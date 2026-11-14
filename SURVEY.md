@@ -107,6 +107,14 @@ the Unicode scripts' ranges) next to it: the ports need the same table in
 each language (generated, as upstream generates its own), not a file read
 at run time.
 
+pandoc-quotes keeps its quotation marks as a table in the script (no
+file read: round 1), and the ports have the same table. Under pandoc 3 its
+original fails on every `quot-marks` and `quot-marks-by-lang` (it tests
+`meta.t`, which metadata has not had in Lua since pandoc 2.17): its cases
+are made with those two tests fixed (`pandoc-quotes/upstream/ORIGIN`).
+author-info-blocks is run after scholarly-metadata, the originals and the
+ports alike (`after:` in its `ORIGIN`).
+
 How the features are covered (each at least twice where possible):
 
 | feature | filters |

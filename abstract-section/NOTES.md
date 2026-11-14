@@ -50,6 +50,10 @@ lists of blocks with a second filter, then writes the metadata.
 | a field, missing or false | built in | `given`, 2 lines | 1 | 1 (a `matches!` in place) | 3 |
 | the walk of the body's lists, from the `Pandoc` function | `doc.blocks:walk{Blocks = f}` | `doc.blocks.walk(sections)` | `applyFilter(doc.blocks, { Blocks })` | `ctx.apply(&mut doc.blocks, &mut sections)` | `walk!(sections, doc.blocks)` |
 
+No language reads a nested option in one step, or "one value or a list
+of them" in one call (`GAPS.md` 21, 22); Lua does both with its plain
+values.
+
 - **Python**: one `match` with three constructors in one arm
   (`MetaList(items) | MetaInlines(items) | MetaBlocks(items) if items`) is
   Lua's "anything `ipairs` takes"; the walk's state in the `Pandoc`

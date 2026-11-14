@@ -90,7 +90,7 @@ out (`RESULTS.md` counts the files); "Lua" is the original's.
   and a `MetaMap` of a dict but refuses inlines (`[Str("x")]`): a name is
   `MetaInlines(Str(key))` by hand (`GAPS.md` 19). `bool(MetaBool(False))`
   is `True`: a port of `if meta.x then` as `if meta.get("x"):` is wrong for
-  `x: false`, silently; `given` is a `TypeGuard`.
+  `x: false`, silently; `given` is a `TypeGuard` (`GAPS.md` 18).
 - **TypeScript**: the named objects are `Map<string, MetaValue>`, not plain
   objects: their keys are the document's (`__proto__` is one), and
   panir's maps are prototype-less for that reason, a filter's own objects

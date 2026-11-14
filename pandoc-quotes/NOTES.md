@@ -69,7 +69,7 @@ it), under which its own tests pass again. For upstream: those two lines.
 | the table (72 languages) | 74 lines | 74 | 74 | 74 | 74 |
 | four marks from a string or a list (`get_quotation_marks`) | 19 | 11 | 8 | 10 | 4 |
 | `quot-marks-by-lang`: a map, else an error | 11 | 8 | 8 | 12 | 8 |
-| a field, missing or false | built in | `given`, 2 lines | 1 | 3 | 3 |
+| a field, missing or false (`GAPS.md` 18) | built in | `given`, 2 lines | 1 | 3 | 3 |
 | the field, then the language: as given, its letters, a region | 18 | 13 | 10 | 28 | 11 |
 | two filters, metadata then quotations | `return {{Meta=...}, {Quoted=...}}` | a `Pandoc` function walking the document with a second filter | `runFilter([configure, quotes])`, as Lua | two `apply` in `main` | a `Pandoc` method calling `walk!` |
 
