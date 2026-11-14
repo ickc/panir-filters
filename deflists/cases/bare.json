@@ -1,0 +1,1 @@
+{"pandoc-api-version":[1,23,1,2],"meta":{},"blocks":[{"t":"DefinitionList","c":[]},{"t":"DefinitionList","c":[[[{"t":"Str","c":"no"},{"t":"Space"},{"t":"Str","c":"definitions"}],[]],[[],[[{"t":"Plain","c":[{"t":"Str","c":"an"},{"t":"Space"},{"t":"Str","c":"empty"},{"t":"Space"},{"t":"Str","c":"term"}]}],[]]]]}]}
