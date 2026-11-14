@@ -21,9 +21,15 @@ One folder per filter:
   the ports in the folder;
 - `upstream/`: the original, as it is, and `ORIGIN` (where it came from,
   the commit, the licence, how it runs, the output formats its cases are
-  run for);
-- `cases/`: input documents (`*.md`, read by pandoc's markdown reader, or
-  `*.json`, a document as pandoc's JSON), and `expected.jsonl`, what the
+  run for, and, as `after: OTHER`, a filter of this repository it always
+  runs after: author-info-blocks after scholarly-metadata; the originals
+  then run one after the other, in one pandoc if both are Lua, and each
+  language's ports likewise);
+- `cases/`: input documents (`*.md`, read by pandoc's markdown reader, with
+  the reader's options in `NAME.args` beside one, if any: `-M lang=en-GB`,
+  which makes a `MetaString` as a command line does, or `-f
+  markdown-smart`; or `*.json`, a document as pandoc's JSON, for metadata
+  no reader makes), and `expected.jsonl`, what the
   original made of each under pandoc 3.14, one line per document and
   format (`{"name", "format", "input", "output"}`, or `"error": true` where
   the original fails); committed, so the tests need neither pandoc nor the
