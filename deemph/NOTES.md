@@ -10,7 +10,7 @@ beside it, so `upstream/` holds both).
   content with `caps`, and returns the list, spliced in the emphasis's
   place. Each port does the same with panir's walk of a fragment:
   `emph.content.walk(caps)`, `applyFilter(emph.content, caps)`,
-  `panir::apply_with(&mut content, &mut Caps, ...)`, `walk!(caps,
+  `ctx.apply(content, &mut Caps)`, `walk!(caps,
   emph.content)`; each returns the list it walked. Each port defines its
   `caps` (three lines) rather than importing the caps port: a port is one
   file.
@@ -34,14 +34,11 @@ beside it, so `upstream/` holds both).
 
 - **Julia**: `uppercase` maps `ß` to `ẞ`, not `SS` (as in `caps`): case
   `unicode`, in `known.tsv`. The shortest port, two methods.
-- **Rust**: the sub-walk takes six lines where the others take one: the
-  content is taken out of the node (`std::mem::take`), walked with
-  `panir::apply_with`, given the context's conversion, which returns a
-  `Result`, whose error the function forwards with `ctx.fail(e)`; then the
-  content is returned. Passing the conversion and forwarding the error by
-  hand is what every filter that walks a fragment from a function will
-  write (`GAPS.md`, 12). `ctx.fail` with a `FilterError` works as it is
-  (it is an `Error`).
+- **Rust**: `ctx.apply(content, &mut Caps)?` walks the content with the
+  walk's conversion and fails with the inner function's error, then the
+  content is taken out (`std::mem::take`) and returned: two lines. It
+  took six before (`panir::apply_with` given the conversion by hand, its
+  `Result` matched into `ctx.fail(e)`; `GAPS.md`, 12).
 - **Python, TypeScript**: one line each; the walk of a list returns the
   list, ready to return.
 

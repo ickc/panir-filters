@@ -28,5 +28,5 @@ await runFilter({
   // after a beginning in a note, the rest of its paragraph
   Inline: () => (hiding ? [] : undefined),
   // as the original's walk: a list's items go, a map's values stay
-  MetaValue: (_value, ctx) => (hiding && Array.isArray(ctx.container) ? [] : undefined),
+  MetaValue: (_value, ctx) => (hiding && ctx.parent?.t === "MetaList" ? [] : undefined),
 });

@@ -65,12 +65,17 @@ def origin(folder: Path) -> dict[str, str]:
 def port(folder: Path, lang: str) -> list[str] | None:
     """The command running a filter's port in a language, if it has one."""
     name = folder.name
+    # CHECK_UNIQUE=1: panir's check that no node is in two places, on what
+    # each port made (Rust's ownership needs none)
+    check = env("CHECK_UNIQUE") == "1"
     if lang == "python":
         script = folder / "python" / f"{name}.py"
-        return [env("PYTHON", "python3"), str(script)] if script.exists() else None
+        wrap = [str(ROOT / "unique" / "check.py")] if check else []
+        return [env("PYTHON", "python3"), *wrap, str(script)] if script.exists() else None
     if lang == "ts":
         script = folder / "ts" / f"{name}.ts"
-        return [env("NODE", "node"), str(script)] if script.exists() else None
+        wrap = ["--import", str(ROOT / "unique" / "check.mjs")] if check else []
+        return [env("NODE", "node"), *wrap, str(script)] if script.exists() else None
     if lang == "rust":
         if not (folder / "rust" / "Cargo.toml").exists():
             return None

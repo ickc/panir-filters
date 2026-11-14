@@ -18,6 +18,7 @@ function run_case(script, format, json)
     f, traverse = handed
     doc = Panir.parse(json)
     doc = walk!(f, doc; traverse, format = Panir.Conversion([format], Dict{String, String}()))
+    get(ENV, "CHECK_UNIQUE", "") == "1" && check_unique(doc)  # (run.py's switch)
     Panir.serialize(doc)
 end
 

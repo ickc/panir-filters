@@ -49,22 +49,21 @@ walk and functions for blocks, inlines and metadata values:
   base classes), and a module-level flag (`global`, as the original). In
   the metadata, returning `[]` for a value deletes it from a list and,
   in a map, deletes the key: the function checks `isinstance(ctx.parent,
-  MetaList)`. The same `[]` for a map's value is an error in TypeScript
-  and Julia ("this position holds one"): the languages differ here
-  (`GAPS.md`, 15).
-- **TypeScript**: `Block`, `Inline`, `MetaValue` functions; `ctx.parent`
-  is typed `ASTNode`, which includes products without `t`, so `ctx.parent?.t
-  === "MetaList"` doesn't type-check; `Array.isArray(ctx.container)` says
-  "in a list" and does (`GAPS.md`, 16).
+  MetaList)`. Since `GAPS.md` 15 was closed, `[]` for a map's value is an
+  error in every language, saying how to delete a key; the check is
+  needed.
+- **TypeScript**: `Block`, `Inline`, `MetaValue` functions;
+  `ctx.parent?.t === "MetaList"`, as the other ports test the parent
+  (`ctx.parent` is typed by the function since `GAPS.md` 16 was closed;
+  before, `Array.isArray(ctx.container)`).
 - **Julia**: a method for `RawBlock`, one for `Union{Block, Inline}`, one
   for `MetaValue` with the context; the flag a `const Ref`. Dispatch reads
   well here.
-- **Rust**: `block` and `inline`, the flag in the filter's struct
-  (`self.hiding.then(Vec::new)` deletes). **panir's Rust `Filter` has no
-  function for metadata values**, so a hidden `MetaList`'s items are
-  emptied (their inlines deleted), not deleted: case `meta`, in
-  `known.tsv` (`GAPS.md`, 14). A `VisitMut` could do it, but would be the
-  whole filter written again as a visitor.
+- **Rust**: `block`, `inline` and `meta_value`, the flag in the filter's
+  struct (`self.hiding.then(Vec::new)` deletes); `meta_value` deletes
+  only where `ctx.in_list()` (Rust's context has no parent). Before
+  panir's `Filter` had `meta_value` (`GAPS.md`, 14), a hidden `MetaList`'s
+  items were emptied, not deleted, a known difference (case `meta`).
 
 Differential runs (pandoc's test documents, eight real documents, which
 have no markers, and five documents made of every filter's cases, which
