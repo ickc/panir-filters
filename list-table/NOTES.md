@@ -43,25 +43,31 @@ input.
 
 - **Attributes by key** are most of the work: the filter reads and removes
   seven (`colspan`, `rowspan`, `align`, `aligns`, `widths`,
-  `header-rows`, `header-cols`). Python has `attributes["k"]`, `.get`,
-  `del`, but no `pop(key, default)`, so each port has a `pop` helper;
-  TypeScript, Rust and Julia have only the list of pairs (`findIndex` and
-  `splice`; `iter().position` and `remove`; `findfirst` and `popat!`).
-  The biggest gap found here.
+  `header-rows`, `header-cols`). At first each port had a `pop` helper
+  (Python lacked `pop(key, default)`; TypeScript, Rust and Julia had only
+  the list of pairs). Since panir#14 each language's own is used, and
+  reads as the Lua does: `attr.attributes.pop("colspan", None)`,
+  `removeAttribute(attr, "colspan")`, `attr.remove("colspan")`,
+  `pop!(attr, "colspan", "1")` (Julia's default saves a `something`);
+  `hasAttribute`, `attr.get(...).is_some()` and `haskey` for `data-pos`.
+  Python's is on `attr.attributes`, the others' on the `Attr`: Python's
+  `div.attributes.pop(...)` on the element works too.
 - **"The inlines of this block, if any"**: Lua and Python take
   `block.content` and look at its first element; TypeScript can (`"content"
-  in block`, then tell an inline from a list of blocks); Rust and Julia
-  match `Plain`, `Para`, `Header` (`inlines_of`), which is also what the
-  original means.
+  in block`, then tell an inline from a list of blocks); Julia matches
+  `Plain`, `Para`, `Header` by dispatch (`inlines_of`), which is also what
+  the original means; Rust now has `Block::inlines_mut` for it.
 - **The name of a block's constructor** for messages: `.t` in TypeScript,
-  `type(b).__name__` in Python, `nameof(typeof(b))` in Julia; panir's Rust
-  has none, the port takes it from `Debug`'s output.
-- **Rust**: a filter function can't fail, so the port's logic returns a
-  `Result` and the `Filter` method prints the error and exits the process.
-  Taking a table apart (`let Table { attr, caption, bodies, .. } =
-  *table`) and the one-element checks (`<[Block; 1]>::try_from(item)`) are
-  pleasant; the port is the longest of the four because rustfmt spreads
-  it out, and because of `inlines_of`, `tag` and the error plumbing.
+  `type(b).__name__` in Python, `nameof(typeof(b))` in Julia, `x.tag()` in
+  Rust (it took it from `Debug`'s output before panir#14).
+- **Rust**: the logic returns a `Result`, and the `Filter` method turns an
+  error into `ctx.fail(e)`, which stops the walk with the node's path
+  (before panir#14 it printed and exited the process). Taking a table
+  apart (`let Table { attr, caption, bodies, .. } = *table`) and the
+  one-element checks (`<[Block; 1]>::try_from(item)`) are pleasant; the
+  port is still the longest of the four (239 lines to 218 with the new
+  API) because rustfmt spreads it out. `attr.remove` returns a `Text`, so
+  the helper reading a span's number takes `Option<Text>`.
 - **TypeScript**: the types follow narrowing well (`list.t !==
   "BulletList"`), except that a `shift()` loses what `content[0]?.t ===
   "Para"` had narrowed: take the element first. `Cell(content, {

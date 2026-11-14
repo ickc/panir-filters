@@ -18,7 +18,7 @@ await runFilter({
   Str: (s, ctx) => {
     const field = PATTERN.exec(s.text)?.[1];
     if (field === undefined) return;
-    const value = ctx.doc?.meta[field];
+    const value = ctx.doc.meta[field];
     // a field that isn't there is an error, as in the original
     if (value === undefined) throw new Error(`no metadata field ${field}`);
     switch (value.t) {

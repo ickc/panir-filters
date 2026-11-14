@@ -67,14 +67,6 @@ def skip_data_pos(block: Block) -> Block:
     return block
 
 
-def pop(attr: Attr, key: str) -> str | None:
-    """Remove an attribute, returning its value."""
-    value = attr.attributes.get(key)
-    if key in attr.attributes:
-        del attr.attributes[key]
-    return value
-
-
 def new_cell(blocks: list[Block]) -> Cell:
     blocks = [skip_data_pos(b) for b in blocks]
     attr = Attr()
@@ -83,9 +75,9 @@ def new_cell(blocks: list[Block]) -> Cell:
     first = getattr(blocks[0], "content", None) if blocks else None
     if first and isinstance(first[0], Span) and not first[0].content:
         attr = first.pop(0).attr
-    col_span = pop(attr, "colspan") or 1
-    row_span = pop(attr, "rowspan") or 1
-    align = ALIGNMENTS.get(pop(attr, "align") or "", Alignment.AlignDefault)
+    col_span = attr.attributes.pop("colspan", None) or 1
+    row_span = attr.attributes.pop("rowspan", None) or 1
+    align = ALIGNMENTS.get(attr.attributes.pop("align", ""), Alignment.AlignDefault)
     return Cell(blocks, align, int(row_span), int(col_span), attr=attr)
 
 
@@ -105,7 +97,7 @@ def row_attr(block: Block) -> Attr:
 
 def colspecs(attr: Attr, columns: int) -> list[ColSpec]:
     specs = [ColSpec() for _ in range(columns)]
-    aligns = pop(attr, "aligns")
+    aligns = attr.attributes.pop("aligns", None)
     if aligns is not None:
         given = [a for a in aligns.split(",") if a]
         if unknown := [a for a in given if a not in ALIGNMENTS]:
@@ -114,7 +106,7 @@ def colspecs(attr: Attr, columns: int) -> list[ColSpec]:
             raise ListTableError("more alignments than columns")
         for spec, a in zip(specs, given):
             spec.alignment = ALIGNMENTS[a]
-    widths = pop(attr, "widths")
+    widths = attr.attributes.pop("widths", None)
     if widths is not None:
         given = [w for w in map(number, widths.split(",")) if w is not None]
         if len(given) != len([w for w in widths.split(",") if w]) or len(given) < columns:
@@ -168,10 +160,10 @@ def list_table(div: Div) -> Table | None:
 
     del div.classes[0]
     rows = bodies[0].body
-    header_rows = number(pop(div.attr, "header-rows"))
+    header_rows = number(div.attributes.pop("header-rows", None))
     if header_rows is None:
         header_rows = 1 if kind == "list-table" else 0
-    header_cols = number(pop(div.attr, "header-cols")) or 0
+    header_cols = number(div.attributes.pop("header-cols", None)) or 0
     columns = sum(cell.col_span for cell in rows[0].cells) if rows else 0
     specs = colspecs(div.attr, columns)
     head = rows[: max(0, int(header_rows))]

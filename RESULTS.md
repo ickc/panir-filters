@@ -26,13 +26,15 @@ Known differences (`known.tsv`, explained in `NOTES.md`): Julia's
 ## Lines of code
 
 Non-blank, non-comment lines, docstrings not counted; the Rust ports as
-rustfmt leaves them.
+rustfmt leaves them. In brackets, before panir#14 (attributes by key,
+`ctx.fail`, `ctx.meta()`, `Attr::new`, `tag`, `inlines_mut`). caps' Rust
+was given as 12 at first; it is 13.
 
 | filter | original | Python | TypeScript | Rust | Julia |
 |---|---|---|---|---|---|
-| caps | 6 (Python) | 7 | 6 | 12 | 3 |
-| metavars | 17 (Python) | 19 | 18 | 40 | 13 |
-| list-table | 209 (Lua; 176 without its old-pandoc polyfill and markdown error context) | 144 | 119 | 239 | 111 |
+| caps | 6 (Python) | 7 | 6 | 13 | 3 |
+| metavars | 17 (Python) | 19 | 18 | 28 (40 before panir#14) | 13 |
+| list-table | 209 (Lua; 176 without its old-pandoc polyfill and markdown error context) | 139 (144) | 118 (119) | 218 (239) | 107 (111) |
 
 ## Time and memory
 

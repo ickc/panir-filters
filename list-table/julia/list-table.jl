@@ -31,13 +31,7 @@ number(::Nothing) = nothing
 
 "The block itself, or the first in a div the sourcepos extension wrapped it in."
 skip_data_pos(block::Block) = block
-skip_data_pos(div::Div) = any(((k, _),) -> k == "data-pos", div.attr.attributes) ? div.content[1] : div
-
-"Remove an attribute, returning its value (or `nothing`)."
-function pop_attribute!(attr::Attr, key)
-    i = findfirst(((k, _),) -> k == key, attr.attributes)
-    i === nothing ? nothing : popat!(attr.attributes, i)[2]
-end
+skip_data_pos(div::Div) = haskey(div.attr, "data-pos") ? div.content[1] : div
 
 "The inlines a block holds, if it holds inlines."
 inlines_of(b::Union{Plain, Para, Header}) = b.content
@@ -52,9 +46,9 @@ function new_cell(item::Vector{Block})
     if first !== nothing && !isempty(first) && first[1] isa Span && isempty(first[1].content)
         attr = popfirst!(first).attr
     end
-    col_span = parse(Int, something(pop_attribute!(attr, "colspan"), "1"))
-    row_span = parse(Int, something(pop_attribute!(attr, "rowspan"), "1"))
-    alignment = get(ALIGNMENTS, something(pop_attribute!(attr, "align"), ""), AlignDefault)
+    col_span = parse(Int, pop!(attr, "colspan", "1"))
+    row_span = parse(Int, pop!(attr, "rowspan", "1"))
+    alignment = get(ALIGNMENTS, pop!(attr, "align", ""), AlignDefault)
     Cell(blocks, alignment, row_span, col_span; attr)
 end
 
@@ -71,7 +65,7 @@ end
 
 function colspecs(attr::Attr, columns::Integer)
     specs = [ColSpec() for _ in 1:columns]
-    aligns = pop_attribute!(attr, "aligns")
+    aligns = pop!(attr, "aligns", nothing)
     if aligns !== nothing
         given = filter(!isempty, split(aligns, ','))
         for a in given
@@ -82,7 +76,7 @@ function colspecs(attr::Attr, columns::Integer)
             spec.alignment = ALIGNMENTS[a]
         end
     end
-    widths = pop_attribute!(attr, "widths")
+    widths = pop!(attr, "widths", nothing)
     if widths !== nothing
         given = map(number, filter(!isempty, split(widths, ',')))
         (any(isnothing, given) || length(given) < columns) && throw(ListTableError("invalid widths: $widths"))
@@ -133,8 +127,8 @@ function list_table(div::Div)
 
     popfirst!(div.attr.classes)
     rows = bodies[1].body
-    header_rows = something(number(pop_attribute!(div.attr, "header-rows")), kind == "list-table" ? 1 : 0)
-    header_cols = something(number(pop_attribute!(div.attr, "header-cols")), 0)
+    header_rows = something(number(pop!(div.attr, "header-rows", nothing)), kind == "list-table" ? 1 : 0)
+    header_cols = something(number(pop!(div.attr, "header-cols", nothing)), 0)
     columns = isempty(rows) ? 0 : sum(cell.col_span for cell in rows[1].cells)
     specs = colspecs(div.attr, columns)
     head = [popfirst!(rows) for _ in 1:min(length(rows), max(0, floor(Int, header_rows)))]

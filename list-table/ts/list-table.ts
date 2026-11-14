@@ -13,7 +13,10 @@
 // A port of pandoc-ext/list-table (Copyright (c) 2021 Martin Fischer,
 // 2023-2024 Pandoc Extensions contributors; MIT, see ../LICENSE).
 
-import { Attr, Caption, Cell, ColSpec, ColWidth, Plain, Row, Table, TableBody, TableFoot, TableHead } from "panir";
+import {
+  Attr, Caption, Cell, ColSpec, ColWidth, hasAttribute, Plain, removeAttribute, Row, Table, TableBody, TableFoot,
+  TableHead,
+} from "panir";
 import type { Alignment, Block, Div } from "panir";
 import { runFilter } from "panir/node";
 
@@ -30,14 +33,8 @@ function number(text: string | undefined): number | undefined {
 
 /** The block itself, or the first in a div the sourcepos extension wrapped it in. */
 function skipDataPos(block: Block): Block {
-  if (block.t === "Div" && block.attr.attributes.some(([k]) => k === "data-pos")) return block.content[0];
+  if (block.t === "Div" && hasAttribute(block.attr, "data-pos")) return block.content[0];
   return block;
-}
-
-/** Remove an attribute, returning its value. */
-function pop(attr: Attr, key: string): string | undefined {
-  const i = attr.attributes.findIndex(([k]) => k === key);
-  return i < 0 ? undefined : attr.attributes.splice(i, 1)[0][1];
 }
 
 function newCell(item: Block[]): Cell {
@@ -53,9 +50,9 @@ function newCell(item: Block[]): Cell {
       attr = opening.attr;
     }
   }
-  const colSpan = Number(pop(attr, "colspan") || 1);
-  const rowSpan = Number(pop(attr, "rowspan") || 1);
-  const alignment = ALIGNMENTS[pop(attr, "align") ?? ""] ?? "AlignDefault";
+  const colSpan = Number(removeAttribute(attr, "colspan") || 1);
+  const rowSpan = Number(removeAttribute(attr, "rowspan") || 1);
+  const alignment = ALIGNMENTS[removeAttribute(attr, "align") ?? ""] ?? "AlignDefault";
   return Cell(blocks, { alignment, rowSpan, colSpan, attr });
 }
 
@@ -72,7 +69,7 @@ function rowAttr(block: Block): Attr {
 
 function colSpecs(attr: Attr, columns: number): ColSpec[] {
   const specs = Array.from({ length: columns }, () => ColSpec());
-  const aligns = pop(attr, "aligns");
+  const aligns = removeAttribute(attr, "aligns");
   if (aligns !== undefined) {
     const given = aligns.split(",").filter((a) => a !== "");
     const unknown = given.find((a) => !(a in ALIGNMENTS));
@@ -80,7 +77,7 @@ function colSpecs(attr: Attr, columns: number): ColSpec[] {
     if (given.length > columns) throw new ListTableError("more alignments than columns");
     given.forEach((a, i) => { specs[i].alignment = ALIGNMENTS[a]; });
   }
-  const widths = pop(attr, "widths");
+  const widths = removeAttribute(attr, "widths");
   if (widths !== undefined) {
     const given = widths.split(",").filter((w) => w !== "").map(number);
     if (given.some((w) => w === undefined) || given.length < columns) {
@@ -134,8 +131,8 @@ function listTable(div: Div): Table | undefined {
 
   div.attr.classes.shift();
   const rows = bodies[0].body;
-  const headerRows = number(pop(div.attr, "header-rows")) ?? (kind === "list-table" ? 1 : 0);
-  let headerCols = number(pop(div.attr, "header-cols")) ?? 0;
+  const headerRows = number(removeAttribute(div.attr, "header-rows")) ?? (kind === "list-table" ? 1 : 0);
+  let headerCols = number(removeAttribute(div.attr, "header-cols")) ?? 0;
   const columns = rows.length > 0 ? rows[0].cells.reduce((n, cell) => n + cell.colSpan, 0) : 0;
   const specs = colSpecs(div.attr, columns);
   const head = rows.splice(0, Math.max(0, Math.trunc(headerRows)));
