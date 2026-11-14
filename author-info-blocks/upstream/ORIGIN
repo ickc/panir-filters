@@ -1,0 +1,9 @@
+url: https://github.com/pandoc/lua-filters/blob/818f901a56cff8629dbd3d3d2d719320279ef6d1/author-info-blocks/author-info-blocks.lua
+repository: https://github.com/pandoc/lua-filters
+commit: 818f901a56cff8629dbd3d3d2d719320279ef6d1
+path: author-info-blocks/author-info-blocks.lua
+licence: MIT, Copyright (c) 2017-2021 pandoc Lua filters contributors (../LICENSE, the repository's, verbatim); the file's own header is ISC text, Copyright © 2017–2021 Albert Krewinkel; both cover the original and the ports here
+cases: cases/sample.md is the repository's author-info-blocks/sample.md, verbatim, and cases/scholarly.md scholarly-metadata/sample.md, verbatim (their expected outputs are not used: the expected AST is the original's under pandoc 3.14); the others are written for the ports
+run: lua author-info-blocks.lua
+after: scholarly-metadata
+formats: html latex

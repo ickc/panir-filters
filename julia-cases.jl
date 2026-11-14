@@ -6,26 +6,29 @@
 # (`Panir.handoff`, as a host running filter scripts does) instead of
 # reading stdin.
 #
-# Reads lines `script<TAB>format<TAB>document` (the document as pandoc's
-# JSON, on one line); writes a line per case, `output<TAB>document` or
-# `error<TAB>message` (the message's newlines as \n).
+# Reads lines `scripts<TAB>format<TAB>document` (the scripts of a chain,
+# run in turn, separated by the unit separator, \x1f; the document as
+# pandoc's JSON, on one line); writes a line per case, `output<TAB>document`
+# or `error<TAB>message` (the message's newlines as \n).
 
 using Panir
 
-function run_case(script, format, json)
-    handed = Panir.handoff(() -> Base.include(Module(), script))
-    handed === nothing && error("$script calls no run_filter")
-    f, traverse = handed
+function run_case(scripts, format, json)
     doc = Panir.parse(json)
-    doc = walk!(f, doc; traverse, format = Panir.Conversion([format], Dict{String, String}()))
-    get(ENV, "CHECK_UNIQUE", "") == "1" && check_unique(doc)  # (run.py's switch)
+    for script in scripts
+        handed = Panir.handoff(() -> Base.include(Module(), script))
+        handed === nothing && error("$script calls no run_filter")
+        f, traverse = handed
+        doc = walk!(f, doc; traverse, format = Panir.Conversion([format], Dict{String, String}()))
+        get(ENV, "CHECK_UNIQUE", "") == "1" && check_unique(doc)  # (run.py's switch)
+    end
     Panir.serialize(doc)
 end
 
 for line in eachline(stdin)
-    script, format, json = split(line, '\t'; limit = 3)
+    scripts, format, json = split(line, '\t'; limit = 3)
     result = try
-        "output\t" * run_case(String(script), String(format), String(json))
+        "output\t" * run_case(String.(split(scripts, '\x1f')), String(format), String(json))
     catch e
         "error\t" * replace(sprint(showerror, e), "\n" => "\\n")
     end

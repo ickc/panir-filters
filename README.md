@@ -10,8 +10,9 @@ Round 1 (filters that need only the AST) is chosen in
 [`SURVEY.md`](SURVEY.md) and listed, with each port's status, in
 [`filters.tsv`](filters.tsv). Ported so far: `caps`, `metavars`,
 `list-table`, then `deemph`, `comments`, `deflists`, `theorem`,
-`inlinenotes`, `gitlab_markdown`, `french-spaces`; lines and times in
-[`RESULTS.md`](RESULTS.md).
+`inlinenotes`, `gitlab_markdown`, `french-spaces`, then the metadata
+cluster, `scholarly-metadata`, `author-info-blocks`, `pandoc-quotes`,
+`abstract-section`, `cito`; lines and times in [`RESULTS.md`](RESULTS.md).
 
 ## What goes here
 
@@ -21,9 +22,15 @@ One folder per filter:
   the ports in the folder;
 - `upstream/`: the original, as it is, and `ORIGIN` (where it came from,
   the commit, the licence, how it runs, the output formats its cases are
-  run for);
-- `cases/`: input documents (`*.md`, read by pandoc's markdown reader, or
-  `*.json`, a document as pandoc's JSON), and `expected.jsonl`, what the
+  run for, and, as `after: OTHER`, a filter of this repository it always
+  runs after: author-info-blocks after scholarly-metadata; the originals
+  then run one after the other, in one pandoc if both are Lua, and each
+  language's ports likewise);
+- `cases/`: input documents (`*.md`, read by pandoc's markdown reader, with
+  the reader's options in `NAME.args` beside one, if any: `-M lang=en-GB`,
+  which makes a `MetaString` as a command line does, or `-f
+  markdown-smart`; or `*.json`, a document as pandoc's JSON, for metadata
+  no reader makes), and `expected.jsonl`, what the
   original made of each under pandoc 3.14, one line per document and
   format (`{"name", "format", "input", "output"}`, or `"error": true` where
   the original fails); committed, so the tests need neither pandoc nor the
@@ -85,8 +92,9 @@ read by pandoc with `--sandbox`). The ones used so far: `./fetch-docs.sh`
 (pandoc's test documents), some of libpandoc's benchmark documents (the
 pandoc manual, a Wikipedia article as HTML, a textbook in LaTeX, Python's
 documentation in RST, a novel as EPUB...), and, as real documents rarely
-hold a filter's syntax, `python3 assemble.py` (five documents made of
-every filter's cases, shuffled, at several depths, in
+hold a filter's syntax, `python3 assemble.py` (eight documents made of
+every filter's cases, shuffled, at several depths, each with metadata of
+its own: the cases' fields, some missing, some in another shape, in
 `.cache/assembled`); none are kept here.
 
 CI (`.github/workflows/ci.yml`) runs `run.py test` for the four languages

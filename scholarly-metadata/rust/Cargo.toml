@@ -1,0 +1,11 @@
+[package]
+name = "scholarly-metadata"
+description = "Normalise the authors and institutes of a document's metadata: a pandoc filter (a port of pandoc/lua-filters' scholarly-metadata)"
+license = "MIT"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true

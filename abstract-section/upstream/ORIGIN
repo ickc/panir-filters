@@ -1,0 +1,8 @@
+url: https://github.com/pandoc-ext/abstract-section/blob/481de0dec6ed2b5275dcb4dc30d169ff539d3d5a/_extensions/abstract-section/abstract-section.lua
+repository: https://github.com/pandoc-ext/abstract-section
+commit: 481de0dec6ed2b5275dcb4dc30d169ff539d3d5a
+path: _extensions/abstract-section/abstract-section.lua
+licence: MIT, Copyright © 2017-2023 Albert Krewinkel (../LICENSE, the repository's, verbatim; it covers the original and the ports here)
+cases: cases/hrule.md, in-div.md, shifted-headings.md and two-sections.md are the input blocks of the repository's test/perevirky/*.md, verbatim (their expected outputs are not used: the expected AST is the original's under pandoc 3.14); the others are written for the ports
+run: lua abstract-section.lua
+formats: html

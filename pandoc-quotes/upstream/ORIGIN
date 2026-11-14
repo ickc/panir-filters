@@ -1,0 +1,9 @@
+url: https://github.com/pandoc/lua-filters/blob/818f901a56cff8629dbd3d3d2d719320279ef6d1/pandoc-quotes.lua/pandoc-quotes.lua
+repository: https://github.com/pandoc/lua-filters
+commit: 818f901a56cff8629dbd3d3d2d719320279ef6d1
+path: pandoc-quotes.lua/pandoc-quotes.lua
+licence: MIT, Copyright (c) 2018 Odin Kroeger (../LICENSE, the folder's LICENSE.txt, verbatim; it covers the original and the ports here)
+cases: cases/simple.md, lookup-simple.md, lookup-void-country.md, lookup-mapping.md, lookup-no-fallback.md and noop.md are the repository's test/docs/test-*.md, verbatim (noop.args holds the -f markdown-smart its Makefile reads it with); the others are written for the ports
+run: lua pandoc-quotes-pandoc3.lua
+pandoc3: pandoc-quotes-pandoc3.lua is pandoc-quotes.lua with the two tests of a metadata value's type made as pandoc 3 needs (`pandoc.utils.type(meta) == 'Inlines'`, `== 'List'`, where the original tests `meta.t == 'MetaInlines'`, `'MetaList'`): since pandoc 2.17 a metadata value has no `t` in Lua, so the original fails (see NOTES.md) on every document that sets quot-marks or quot-marks-by-lang. With the fix its own tests pass under pandoc 3.14, as they did under pandoc 2; the cases are what the fixed one makes.
+formats: html

@@ -1,0 +1,11 @@
+[package]
+name = "author-info-blocks"
+description = "Affiliations and correspondence as blocks before the body: a pandoc filter (a port of pandoc/lua-filters' author-info-blocks)"
+license = "MIT"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true
