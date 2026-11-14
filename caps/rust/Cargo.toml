@@ -1,0 +1,11 @@
+[package]
+name = "caps"
+description = "Upper-case all regular text: a pandoc filter (a port of pandocfilters' caps.py)"
+license = "BSD-3-Clause"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true
