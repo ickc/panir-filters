@@ -27,15 +27,15 @@ metadata.
 | 5 | Rust's context has no metadata | Rust | 1 directly (metavars); common in the wiki's list | closed, panir#14 (but see 11) |
 | 6 | a node's constructor name in Rust | Rust | 3: list-table, first-line-indent, amsthm | closed, panir#14 |
 | 7 | the walks of Rust and Julia have no depth limit | Rust, Julia | 1 (metavars, on a self-referring field), but any document can trigger it | closed, panir#14 |
-| 8 | a value put in a second place must be copied | Python, TypeScript, Julia | 2: metavars, author-info-blocks | documented, panir#14; the check proposed is not made |
+| 8 | a value put in a second place must be copied | Python, TypeScript, Julia | 2: metavars, author-info-blocks | closed: documented in panir#14; `check_unique` to call in tests, panir#15 |
 | 9 | "the inlines of this block" | Rust | 1: list-table | closed, panir#14 |
 | 10 | `ctx.doc` is optional in TypeScript's types | TypeScript | every filter reading the document from a function | closed, panir#14 |
-| 11 | inside the metadata, Rust's `ctx.meta()` lacks the field being walked | Rust | 1: metavars (only a field naming itself, an error anyway) | open; low |
-| 12 | a sub-walk from a Rust filter function: the conversion and the error by hand | Rust | 6: deemph, pagebreak, abstract-section, cito, track-changes, amsthm | open |
-| 13 | what a top-down function's replacement gets walked is not said | all (documentation) | 6: deemph, theorem, metavars, comments, amsthm, auto-lang | open |
-| 14 | Rust's `Filter` has no function for metadata values | Rust | 1: comments (a `MetaList`'s items) | open; low |
-| 15 | `[]` for a metadata value in a map: Python deletes the key, TypeScript and Julia refuse | Python, TypeScript, Julia | 1: comments | open; low |
-| 16 | TypeScript's `ctx.parent` is typed `ASTNode`: `ctx.parent?.t` doesn't type-check | TypeScript | 1: comments | open; low |
+| 11 | inside the metadata, Rust's `ctx.meta()` lacks the field being walked | Rust | 1: metavars (only a field naming itself, an error anyway) | closed, panir#15: said in the README (walking a copy costs more than it gives) |
+| 12 | a sub-walk from a Rust filter function: the conversion and the error by hand | Rust | 6: deemph, pagebreak, abstract-section, cito, track-changes, amsthm | closed, panir#15: `ctx.apply(x, f)` |
+| 13 | what a top-down function's replacement gets walked is not said | all (documentation) | 6: deemph, theorem, metavars, comments, amsthm, auto-lang | closed, panir#15: said in each README, pinned by a scenario |
+| 14 | Rust's `Filter` has no function for metadata values | Rust | 1: comments (a `MetaList`'s items) | closed, panir#15: `meta_value`, `ctx.in_list()` |
+| 15 | `[]` for a metadata value in a map: Python deletes the key, TypeScript and Julia refuse | Python, TypeScript, Julia | 1: comments | closed, panir#15: an error in every language |
+| 16 | TypeScript's `ctx.parent` is typed `ASTNode`: `ctx.parent?.t` doesn't type-check | TypeScript | 1: comments | closed, panir#15: typed by the function |
 
 Not panir's, but met: Julia has no full Unicode case mapping (`caps`); an
 error that shows the offending blocks as markdown needs pandoc's writer,
@@ -213,13 +213,16 @@ in Rust through the error of gap 3.
 How common: any top-down filter whose replacement contains what it
 matches; rare in intent, but a hostile document finds it.
 
-## 8. A value put in a second place must be copied (documented)
+## 8. A value put in a second place must be copied (closed: documented, a check to call)
 
-**Documented** in panir#14, no more: each README's "Coming from Lua"
-says Lua's elements are values and names the language's copy
-(`copy.deepcopy`, `copy`, `deepcopy`, `.clone()`). The proposed check (a
-node reachable from two places) and a Python `panir.copy` were not made;
-the gap stays open in that sense.
+**Documented** in panir#14: each README's "Coming from Lua" says Lua's
+elements are values and names the language's copy (`copy.deepcopy`,
+`copy`, `deepcopy`, `.clone()`). **A check to call** in panir#15:
+`check_unique(x)` (Python, Julia), `checkUnique(x)` (TypeScript) raises
+if the same node object is reachable from two places, naming both paths.
+Nothing calls it: a check on every write cost 45 to 124% of the write
+time, and a filter's correctness is its author's. Here `CHECK_UNIQUE=1
+python3 run.py test` calls it on every port's output; no port fails it.
 
 **The original**: Lua and pandocfilters copy implicitly (Lua's elements
 are values; pandocfilters builds new JSON). metavars puts a metadata
@@ -268,7 +271,9 @@ filter that only runs on documents writes `ctx.doc?.meta`, and handles an
 `Pandoc` (it always runs on a document); `applyFilter` on a fragment
 keeps the optional one. Low priority.
 
-## 11. Inside the metadata, Rust's `ctx.meta()` lacks the field being walked
+## 11. Inside the metadata, Rust's `ctx.meta()` lacks the field being walked (closed: documented)
+
+**Closed** in panir#15 by saying it in the Rust README. Walking a copy of the field to give the whole metadata was measured: 3.8 ms of copies against a 0.9 ms walk with 1,000 references in the metadata; not built.
 
 Found bringing metavars onto panir#14.
 
@@ -296,7 +301,9 @@ Low priority.
 How common: 1 of 21 (metavars), and only on a document that is an error
 anyway.
 
-## 12. A sub-walk from a Rust filter function: the conversion and the error by hand
+## 12. A sub-walk from a Rust filter function: the conversion and the error by hand (closed)
+
+**Closed** in panir#15: `ctx.apply(x, f) -> Option<()>` walks with the walk's conversion and depth and records a failure as `ctx.fail` does, so `ctx.apply(content, &mut Caps)?;`. The error is the inner function's, with its path inside the fragment, as Python and TypeScript report it.
 
 Found with deemph.
 
@@ -321,7 +328,9 @@ message) and returns `None`, so that a function writes
 
 How common: every filter with `subwalk` in `SURVEY.md`: 6 of 21.
 
-## 13. What a top-down function's replacement gets walked is not said
+## 13. What a top-down function's replacement gets walked is not said (closed)
+
+**Closed** in panir#15: each README says it, and the scenario `replaced` pins it. pandoc's Lua does the same: what a function returns top-down is given to no function, and its children are walked.
 
 Found with deemph and theorem.
 
@@ -346,7 +355,9 @@ elements); their children are", and a corpus scenario that pins it
 
 How common: the top-down filters of round 1, 6 of 21.
 
-## 14. Rust's `Filter` has no function for metadata values
+## 14. Rust's `Filter` has no function for metadata values (closed)
+
+**Closed** in panir#15: Rust's `Filter::meta_value`, as the other three languages have (pandoc's Lua has none; panflute has), and `ctx.in_list()` to tell a `MetaList`'s item from a map's value. The scenario `metavalues` pins the four.
 
 Found with comments.
 
@@ -368,7 +379,9 @@ filters have that `Filter` doesn't. Low priority.
 
 How common: 1 of 21, and only on a beginning marker in the metadata.
 
-## 15. `[]` for a metadata value in a map: Python deletes the key, TypeScript and Julia refuse
+## 15. `[]` for a metadata value in a map: Python deletes the key, TypeScript and Julia refuse (closed)
+
+**Closed** in panir#15: an error in every language, saying to delete the key in the function of the `Meta` or `MetaMap` holding it (scenario `metadelete`).
 
 Found with comments.
 
@@ -388,7 +401,9 @@ function). A corpus scenario to pin it.
 
 How common: 1 of 21.
 
-## 16. TypeScript's `ctx.parent` is typed `ASTNode`
+## 16. TypeScript's `ctx.parent` is typed `ASTNode` (closed)
+
+**Closed** in panir#15: `ctx.parent` is typed by the function it is in (the nodes that can hold that node), so `ctx.parent?.t === "MetaList"` type-checks and narrows.
 
 Found with comments.
 

@@ -31,11 +31,8 @@ impl Filter for Deemph {
         let Inline::Emph(content) = x else {
             return None;
         };
-        let mut content = std::mem::take(content);
-        match panir::apply_with(&mut content, &mut Caps, ctx.conversion()) {
-            Ok(()) => Some(content),
-            Err(e) => ctx.fail(e),
-        }
+        ctx.apply(content, &mut Caps)?;
+        Some(std::mem::take(content))
     }
 }
 

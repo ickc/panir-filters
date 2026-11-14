@@ -5,7 +5,7 @@
 //! A port of pandocfilters' examples/comments.py (Copyright (c) 2013, John
 //! MacFarlane; BSD-3-Clause, see ../LICENSE).
 
-use panir::{Block, Ctx, Filter, Inline, Order};
+use panir::{Block, Ctx, Filter, Inline, MetaValue, Order};
 
 const BEGIN: &str = "<!-- BEGIN COMMENT -->";
 const END: &str = "<!-- END COMMENT -->";
@@ -40,6 +40,11 @@ impl Filter for Comments {
     // after a beginning in a note, the rest of its paragraph
     fn inline(&mut self, _: &mut Inline, _: &mut Ctx) -> Option<Vec<Inline>> {
         self.hiding.then(Vec::new)
+    }
+
+    // as the original's walk: a list's items go, a map's values stay
+    fn meta_value(&mut self, _: &mut MetaValue, ctx: &mut Ctx) -> Option<Vec<MetaValue>> {
+        (self.hiding && ctx.in_list()).then(Vec::new)
     }
 }
 
