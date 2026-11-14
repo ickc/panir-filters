@@ -14,7 +14,7 @@
 
 use panir::{
     Alignment, Attr, Block, Caption, Cell, ColSpec, ColWidth, Ctx, Filter, Inline, Row, Table,
-    TableBody, TableHead,
+    TableBody, TableHead, Text,
 };
 
 /// The original also shows the offending block as markdown: that needs
@@ -44,32 +44,15 @@ fn number(text: Option<&str>) -> Option<f64> {
     text.parse().ok()
 }
 
-/// Remove an attribute, returning its value.
-fn pop(attr: &mut Attr, key: &str) -> Option<String> {
-    let i = attr.attributes.iter().position(|(k, _)| k == key)?;
-    Some(attr.attributes.remove(i).1.to_string())
-}
-
-/// The constructor's name, as Lua's `.t` (panir's Rust has no such method:
-/// its `Debug` starts with it).
-fn tag(block: &Block) -> String {
-    let debug = format!("{block:?}");
-    debug
-        .split(['(', ' ', '{'])
-        .next()
-        .unwrap_or_default()
-        .to_string()
-}
-
 fn has_data_pos(block: &Block) -> bool {
-    matches!(block, Block::Div(div) if div.attr.attributes.iter().any(|(k, _)| k == "data-pos"))
+    matches!(block, Block::Div(div) if div.attr.get("data-pos").is_some())
 }
 
 /// The block itself, or the first in a div the sourcepos extension wrapped
 /// it in.
 fn skip_data_pos(block: Block) -> Block {
     match block {
-        Block::Div(div) if div.attr.attributes.iter().any(|(k, _)| k == "data-pos") => div
+        Block::Div(div) if div.attr.get("data-pos").is_some() => div
             .content
             .into_iter()
             .next()
@@ -78,21 +61,12 @@ fn skip_data_pos(block: Block) -> Block {
     }
 }
 
-/// The inlines a block holds, if it holds inlines.
-fn inlines_of(block: &mut Block) -> Option<&mut Vec<Inline>> {
-    match block {
-        Block::Plain(xs) | Block::Para(xs) => Some(xs),
-        Block::Header(h) => Some(&mut h.content),
-        _ => None,
-    }
-}
-
 fn new_cell(item: Vec<Block>) -> Result<Cell, Error> {
     let mut content: Vec<Block> = item.into_iter().map(skip_data_pos).collect();
     let mut attr = Attr::default();
     // pandoc has no attributes on list items: an empty span opening the
     // first block holds the cell's
-    if let Some(xs) = content.first_mut().and_then(inlines_of)
+    if let Some(xs) = content.first_mut().and_then(Block::inlines_mut)
         && let Some(Inline::Span(span)) = xs.first()
         && span.content.is_empty()
     {
@@ -101,14 +75,15 @@ fn new_cell(item: Vec<Block>) -> Result<Cell, Error> {
         };
         attr = span.attr;
     }
-    let span = |value: Option<String>| -> Result<i64, Error> {
+    let span = |value: Option<Text>| -> Result<i64, Error> {
         value.map_or(Ok(1), |v| {
             v.parse().map_err(|_| format!("not a number of cells: {v}"))
         })
     };
-    let col_span = span(pop(&mut attr, "colspan"))?;
-    let row_span = span(pop(&mut attr, "rowspan"))?;
-    let alignment = pop(&mut attr, "align")
+    let col_span = span(attr.remove("colspan"))?;
+    let row_span = span(attr.remove("rowspan"))?;
+    let alignment = attr
+        .remove("align")
         .and_then(|a| alignment(&a))
         .unwrap_or(Alignment::AlignDefault);
     Ok(Cell {
@@ -122,7 +97,7 @@ fn new_cell(item: Vec<Block>) -> Result<Cell, Error> {
 
 /// The attributes of a row: a block holding one empty span.
 fn row_attr(mut block: Block) -> Result<Attr, Error> {
-    let Some(content) = inlines_of(&mut block) else {
+    let Some(content) = block.inlines_mut() else {
         return Err("expected list item to have row attrs".into());
     };
     if content.len() != 1 {
@@ -137,7 +112,7 @@ fn row_attr(mut block: Block) -> Result<Attr, Error> {
 
 fn col_specs(attr: &mut Attr, columns: usize) -> Result<Vec<ColSpec>, Error> {
     let mut specs = vec![ColSpec::default(); columns];
-    if let Some(aligns) = pop(attr, "aligns") {
+    if let Some(aligns) = attr.remove("aligns") {
         let given: Vec<&str> = aligns.split(',').filter(|a| !a.is_empty()).collect();
         if given.len() > columns {
             return Err("more alignments than columns".into());
@@ -146,7 +121,7 @@ fn col_specs(attr: &mut Attr, columns: usize) -> Result<Vec<ColSpec>, Error> {
             spec.alignment = alignment(a).ok_or_else(|| format!("unknown column alignment {a}"))?;
         }
     }
-    if let Some(widths) = pop(attr, "widths") {
+    if let Some(widths) = attr.remove("widths") {
         let given: Option<Vec<f64>> = widths
             .split(',')
             .filter(|w| !w.is_empty())
@@ -193,7 +168,7 @@ fn list_table(block: &mut Block) -> Result<Option<Table>, Error> {
     };
     let items = match content.next() {
         Some(Block::BulletList(items)) => items,
-        Some(other) => return Err(format!("expected bullet list, found {}", tag(&other))),
+        Some(other) => return Err(format!("expected bullet list, found {}", other.tag())),
         None => unreachable!(),
     };
 
@@ -230,15 +205,15 @@ fn list_table(block: &mut Block) -> Result<Option<Table>, Error> {
                 let cells = cells.into_iter().map(new_cell).collect::<Result<_, _>>()?;
                 bodies.last_mut().unwrap().body.push(Row { attr, cells });
             }
-            other => return Err(format!("expected bullet list, found {}", tag(&other))),
+            other => return Err(format!("expected bullet list, found {}", other.tag())),
         }
     }
 
     let mut attr = std::mem::take(&mut div.attr);
     attr.classes.remove(0);
-    let header_rows = number(pop(&mut attr, "header-rows").as_deref())
+    let header_rows = number(attr.remove("header-rows").as_deref())
         .unwrap_or(if kind == "list-table" { 1.0 } else { 0.0 });
-    let mut header_cols = number(pop(&mut attr, "header-cols").as_deref()).unwrap_or(0.0);
+    let mut header_cols = number(attr.remove("header-cols").as_deref()).unwrap_or(0.0);
     let rows = &mut bodies[0].body;
     let columns = rows
         .first()
@@ -271,14 +246,10 @@ fn list_table(block: &mut Block) -> Result<Option<Table>, Error> {
 struct ListTable;
 
 impl Filter for ListTable {
-    fn block(&mut self, x: &mut Block, _: &mut Ctx) -> Option<Vec<Block>> {
+    fn block(&mut self, x: &mut Block, ctx: &mut Ctx) -> Option<Vec<Block>> {
         match list_table(x) {
             Ok(table) => table.map(|t| vec![t.into()]),
-            Err(e) => {
-                // a filter function can't fail: stop here
-                eprintln!("list-table: {e}");
-                std::process::exit(1);
-            }
+            Err(e) => ctx.fail(e),
         }
     }
 }

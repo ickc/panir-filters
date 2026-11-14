@@ -14,13 +14,15 @@ run as pandoc runs a JSON filter: the document on stdin, the output format
 as the first argument, the document on stdout. Two documents are the same
 when their JSON is ("the same AST"), `pandoc-api-version` aside.
 
-`test` needs only the ports' toolchains. `diff`, `expect` and `time` also
-run the originals: pandoc (`$PANDOC`) for Lua ones, and for Python ones a
-Python with pandocfilters and panflute (`$ORACLE_PYTHON`; see
-`oracle-requirements.txt`). Other variables: `$PANIR` (panir's checkout,
-default `../panir`), `$PYTHON`, `$NODE`, `$JULIA`, `$TIMEOUT` (seconds a
-run may take, 300). Rust ports are built
-(`cargo build --release`) before they run.
+`test` needs only the ports' toolchains; it runs the Julia ports' cases
+in one Julia process (`julia-cases.jl`), the others a process per case.
+`diff`, `expect` and `time` also run the originals: pandoc (`$PANDOC`) for
+Lua ones, and for Python ones a Python with pandocfilters and panflute
+(`$ORACLE_PYTHON`; see `oracle-requirements.txt`), whose output is taken
+as pandoc reads it. Other variables: `$PANIR` (panir's checkout, default
+`../panir`), `$PYTHON`, `$NODE`, `$JULIA`, `$TIMEOUT` (seconds a run may
+take, 300). Rust ports are built (`cargo build --release`) before they
+run.
 """
 
 from __future__ import annotations
@@ -136,11 +138,22 @@ def run(cmd: list[str], data: bytes, cwd: Path | None = None, environ: dict | No
     return Ran(p.returncode, out[0], err[0], seconds, usage.ru_maxrss)
 
 
-def run_original(folder: Path, data: bytes, fmt: str) -> Ran:
+def run_original(folder: Path, data: bytes, fmt: str, as_read: bool = True) -> Ran:
+    """The original's output; with `as_read`, as pandoc reads it (a Lua
+    filter's always is): JSON that pandoc reads as the same AST is the same
+    output (pandocfilters writes `{"t": "DisplayMath", "c": []}`, pandoc
+    `{"t": "DisplayMath"}`), and JSON pandoc can't read is a failure, as it
+    is when pandoc runs the filter."""
     cmd = original(folder)
     if origin(folder)["run"].startswith("lua"):
         return run(cmd + [fmt], data)
-    return run(cmd + [fmt], data, cwd=folder / "upstream")
+    ran = run(cmd + [fmt], data, cwd=folder / "upstream")
+    if not as_read or ran.code != 0:
+        return ran
+    read = run([env("PANDOC", "pandoc"), "--sandbox", "-f", "json", "-t", "json"], ran.out)
+    if read.code != 0:
+        read.err = b"pandoc could not read the original's output: " + read.err
+    return read
 
 
 def run_port(cmd: list[str], data: bytes, fmt: str) -> Ran:
@@ -194,9 +207,10 @@ def build(langs: list[str]) -> None:
         subprocess.run(["cargo", "build", "--release", "--quiet"], cwd=ROOT, check=True)
 
 
-def check(cmd: list[str], case: dict, label: str) -> str | None:
-    """None if the port makes what the original made, else what differs."""
-    ran = run_port(cmd, json.dumps(case["input"]).encode(), case["format"])
+def check(cmd: list[str] | Ran, case: dict, label: str) -> str | None:
+    """None if the port (its command, or what it made) makes what the
+    original made, else what differs."""
+    ran = cmd if isinstance(cmd, Ran) else run_port(cmd, json.dumps(case["input"]).encode(), case["format"])
     if case.get("error"):
         return None if ran.code != 0 else f"{label}: the original failed, the port didn't"
     if ran.code != 0:
@@ -214,7 +228,9 @@ def check(cmd: list[str], case: dict, label: str) -> str | None:
 
 def known(folder: Path) -> dict[tuple[str, str], str]:
     """known.tsv: differences explained in NOTES.md, as `language, case or
-    document, why`. They don't fail a run; one that no longer differs does."""
+    document, why`; the case or document perhaps with a format, `name
+    (format)`, if it differs in that one only. They don't fail a run; one
+    that no longer differs does."""
     path = folder / "known.tsv"
     if not path.exists():
         return {}
@@ -226,8 +242,9 @@ class Tally:
     def __init__(self, verbose: bool):
         self.verbose, self.passed, self.failed, self.known = verbose, 0, 0, 0
 
-    def add(self, folder: Path, lang: str, name: str, label: str, problem: str | None) -> None:
-        why = known(folder).get((lang, name))
+    def add(self, folder: Path, lang: str, name: str, fmt: str, label: str, problem: str | None) -> None:
+        listed = known(folder)
+        why = listed.get((lang, f"{name} ({fmt})")) or listed.get((lang, name))
         if problem and why:
             self.known += 1
             print("known", label, "--", why)
@@ -247,21 +264,47 @@ class Tally:
         return 1 if self.failed else 0
 
 
+def julia_in_one(jobs: list[tuple[str, dict]]) -> list[Ran]:
+    """What each Julia port made of its case, `(script, case)`, all in one
+    Julia process (julia-cases.jl): a process per case would compile
+    Panir's walk each time."""
+    lines = "".join(f"{script}\t{case['format']}\t{json.dumps(case['input'], ensure_ascii=False)}\n"
+                    for script, case in jobs)
+    driver = [env("JULIA", "julia"), f"--project={ROOT}", "--startup-file=no", str(ROOT / "julia-cases.jl")]
+    ran = run(driver, lines.encode(), environ=port_env())
+    results = ran.out.decode().splitlines()
+    if ran.code != 0 or len(results) != len(jobs):
+        sys.exit(f"julia-cases.jl failed (exit {ran.code}): {ran.err.decode(errors='replace')[-2000:]}")
+    out = []
+    for line in results:
+        kind, _, rest = line.partition("\t")
+        if kind == "output":
+            out.append(Ran(0, rest.encode(), b"", 0, 0))
+        else:
+            out.append(Ran(1, b"", rest.replace("\\n", "\n").encode(), 0, 0))
+    return out
+
+
 def cmd_test(args: argparse.Namespace) -> int:
     langs = langs_of(args.lang)
     build(langs)
     tally = Tally(args.verbose)
+    runs = []  # (folder, lang, case, the port's command, or what it made)
     for folder in filters(args.filters):
         cases = [json.loads(line) for line in (folder / "cases" / "expected.jsonl").read_text().splitlines()]
         for lang in langs:
             cmd = port(folder, lang)
-            if cmd is None:
-                continue
-            for case in cases:
-                label = f"{folder.name} {lang} {case['name']} ({case['format']})"
-                tally.add(folder, lang, case["name"], label, check(cmd, case, label))
+            if cmd is not None:
+                runs.extend((folder, lang, case, cmd) for case in cases)
+    julia = [i for i, (_, lang, _, _) in enumerate(runs) if lang == "julia"]
+    if julia:
+        made = julia_in_one([(runs[i][3][-1], runs[i][2]) for i in julia])
+        for i, ran in zip(julia, made):
+            runs[i] = (*runs[i][:3], ran)
+    for folder, lang, case, cmd in runs:
+        label = f"{folder.name} {lang} {case['name']} ({case['format']})"
+        tally.add(folder, lang, case["name"], case["format"], label, check(cmd, case, label))
     return tally.done()
-    return 1 if failed else 0
 
 
 def document(path: Path) -> bytes:
@@ -304,9 +347,8 @@ def cmd_diff(args: argparse.Namespace) -> int:
                     if cmd is None:
                         continue
                     label = f"{folder.name} {lang} {name} ({fmt})"
-                    tally.add(folder, lang, name, label, check(cmd, case, label))
+                    tally.add(folder, lang, name, fmt, label, check(cmd, case, label))
     return tally.done()
-    return 1 if failed else 0
 
 
 def cmd_expect(args: argparse.Namespace) -> int:
@@ -335,7 +377,7 @@ def cmd_time(args: argparse.Namespace) -> int:
     (folder,) = filters([args.filter])
     data = document(Path(args.doc))
     fmt = args.format or formats(folder)[0]
-    rows = [("original", lambda: run_original(folder, data, fmt))]
+    rows = [("original", lambda: run_original(folder, data, fmt, as_read=False))]
     for lang in langs:
         cmd = port(folder, lang)
         if cmd is not None:

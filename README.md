@@ -9,7 +9,9 @@ the ports are the means.
 Round 1 (filters that need only the AST) is chosen in
 [`SURVEY.md`](SURVEY.md) and listed, with each port's status, in
 [`filters.tsv`](filters.tsv). Ported so far: `caps`, `metavars`,
-`list-table`; lines and times in [`RESULTS.md`](RESULTS.md).
+`list-table`, then `deemph`, `comments`, `deflists`, `theorem`,
+`inlinenotes`, `gitlab_markdown`, `french-spaces`; lines and times in
+[`RESULTS.md`](RESULTS.md).
 
 ## What goes here
 
@@ -31,16 +33,18 @@ One folder per filter:
 - `NOTES.md`: what was awkward or missing, per language, and every place
   a port differs from its original;
 - `known.tsv`, if any: the differences `NOTES.md` explains (`language`,
-  case or document, why); they don't fail a run, and one that stops
-  differing does.
+  case or document, perhaps with the one format it differs in, as `name
+  (markdown)`, why); they don't fail a run, and one that stops differing
+  does.
 
 At the top: `run.py`, the runner; one Cargo workspace for the Rust ports
 (`Cargo.toml`), one Node.js package for the TypeScript ones and the type
 checkers (`package.json`, `tsconfig.json`, `pyrightconfig.json`), one
 Julia project (`Project.toml`); `tojson.lua`, which writes what an
 original Lua filter made; `oracle-requirements.txt`, what the Python
-originals need; `fetch-docs.sh`, pandoc's test documents for the
-differential runs.
+originals need; `julia-cases.jl`, which runs the Julia ports' cases in one
+process; `fetch-docs.sh`, pandoc's test documents for the differential
+runs, and `assemble.py`, documents made of the cases for them.
 
 ## Running
 
@@ -61,8 +65,12 @@ and:
 port as pandoc runs a JSON filter: Python with panir from
 `../panir/python/src` (`$PYTHON`, default `python3`), TypeScript with
 Node.js 22.18 or later as it is (`$NODE`), Rust from `target/release`,
-Julia with this project (`$JULIA`). Two documents are the same when their
-JSON is ("the same AST"), `pandoc-api-version` aside.
+Julia with this project (`$JULIA`), whose cases `test` runs in one Julia
+process (each case in a new module, through `Panir.handoff`: a process per
+case compiles Panir's walk again each time). Two documents are the same
+when their JSON is ("the same AST"), `pandoc-api-version` aside; an
+original's output is taken as pandoc reads it (`pandoc -f json -t json`
+for a Python one), as pandoc reads what a filter writes.
 
 Against the originals, which needs pandoc 3.14 (`$PANDOC`) and, for the
 Python originals, a Python with `oracle-requirements.txt`
@@ -74,9 +82,12 @@ Python originals, a Python with `oracle-requirements.txt`
 
 `diff` takes pandoc JSON documents (`.json`) or markdown (anything else,
 read by pandoc with `--sandbox`). The ones used so far: `./fetch-docs.sh`
-(pandoc's test documents) and some of libpandoc's benchmark documents
-(the pandoc manual, a Wikipedia article as HTML, a textbook in LaTeX,
-Python's documentation in RST, a novel as EPUB...); none are kept here.
+(pandoc's test documents), some of libpandoc's benchmark documents (the
+pandoc manual, a Wikipedia article as HTML, a textbook in LaTeX, Python's
+documentation in RST, a novel as EPUB...), and, as real documents rarely
+hold a filter's syntax, `python3 assemble.py` (five documents made of
+every filter's cases, shuffled, at several depths, in
+`.cache/assembled`); none are kept here.
 
 CI (`.github/workflows/ci.yml`) runs `run.py test` for the four languages
 on Linux, with `tsc`, pyright, rustfmt and clippy, panir's main checked

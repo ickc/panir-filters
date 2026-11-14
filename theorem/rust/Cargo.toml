@@ -1,0 +1,11 @@
+[package]
+name = "theorem"
+description = "Theorem divs to LaTeX environments or numbered HTML: a pandoc filter (a port of pandocfilters' theorem.py)"
+license = "BSD-3-Clause"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true

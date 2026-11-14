@@ -10,6 +10,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "comments"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
+name = "deemph"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
+name = "deflists"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
+name = "french-spaces"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
+name = "gitlab_markdown"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
+name = "inlinenotes"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -113,6 +155,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "theorem"
+version = "0.1.0"
+dependencies = [
+ "panir",
 ]
 
 [[package]]

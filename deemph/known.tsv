@@ -1,0 +1,2 @@
+# language	case or document	why (NOTES.md)
+julia	unicode	Julia's uppercase maps one character to one: ß to ẞ, not SS (as caps; NOTES.md)

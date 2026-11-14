@@ -1,0 +1,8 @@
+url: https://github.com/jgm/pandocfilters/blob/9988f9a6e4528d2ce3c4b885b8eed9328c3b408a/examples/gitlab_markdown.py
+repository: https://github.com/jgm/pandocfilters
+commit: 9988f9a6e4528d2ce3c4b885b8eed9328c3b408a
+path: examples/gitlab_markdown.py
+licence: BSD-3-Clause, Copyright (c) 2013, John MacFarlane (../LICENSE, the repository's, verbatim; it covers the original and the ports here)
+cases: cases/sample.md is the repository's examples/gitlab_markdown-sample.md, verbatim; the others are written for the port
+run: python gitlab_markdown.py
+formats: html

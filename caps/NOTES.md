@@ -21,5 +21,8 @@ the trivial filter needs nothing panir lacks. What it does show:
   not done. (The Unicode versions differ too, Python 17, Node.js 18, Rust
   17: no letter of the documents tried is affected.)
 
+panir#14 (the gaps the first ports found) changed nothing here: Rust's
+`apply` now returns a `Result`, which `panir::filter` takes as it is.
+
 Differential runs (pandoc's test documents, eight real documents): the
 same AST in Python, TypeScript and Rust everywhere; Julia as above.

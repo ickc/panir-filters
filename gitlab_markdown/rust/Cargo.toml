@@ -1,0 +1,11 @@
+[package]
+name = "gitlab_markdown"
+description = "GitLab's math to pandoc's: a pandoc filter (a port of pandocfilters' gitlab_markdown.py)"
+license = "BSD-3-Clause"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true

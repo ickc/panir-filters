@@ -7,13 +7,9 @@
 //! A port of pandocfilters' examples/metavars.py (Copyright (c) 2013, John
 //! MacFarlane; BSD-3-Clause, see ../LICENSE).
 
-use panir::{Attr, Ctx, Filter, Inline, Meta, MetaValue, Order, Span};
+use panir::{Attr, Ctx, Filter, Inline, MetaValue, Order, Span};
 
-/// The metadata as it was before the walk (a function's context has no
-/// document to read it from).
-struct MetaVars {
-    meta: Meta,
-}
+struct MetaVars;
 
 impl Filter for MetaVars {
     // pandocfilters' order: what is put in is walked
@@ -21,25 +17,18 @@ impl Filter for MetaVars {
         Order::Topdown
     }
 
-    fn inline(&mut self, x: &mut Inline, _: &mut Ctx) -> Option<Vec<Inline>> {
+    fn inline(&mut self, x: &mut Inline, ctx: &mut Ctx) -> Option<Vec<Inline>> {
         let Inline::Str(s) = x else { return None };
         let field = s.strip_prefix("%{")?.strip_suffix('}')?;
         // a field that isn't there is an error, as in the original
-        let value = self
-            .meta
-            .get(field)
-            .unwrap_or_else(|| panic!("no metadata field {field}"));
+        let Some(value) = ctx.meta().and_then(|meta| meta.get(field)) else {
+            return ctx.fail(format!("no metadata field {field}"));
+        };
         match value {
+            // the original's attributes() reads "class" as an attribute, not a class
             MetaValue::MetaInlines(content) => Some(vec![
                 Span {
-                    // the original's attributes() reads "class" as an attribute, not a class
-                    attr: Attr {
-                        attributes: vec![
-                            ("class".into(), "interpolated".into()),
-                            ("field".into(), field.into()),
-                        ],
-                        ..Attr::default()
-                    },
+                    attr: Attr::new("", &[], &[("class", "interpolated"), ("field", field)]),
                     content: content.clone(),
                 }
                 .into(),
@@ -51,8 +40,5 @@ impl Filter for MetaVars {
 }
 
 fn main() {
-    panir::filter(|doc, format| {
-        let meta = doc.meta.clone();
-        panir::apply(doc, &mut MetaVars { meta }, format);
-    });
+    panir::filter(|doc, format| panir::apply(doc, &mut MetaVars, format));
 }

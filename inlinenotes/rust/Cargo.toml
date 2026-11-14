@@ -1,0 +1,11 @@
+[package]
+name = "inlinenotes"
+description = "Notes to Markdown's inline notes: a pandoc filter (a port of pandocfilters' inlinenotes.py)"
+license = "BSD-3-Clause"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true

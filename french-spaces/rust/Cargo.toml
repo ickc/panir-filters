@@ -1,0 +1,11 @@
+[package]
+name = "french-spaces"
+description = "French punctuation's spaces for LaTeX: a pandoc filter (a port of chdemko/pandoc-latex-french-spaces)"
+license = "BSD-3-Clause"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true

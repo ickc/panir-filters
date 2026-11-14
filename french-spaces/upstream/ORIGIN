@@ -1,0 +1,9 @@
+url: https://github.com/chdemko/pandoc-latex-french-spaces/blob/82f5eee44f002a1fd812e9aabb1299de9e1c286b/src/pandoc_latex_french_spaces/_main.py
+repository: https://github.com/chdemko/pandoc-latex-french-spaces
+commit: 82f5eee44f002a1fd812e9aabb1299de9e1c286b
+path: src/pandoc_latex_french_spaces/_main.py
+licence: BSD-3-Clause, Copyright (c) 2018-2024, Christophe Demko (../LICENSE, the repository's, verbatim; it covers the original and the ports here)
+cases: cases/tests.md holds the inputs of the repository's tests/test_space.py (its expected markdown is not used: the expected AST is the original's under pandoc 3.14); the others are written for the port
+needs: panflute 2.3 (oracle-requirements.txt)
+run: python _main.py
+formats: latex beamer html
