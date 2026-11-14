@@ -26,16 +26,20 @@ That is the docstring's rule for most notes, and something else for some:
 - **Not kept, a known difference: what the JSON walk does inside a
   paragraph.** pandocfilters' walk doesn't give the query a paragraph's
   own inlines (they are what the query returned, whose fields it walks),
-  but it does give it the inlines inside those. So an emphasis in an
-  emphasis, or in a link, is appended again (`An *outer _inner_ outer*`
-  becomes `^[An *outer *inner* outer* emphasis.inner]`), and a note
-  whose emphasis or strong holds a link, code, a span, a quote or math
-  (whose JSON content holds attributes or strings) is left as is, while
-  the same link or code directly in the paragraph is joined. Case
-  `nesting`, in `known.tsv` for `markdown` in every language. Doing the
-  same would mean walking panir's AST as pandocfilters walks JSON, which
-  no port of a filter should; the ports follow the docstring. For
-  upstream: collect `Para` content only, not by a walk.
+  but it does give it the inlines inside those, in any inline that holds
+  some (an emphasis, a link, a span, a quote, a citation). Then an
+  emphasis-like one there (emphasis, strong, strikeout...: its JSON
+  content a list of inlines) is appended again (`An *outer _inner_
+  outer*` becomes `^[An *outer *inner* outer* emphasis.inner]`), and a
+  link, code, span, quote, math, raw inline or citation there (its JSON
+  content holding attributes or strings) leaves the note as it is, while
+  the same directly in the paragraph is joined. Case `nesting`, and a
+  real document: the textbook (LaTeX), whose notes cite with a `Cite`
+  holding a raw `\citep{...}`; the original leaves those notes, the
+  ports join them. Both in `known.tsv` for `markdown` in every language.
+  Doing the same would mean walking panir's AST as pandocfilters walks
+  JSON, which no port of a filter should; the ports follow the docstring.
+  For upstream: collect `Para` content only, not by a walk.
 
 ## By language
 
@@ -50,6 +54,7 @@ before it changes anything, so returning early is safe in every language.
   the decision made before anything moves.
 - **TypeScript, Julia**: a `switch` and an `if` chain; nothing missing.
 
-Differential runs (pandoc's test documents and eight real documents, which
-have notes, few with emphasis around a link; five documents made of every
-filter's cases but `nesting`): the same AST in every language.
+Differential runs (pandoc's test documents and eight real documents, three
+of which have notes; five documents made of every filter's cases but
+`nesting`): the same AST in every language, but the textbook's cited notes
+above.

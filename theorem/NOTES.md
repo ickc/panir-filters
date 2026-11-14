@@ -41,6 +41,8 @@ formats (`markdown` among the cases') are left alone.
   spliced list. The longest port (49 lines), from rustfmt's layout.
 - **Python**: `div.content[:0] = [...]` prepends, checked.
 
-Differential runs (pandoc's test documents, eight real documents, which
-have no theorem divs, and five documents made of every filter's cases,
-which do, at every depth): the same AST in every language and format.
+Differential runs (pandoc's test documents; eight real documents, one of
+which, the textbook read from LaTeX, has 95 theorem divs, as pandoc's
+LaTeX reader makes them, 74 with an identifier; five documents made of
+every filter's cases, theorems at every depth): the same AST in every
+language and format.

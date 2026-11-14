@@ -30,6 +30,7 @@ are Python's `strip`. TypeScript imports panir as a namespace
 JavaScript's in the module. Rust moves the code's text into the math
 (`std::mem::take`).
 
-Differential runs (pandoc's test documents, which have inline math, eight
-real documents, five documents made of every filter's cases): the same AST
+Differential runs (pandoc's test documents; eight real documents, with
+13,000 math inlines in the textbook and one `math` code block in the
+pandoc manual; five documents made of every filter's cases): the same AST
 in every language.

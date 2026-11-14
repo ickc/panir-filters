@@ -28,6 +28,7 @@ item with `iter::once(...).chain(defs.into_iter().flatten())`; Julia
 takes it as the items (and one vector of blocks as one item), as its
 README says.
 
-Differential runs (pandoc's test documents, which have definition lists,
-eight real documents, five documents made of every filter's cases): the
-same AST in every language.
+Differential runs (pandoc's test documents; eight real documents, the
+pandoc manual with 44 definition lists, Python's documentation with 9;
+five documents made of every filter's cases): the same AST in every
+language.

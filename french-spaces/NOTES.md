@@ -41,6 +41,7 @@ The original's `pyproject.toml` says Python 3.10 to 3.13; it runs under
 JSON changes nothing on the documents tried (an `html` run, where the
 filter does nothing, gives its input back).
 
-Differential runs (pandoc's test documents, eight real documents, five
-documents made of every filter's cases), for `latex`, `beamer` and
-`html`: the same AST in every language.
+Differential runs (pandoc's test documents; eight real documents, three
+of them with a space before `:`, `;`, `?` or `!`, 22 in all, but none
+with French quotation marks; five documents made of every filter's
+cases), for `latex`, `beamer` and `html`: the same AST in every language.
