@@ -27,3 +27,8 @@ proposed change.
 A port derives from its original and keeps the original's licence, stated
 in the filter's folder. What is this repository's own (the harness, the
 notes) is under the BSD 3-Clause licence in `LICENSE`.
+
+Originals under the GPL are not ported from their source. If one is done
+at all, it is written anew without reading that source (from its
+documentation, its behaviour and its tests, which are fetched and not kept
+here), and published under the original's licence.
