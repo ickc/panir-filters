@@ -1,0 +1,6 @@
+# language	case or document	why (NOTES.md)
+python	table	the original deletes a later cell's alignment, JSON pandoc cannot read: it fails, the port cannot (NOTES.md)
+ts	table	the original deletes a later cell's alignment, JSON pandoc cannot read: it fails, the port cannot (NOTES.md)
+rust	table	the original deletes a later cell's alignment, JSON pandoc cannot read: it fails, the port cannot (NOTES.md)
+julia	table	the original deletes a later cell's alignment, JSON pandoc cannot read: it fails, the port cannot (NOTES.md)
+rust	meta	panir's Rust has no function for metadata values: hidden MetaList items are emptied, not deleted (NOTES.md, GAPS.md 14)

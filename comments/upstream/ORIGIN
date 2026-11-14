@@ -1,0 +1,8 @@
+url: https://github.com/jgm/pandocfilters/blob/9988f9a6e4528d2ce3c4b885b8eed9328c3b408a/examples/comments.py
+repository: https://github.com/jgm/pandocfilters
+commit: 9988f9a6e4528d2ce3c4b885b8eed9328c3b408a
+path: examples/comments.py
+licence: BSD-3-Clause, Copyright (c) 2013, John MacFarlane (../LICENSE, the repository's, verbatim; it covers the original and the ports here)
+cases: cases/sample.md is the repository's examples/comments-sample.md, verbatim; the others are written for the port
+run: python comments.py
+formats: html
