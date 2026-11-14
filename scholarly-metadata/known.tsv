@@ -1,0 +1,5 @@
+# language	case or document	why (NOTES.md)
+python	blocks	an author given as blocks: the original names it after Lua's tostring of them (pandoc's Haskell show), the port fails (NOTES.md)
+ts	blocks	an author given as blocks: the original names it after Lua's tostring of them (pandoc's Haskell show), the port fails (NOTES.md)
+rust	blocks	an author given as blocks: the original names it after Lua's tostring of them (pandoc's Haskell show), the port fails (NOTES.md)
+julia	blocks	an author given as blocks: the original names it after Lua's tostring of them (pandoc's Haskell show), the port fails (NOTES.md)

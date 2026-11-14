@@ -1,0 +1,8 @@
+url: https://github.com/pandoc/lua-filters/blob/818f901a56cff8629dbd3d3d2d719320279ef6d1/scholarly-metadata/scholarly-metadata.lua
+repository: https://github.com/pandoc/lua-filters
+commit: 818f901a56cff8629dbd3d3d2d719320279ef6d1
+path: scholarly-metadata/scholarly-metadata.lua
+licence: MIT, Copyright (c) 2017-2021 pandoc Lua filters contributors (../LICENSE, the repository's, verbatim); the file's own header is ISC text, Copyright (c) 2017-2021 Albert Krewinkel, Robert Winkler; both cover the original and the ports here
+cases: cases/sample.md is the repository's scholarly-metadata/sample.md, verbatim (its expected.md is not used: the expected AST is the original's under pandoc 3.14); the others are written for the ports
+run: lua scholarly-metadata.lua
+formats: html
