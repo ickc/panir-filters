@@ -9,7 +9,9 @@ the ports are the means.
 Round 1 (filters that need only the AST) is chosen in
 [`SURVEY.md`](SURVEY.md) and listed, with each port's status, in
 [`filters.tsv`](filters.tsv). Ported so far: `caps`, `metavars`,
-`list-table`; lines and times in [`RESULTS.md`](RESULTS.md).
+`list-table`, then `deemph`, `comments`, `deflists`, `theorem`,
+`inlinenotes`, `gitlab_markdown`, `french-spaces`; lines and times in
+[`RESULTS.md`](RESULTS.md).
 
 ## What goes here
 

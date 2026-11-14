@@ -2,15 +2,21 @@
 
 What porting real filters found missing or awkward in
 [panir](https://github.com/ickc/panir), each with a proposed change.
-Ranked by how many of round 1's 21 filters (`SURVEY.md`) would hit it,
-counted from their sources; then by how much it hurts. Each filter's
+How many of round 1's 21 filters (`SURVEY.md`) would hit each, counted
+from their sources, ranks them, then how much it hurts; they are numbered
+in the order found. Open, by rank: 12, 13, then 11, 14, 15, 16 (low). Each
+filter's
 `NOTES.md` has the details.
 
 A gap stays here once closed, marked so, with what closed it: the list is
 also the history of what the ports found. Gaps 1 to 10 were found with
 `caps`, `metavars` and `list-table`, and closed in panir by
 [ickc/panir#14](https://github.com/ickc/panir/pull/14), which those three
-ports now use.
+ports now use. Gap 11 was found bringing them onto it; 12 to 16 with the
+second batch (`deemph`, `comments`, `deflists`, `theorem`, `inlinenotes`,
+`gitlab_markdown`, `french-spaces`), which used little of panir#14's API
+(`has_class`, `ctx.fail`) as none of them reads attributes or the
+metadata.
 
 | # | gap | languages | round 1 filters hitting it | status |
 |---|---|---|---|---|
@@ -25,6 +31,11 @@ ports now use.
 | 9 | "the inlines of this block" | Rust | 1: list-table | closed, panir#14 |
 | 10 | `ctx.doc` is optional in TypeScript's types | TypeScript | every filter reading the document from a function | closed, panir#14 |
 | 11 | inside the metadata, Rust's `ctx.meta()` lacks the field being walked | Rust | 1: metavars (only a field naming itself, an error anyway) | open; low |
+| 12 | a sub-walk from a Rust filter function: the conversion and the error by hand | Rust | 6: deemph, pagebreak, abstract-section, cito, track-changes, amsthm | open |
+| 13 | what a top-down function's replacement gets walked is not said | all (documentation) | 6: deemph, theorem, metavars, comments, amsthm, auto-lang | open |
+| 14 | Rust's `Filter` has no function for metadata values | Rust | 1: comments (a `MetaList`'s items) | open; low |
+| 15 | `[]` for a metadata value in a map: Python deletes the key, TypeScript and Julia refuse | Python, TypeScript, Julia | 1: comments | open; low |
+| 16 | TypeScript's `ctx.parent` is typed `ASTNode`: `ctx.parent?.t` doesn't type-check | TypeScript | 1: comments | open; low |
 
 Not panir's, but met: Julia has no full Unicode case mapping (`caps`); an
 error that shows the offending blocks as markdown needs pandoc's writer,
@@ -284,4 +295,114 @@ Low priority.
 
 How common: 1 of 21 (metavars), and only on a document that is an error
 anyway.
+
+## 12. A sub-walk from a Rust filter function: the conversion and the error by hand
+
+Found with deemph.
+
+**The original**: deemph walks an emphasis's content with a second
+filter (`walk(val, caps, fmt, meta)`), from inside its function; Lua's
+`el:walk{...}`, panflute's `elem.walk(...)` are the same.
+
+**panir**: Python (`emph.content.walk(caps)`), TypeScript
+(`applyFilter(emph.content, caps)`) and Julia (`walk!(caps,
+emph.content)`) take one line, which returns the list, and an error goes
+up as any exception. Rust takes six: `panir::apply_with(&mut content, &mut
+Caps, ctx.conversion())`, whose `Result` the function turns into
+`ctx.fail(e)` with a `match`, as a filter function returns an `Option`
+and can't use `?` on it. Forgetting the conversion (`apply(..., None)`)
+gives the sub-walk no format, silently.
+
+**Proposed**: `Ctx::apply<T: Walkable, F: Filter>(&mut self, x: &mut T,
+f: &mut F) -> Option<()>`: walks with the context's conversion and depth;
+on failure records the error as `fail` does (the inner path kept in the
+message) and returns `None`, so that a function writes
+`ctx.apply(&mut content, &mut Caps)?;`.
+
+How common: every filter with `subwalk` in `SURVEY.md`: 6 of 21.
+
+## 13. What a top-down function's replacement gets walked is not said
+
+Found with deemph and theorem.
+
+**The original**: pandocfilters calls the action on a node, then walks
+the fields of what it returned, not the returned node itself; of a
+returned list, neither are its elements given to the action, only their
+fields. deemph and theorem depend on it: an emphasis directly in another,
+spliced in, stays an emphasis; in LaTeX, a theorem directly in a theorem
+stays a div (and the HTML branch, returning a div of the same class, would
+otherwise number itself without end).
+
+**panir**: does exactly this in every language (tested in Python: a
+spliced emphasis's directly nested emphasis is not given to the function,
+one in a strong is), so the ports match. But each README says only that
+a node's children "are walked in the node's replacement too", which can
+be read either way; a port had to test it.
+
+**Proposed**: say it in each README's `topdown` paragraph: "what a
+function returns is not given to the function again (nor, if a list, its
+elements); their children are", and a corpus scenario that pins it
+(pandoc's Lua should agree: check it when writing the scenario).
+
+How common: the top-down filters of round 1, 6 of 21.
+
+## 14. Rust's `Filter` has no function for metadata values
+
+Found with comments.
+
+**The original**: comments deletes, while hiding, every node in a list,
+so the items of a `MetaList` after a beginning in the metadata.
+
+**panir**: Python, TypeScript and Julia have functions on `MetaValue`
+(by type, or for each constructor). Rust's `Filter` has `inline`,
+`block`, `inlines`, `blocks`, `meta` and `pandoc` only, as pandoc's Lua
+(which calls no function for a metadata value: checked with pandoc 3.14).
+The Rust port empties those items instead of deleting them: a known
+difference (case `meta`).
+
+**Proposed**: `fn meta_value(&mut self, x: &mut MetaValue, ctx: &mut Ctx)
+-> Option<Vec<MetaValue>>`, called as the other languages call theirs;
+spliced in a list, one value only in a map (gap 15). Or leave it, as Lua
+does, and say in the Rust README which functions the other languages'
+filters have that `Filter` doesn't. Low priority.
+
+How common: 1 of 21, and only on a beginning marker in the metadata.
+
+## 15. `[]` for a metadata value in a map: Python deletes the key, TypeScript and Julia refuse
+
+Found with comments.
+
+**panir**: a `MetaValue` function returning `[]` for a value in a list
+deletes it, in every language. For a value in a map (a field of the
+metadata, an entry of a `MetaMap`), Python deletes the key, silently;
+TypeScript and Julia raise ("expected one MetaValue (this position holds
+one), got []"). pandoc's Lua has no such functions to follow (gap 14).
+The comments port in Python had to check `ctx.parent` to delete only in a
+list, as the original does; in TypeScript and Julia the same check avoids
+an error.
+
+**Proposed**: one rule in every language; the TypeScript and Julia one
+(a map's position holds one value: `[]` is an error there, return
+`nothing` to keep it, and delete a key from the `Meta` or `MetaMap`
+function). A corpus scenario to pin it.
+
+How common: 1 of 21.
+
+## 16. TypeScript's `ctx.parent` is typed `ASTNode`
+
+Found with comments.
+
+**panir**: `ctx.next` and `ctx.prev` are typed by the function's node
+(`Inline` for an inline's), but `ctx.parent` is `ASTNode`, which includes
+the products without `t` (`Attr`, `Cell`...), so `ctx.parent?.t ===
+"MetaList"` doesn't type-check in a `MetaValue` function. The port uses
+`Array.isArray(ctx.container)` ("in a list"), which does and says what
+the original means.
+
+**Proposed**: type `parent` as the nodes that can hold the function's
+node where the schema says (a `MetaValue`'s parent is a `MetaList`, a
+`MetaMap` or none), or at least a union of the `t`-tagged ones. Low
+priority.
+
+How common: 1 of 21.
 
