@@ -1,0 +1,6 @@
+target/
+node_modules/
+Manifest.toml
+__pycache__/
+# documents fetched for the differential runs (fetch-docs.sh): never committed
+.cache/

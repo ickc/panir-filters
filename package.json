@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "description": "The TypeScript ports (Node.js runs them as they are), and the type checkers of the TypeScript and Python ports",
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit && pyright"
+  },
+  "dependencies": {
+    "panir": "file:../panir/ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "pyright": "^1.1.414",
+    "typescript": "^7.0.2"
+  }
+}

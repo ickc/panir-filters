@@ -1,0 +1,4 @@
+# language	case or document	why (NOTES.md)
+julia	unicode	Julia's uppercase maps one character to one: ß to ẞ, not SS (NOTES.md)
+julia	pandoc-changelog	the same: "Voß" (NOTES.md)
+julia	python-stdtypes	the same: "straße" (NOTES.md)

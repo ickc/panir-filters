@@ -1,0 +1,6 @@
+{
+  "include": ["*/python"],
+  "extraPaths": ["../panir/python/src"],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "standard"
+}
