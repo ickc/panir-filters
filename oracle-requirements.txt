@@ -1,0 +1,3 @@
+# What the Python originals need (run.py expect, diff, time): ORACLE_PYTHON
+pandocfilters==1.5.1
+panflute==2.3.1

@@ -1,0 +1,13 @@
+# One workspace for every Rust port: `cargo build --release` (run.py does),
+# each port a binary named as its filter, in target/release.
+[workspace]
+members = ["*/rust"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.97"
+
+[workspace.dependencies]
+# panir's checkout beside this one, while panir isn't published
+panir = { path = "../panir/rust" }

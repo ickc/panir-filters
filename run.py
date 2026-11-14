@@ -1,0 +1,382 @@
+#!/usr/bin/env python3
+"""The test runner: each filter's ports against what its original made.
+
+    python3 run.py test [FILTER...]            the cases (cases/expected.jsonl)
+    python3 run.py diff --docs DOC... [FILTER...]
+                                               each port against its original,
+                                               on documents it wasn't written for
+    python3 run.py expect [FILTER...]          regenerate cases/expected.jsonl
+                                               with the original
+    python3 run.py time FILTER --doc DOC       time and memory, original and ports
+
+`--lang python,ts,rust,julia` picks languages (all by default). A port is
+run as pandoc runs a JSON filter: the document on stdin, the output format
+as the first argument, the document on stdout. Two documents are the same
+when their JSON is ("the same AST"), `pandoc-api-version` aside.
+
+`test` needs only the ports' toolchains. `diff`, `expect` and `time` also
+run the originals: pandoc (`$PANDOC`) for Lua ones, and for Python ones a
+Python with pandocfilters and panflute (`$ORACLE_PYTHON`; see
+`oracle-requirements.txt`). Other variables: `$PANIR` (panir's checkout,
+default `../panir`), `$PYTHON`, `$NODE`, `$JULIA`, `$TIMEOUT` (seconds a
+run may take, 300). Rust ports are built
+(`cargo build --release`) before they run.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+LANGS = ("python", "ts", "rust", "julia")
+env = os.environ.get
+
+
+def filters(names: list[str]) -> list[Path]:
+    found = sorted(p.parent.parent for p in ROOT.glob("*/upstream/ORIGIN"))
+    if not names:
+        return found
+    by_name = {p.name: p for p in found}
+    missing = [n for n in names if n not in by_name]
+    if missing:
+        sys.exit(f"no such filter: {', '.join(missing)}")
+    return [by_name[n] for n in names]
+
+
+def origin(folder: Path) -> dict[str, str]:
+    """upstream/ORIGIN: `key: value` lines."""
+    out = {}
+    for line in (folder / "upstream" / "ORIGIN").read_text().splitlines():
+        key, _, value = line.partition(":")
+        if value:
+            out[key.strip()] = value.strip()
+    return out
+
+
+def port(folder: Path, lang: str) -> list[str] | None:
+    """The command running a filter's port in a language, if it has one."""
+    name = folder.name
+    if lang == "python":
+        script = folder / "python" / f"{name}.py"
+        return [env("PYTHON", "python3"), str(script)] if script.exists() else None
+    if lang == "ts":
+        script = folder / "ts" / f"{name}.ts"
+        return [env("NODE", "node"), str(script)] if script.exists() else None
+    if lang == "rust":
+        if not (folder / "rust" / "Cargo.toml").exists():
+            return None
+        return [str(ROOT / "target" / "release" / name)]
+    if lang == "julia":
+        script = folder / "julia" / f"{name}.jl"
+        if not script.exists():
+            return None
+        return [env("JULIA", "julia"), f"--project={ROOT}", "--startup-file=no", str(script)]
+    raise ValueError(lang)
+
+
+def port_env() -> dict[str, str]:
+    panir = Path(env("PANIR", ROOT.parent / "panir")).resolve()
+    return {**os.environ, "PYTHONPATH": str(panir / "python" / "src")}
+
+
+def original(folder: Path) -> list[str]:
+    """The command running the original as a JSON filter would run."""
+    how = origin(folder)["run"].split()
+    upstream = folder / "upstream"
+    if how[0] == "python":
+        return [env("ORACLE_PYTHON", "python3"), str(upstream / how[1])]
+    if how[0] == "lua":
+        # pandoc runs the Lua filter for the format, and a second one writes
+        # the document as JSON to stdout (pandoc's own output goes nowhere)
+        return [
+            env("PANDOC", "pandoc"), "--sandbox", "-f", "json", "-o", os.devnull,
+            "-L", str(upstream / how[1]), "-L", str(ROOT / "tojson.lua"), "-t",
+        ]
+    raise ValueError(f"{folder.name}: unknown run: {how}")
+
+
+class Ran:
+    def __init__(self, code: int, out: bytes, err: bytes, seconds: float, rss_kb: int):
+        self.code, self.out, self.err, self.seconds, self.rss_kb = code, out, err, seconds, rss_kb
+
+
+def run(cmd: list[str], data: bytes, cwd: Path | None = None, environ: dict | None = None) -> Ran:
+    """Run a command on `data`, with its time and peak memory (its own,
+    from wait4)."""
+    start = time.perf_counter()
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, cwd=cwd, env=environ)
+    out: list[bytes] = []
+    err: list[bytes] = []
+    readers = [threading.Thread(target=lambda: out.append(p.stdout.read())),
+               threading.Thread(target=lambda: err.append(p.stderr.read()))]
+    for r in readers:
+        r.start()
+    # a filter that never ends (one walking its own output, say) is stopped
+    timer = threading.Timer(float(env("TIMEOUT", "300")), p.kill)
+    timer.start()
+    try:
+        p.stdin.write(data)
+        p.stdin.close()
+    except BrokenPipeError:
+        pass
+    _, status, usage = os.wait4(p.pid, 0)
+    seconds = time.perf_counter() - start
+    timer.cancel()
+    p.returncode = os.waitstatus_to_exitcode(status)
+    for r in readers:
+        r.join()
+    return Ran(p.returncode, out[0], err[0], seconds, usage.ru_maxrss)
+
+
+def run_original(folder: Path, data: bytes, fmt: str) -> Ran:
+    cmd = original(folder)
+    if origin(folder)["run"].startswith("lua"):
+        return run(cmd + [fmt], data)
+    return run(cmd + [fmt], data, cwd=folder / "upstream")
+
+
+def run_port(cmd: list[str], data: bytes, fmt: str) -> Ran:
+    return run(cmd + [fmt], data, environ=port_env())
+
+
+def ast(text: bytes) -> object:
+    doc = json.loads(text)
+    doc.pop("pandoc-api-version", None)
+    return doc
+
+
+def first_difference(a: object, b: object, path: str = "") -> str | None:
+    """Where two JSON values first differ, as a path."""
+    if type(a) is not type(b) and not (isinstance(a, (int, float)) and isinstance(b, (int, float))):
+        return f"{path or '.'}: {short(a)} != {short(b)}"
+    if isinstance(a, dict):
+        for k in sorted(set(a) | set(b)):
+            if k not in a or k not in b:
+                return f"{path}.{k}: missing on one side"
+            d = first_difference(a[k], b[k], f"{path}.{k}")
+            if d:
+                return d
+        return None
+    if isinstance(a, list):
+        for i, (x, y) in enumerate(zip(a, b)):
+            d = first_difference(x, y, f"{path}[{i}]")
+            if d:
+                return d
+        if len(a) != len(b):
+            return f"{path}: length {len(a)} != {len(b)}"
+        return None
+    return None if a == b else f"{path or '.'}: {short(a)} != {short(b)}"
+
+
+def short(x: object) -> str:
+    s = json.dumps(x, ensure_ascii=False)
+    return s if len(s) < 120 else s[:117] + "..."
+
+
+def langs_of(arg: str | None) -> list[str]:
+    langs = arg.split(",") if arg else list(LANGS)
+    bad = [x for x in langs if x not in LANGS]
+    if bad:
+        sys.exit(f"unknown language: {', '.join(bad)}")
+    return langs
+
+
+def build(langs: list[str]) -> None:
+    if "rust" in langs and (ROOT / "Cargo.toml").exists():
+        subprocess.run(["cargo", "build", "--release", "--quiet"], cwd=ROOT, check=True)
+
+
+def check(cmd: list[str], case: dict, label: str) -> str | None:
+    """None if the port makes what the original made, else what differs."""
+    ran = run_port(cmd, json.dumps(case["input"]).encode(), case["format"])
+    if case.get("error"):
+        return None if ran.code != 0 else f"{label}: the original failed, the port didn't"
+    if ran.code != 0:
+        return f"{label}: exit {ran.code}\n{ran.err.decode(errors='replace')[-2000:]}"
+    want = dict(case["output"])
+    want.pop("pandoc-api-version", None)
+    try:
+        got = ast(ran.out)
+    except json.JSONDecodeError as e:
+        return f"{label}: not JSON ({e})"
+    if got != want:
+        return f"{label}: {first_difference(got, want)} (port != original)"
+    return None
+
+
+def known(folder: Path) -> dict[tuple[str, str], str]:
+    """known.tsv: differences explained in NOTES.md, as `language, case or
+    document, why`. They don't fail a run; one that no longer differs does."""
+    path = folder / "known.tsv"
+    if not path.exists():
+        return {}
+    rows = [line.split("\t") for line in path.read_text().splitlines() if line and not line.startswith("#")]
+    return {(lang, name): why for lang, name, why in rows}
+
+
+class Tally:
+    def __init__(self, verbose: bool):
+        self.verbose, self.passed, self.failed, self.known = verbose, 0, 0, 0
+
+    def add(self, folder: Path, lang: str, name: str, label: str, problem: str | None) -> None:
+        why = known(folder).get((lang, name))
+        if problem and why:
+            self.known += 1
+            print("known", label, "--", why)
+        elif problem:
+            self.failed += 1
+            print("FAIL", problem)
+        elif why:
+            self.failed += 1
+            print("FAIL", label, "is the same now: remove it from known.tsv")
+        else:
+            self.passed += 1
+            if self.verbose:
+                print("ok  ", label)
+
+    def done(self) -> int:
+        print(f"{self.passed} passed, {self.failed} failed, {self.known} known differences")
+        return 1 if self.failed else 0
+
+
+def cmd_test(args: argparse.Namespace) -> int:
+    langs = langs_of(args.lang)
+    build(langs)
+    tally = Tally(args.verbose)
+    for folder in filters(args.filters):
+        cases = [json.loads(line) for line in (folder / "cases" / "expected.jsonl").read_text().splitlines()]
+        for lang in langs:
+            cmd = port(folder, lang)
+            if cmd is None:
+                continue
+            for case in cases:
+                label = f"{folder.name} {lang} {case['name']} ({case['format']})"
+                tally.add(folder, lang, case["name"], label, check(cmd, case, label))
+    return tally.done()
+    return 1 if failed else 0
+
+
+def document(path: Path) -> bytes:
+    """A document's JSON: a .json file as it is, anything else read by
+    pandoc as markdown."""
+    if path.suffix == ".json":
+        return path.read_bytes()
+    ran = run([env("PANDOC", "pandoc"), "--sandbox", "-f", "markdown", "-t", "json", str(path)], b"")
+    if ran.code != 0:
+        sys.exit(f"pandoc could not read {path}: {ran.err.decode()}")
+    return ran.out
+
+
+def formats(folder: Path) -> list[str]:
+    return origin(folder).get("formats", "html").split()
+
+
+def doc_name(path: Path) -> str:
+    return path.parent.name if path.name == "doc.json" else path.name
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    langs = langs_of(args.lang)
+    build(langs)
+    docs = [(doc_name(Path(d)), document(Path(d))) for d in args.docs]
+    tally = Tally(args.verbose)
+    for folder in filters(args.filters):
+        for name, data in docs:
+            for fmt in formats(folder):
+                want = run_original(folder, data, fmt)
+                case = {"name": name, "format": fmt, "input": json.loads(data)}
+                if want.code != 0:
+                    case["error"] = True
+                    print(f"note {folder.name} {name} ({fmt}): the original failed: "
+                          f"{want.err.decode(errors='replace').strip()[-300:]}")
+                else:
+                    case["output"] = json.loads(want.out)
+                for lang in langs:
+                    cmd = port(folder, lang)
+                    if cmd is None:
+                        continue
+                    label = f"{folder.name} {lang} {name} ({fmt})"
+                    tally.add(folder, lang, name, label, check(cmd, case, label))
+    return tally.done()
+    return 1 if failed else 0
+
+
+def cmd_expect(args: argparse.Namespace) -> int:
+    for folder in filters(args.filters):
+        lines = []
+        sources = (folder / "cases").glob("*.md"), (folder / "cases").glob("*.json")
+        for md in sorted(p for found in sources for p in found):
+            data = document(md)
+            for fmt in formats(folder):
+                ran = run_original(folder, data, fmt)
+                case = {"name": md.stem, "format": fmt, "input": json.loads(data)}
+                if ran.code != 0:
+                    case["error"] = True
+                    print(f"{folder.name} {md.stem} ({fmt}): the original fails (expected so)")
+                else:
+                    case["output"] = json.loads(ran.out)
+                lines.append(json.dumps(case, ensure_ascii=False, separators=(",", ":")))
+        (folder / "cases" / "expected.jsonl").write_text("".join(x + "\n" for x in lines))
+        print(f"{folder.name}: {len(lines)} cases")
+    return 0
+
+
+def cmd_time(args: argparse.Namespace) -> int:
+    langs = langs_of(args.lang)
+    build(langs)
+    (folder,) = filters([args.filter])
+    data = document(Path(args.doc))
+    fmt = args.format or formats(folder)[0]
+    rows = [("original", lambda: run_original(folder, data, fmt))]
+    for lang in langs:
+        cmd = port(folder, lang)
+        if cmd is not None:
+            rows.append((lang, lambda cmd=cmd: run_port(cmd, data, fmt)))
+    print(f"{folder.name} on {doc_name(Path(args.doc))} ({len(data) / 1e6:.1f} MB of JSON, {fmt}), "
+          f"best of {args.repeat}")
+    print("| | seconds | peak MB |\n|---|---|---|")
+    for label, go in rows:
+        best = None
+        for _ in range(args.repeat):
+            ran = go()
+            if ran.code != 0:
+                print(f"| {label} | failed: {ran.err.decode(errors='replace')[-200:]} | |")
+                break
+            if best is None or ran.seconds < best.seconds:
+                best = ran
+        if best:
+            print(f"| {label} | {best.seconds:.2f} | {best.rss_kb / 1024:.0f} |")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="command", required=True)
+    for name in ("test", "diff", "expect"):
+        p = sub.add_parser(name)
+        p.add_argument("filters", nargs="*")
+        if name != "expect":
+            p.add_argument("--lang")
+            p.add_argument("-v", "--verbose", action="store_true")
+        if name == "diff":
+            p.add_argument("--docs", nargs="+", required=True)
+    p = sub.add_parser("time")
+    p.add_argument("filter")
+    p.add_argument("--doc", required=True)
+    p.add_argument("--format")
+    p.add_argument("--lang")
+    p.add_argument("--repeat", type=int, default=3)
+    args = ap.parse_args()
+    return {"test": cmd_test, "diff": cmd_diff, "expect": cmd_expect, "time": cmd_time}[args.command](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

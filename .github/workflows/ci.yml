@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Every port on every case, in the four languages, with panir checked out
+  # beside this repository as in development (its main: the ports follow
+  # panir, whose API may change).
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: panir-filters
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: panir-filters
+      - uses: actions/checkout@v7
+        with:
+          repository: ickc/panir
+          path: panir
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.15"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: panir-filters
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: "1"
+      - uses: julia-actions/cache@v3
+      - name: panir's TypeScript package, built
+        working-directory: panir/ts
+        run: npm ci && npm run build
+      - name: Set up the ports
+        run: |
+          npm ci
+          julia --project=. -e 'using Pkg; Pkg.instantiate(); using Panir'
+      - name: Check the ports
+        run: |
+          npm run check  # tsc and pyright
+          cargo fmt --check
+          cargo clippy --release -- -D warnings
+      - name: The cases
+        run: python3 run.py test
