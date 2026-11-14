@@ -1,0 +1,11 @@
+[package]
+name = "abstract-section"
+description = "A section headed Abstract moves into the metadata: a pandoc filter (a port of pandoc-ext/abstract-section)"
+license = "MIT"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true
