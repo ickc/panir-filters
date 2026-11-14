@@ -5,4 +5,4 @@ quot-marks-by-lang:
 lang: de-DE
 ---
 
-Marks for German, overridden: "Gänsefüßchen" and 'halbe'.
+Marks for German, overridden: "Anführungszeichen" and 'halbe'.
