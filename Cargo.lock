@@ -26,6 +26,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "auto-lang"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
 name = "caps"
 version = "0.1.0"
 dependencies = [
