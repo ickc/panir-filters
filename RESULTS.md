@@ -72,9 +72,11 @@ chained cases' two scripts each).
 ## Lines of code
 
 Non-blank, non-comment lines, docstrings not counted; the Rust ports as
-rustfmt leaves them. In brackets, before panir#14 (attributes by key,
-`ctx.fail`, `ctx.meta()`, `Attr::new`, `tag`, `inlines_mut`). caps' Rust
-was given as 12 at first; it is 13.
+rustfmt leaves them. In brackets, for the first three, before panir#14
+(attributes by key, `ctx.fail`, `ctx.meta()`, `Attr::new`, `tag`,
+`inlines_mut`); for the third batch, before panir#16 (Lua's truth,
+`lookup`, `items`, plain values, a list of filters, Rust's `Option<()>`
+functions). caps' Rust was given as 12 at first; it is 13.
 
 | filter | original | Python | TypeScript | Rust | Julia |
 |---|---|---|---|---|---|
@@ -87,12 +89,12 @@ was given as 12 at first; it is 13.
 | theorem | 25 (Python) | 17 | 19 | 49 | 16 |
 | inlinenotes | 19 (Python) | 22 | 25 | 38 | 17 |
 | gitlab_markdown | 14 (Python) | 13 | 10 | 28 | 10 |
-| french-spaces | 20 (Python, panflute) | 16 | 14 | 40 | 15 |
-| scholarly-metadata | 129 (Lua) | 100 | 87 | 191 | 77 |
-| author-info-blocks | 134 (Lua) | 117 | 66 | 178 | 61 |
-| pandoc-quotes | 178 (Lua; 104 without its table of 72 languages, 74 lines in every language) | 144 (70) | 120 (46) | 180 (106) | 120 (46) |
-| abstract-section | 63 (Lua) | 69 | 53 | 84 | 42 |
-| cito | 207 (Lua; 52 without its table of properties, 155 lines) | 126 (46; the table 80) | 91 (39; 52) | 233 (97; 136) | 89 (43; 46) |
+| french-spaces | 20 (Python, panflute) | 16 | 14 | 41 | 15 |
+| scholarly-metadata | 129 (Lua) | 92 (100) | 84 (87) | 175 (191) | 71 (77) |
+| author-info-blocks | 134 (Lua) | 108 (117) | 61 (66) | 160 (178) | 54 (61) |
+| pandoc-quotes | 178 (Lua; 104 without its table of 72 languages, 74 lines in every language) | 140 (144; 66 without the table) | 119 (120; 45) | 176 (180; 102) | 114 (120; 40) |
+| abstract-section | 63 (Lua) | 61 (69) | 52 (53) | 78 (84) | 40 (42) |
+| cito | 207 (Lua; 52 without its table of properties, 155 lines) | 126 (46; the table 80) | 91 (39; 52) | 225 (89; 136; 233 before) | 89 (43; 46) |
 
 Rust is two to five times the others on these small filters: rustfmt's
 layout (a `let ... else` is three lines, a struct literal one per field),

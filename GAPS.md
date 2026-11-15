@@ -4,8 +4,9 @@ What porting real filters found missing or awkward in
 [panir](https://github.com/ickc/panir), each with a proposed change.
 How many of round 1's 21 filters (`SURVEY.md`) would hit each, counted
 from their sources, ranks them, then how much it hurts; they are numbered
-in the order found. Gaps 1 to 16 are closed. Open, by rank: 17, 18, 22,
-19, 24, 20, 21, 23, 25. Each filter's `NOTES.md` has the details.
+in the order found. Gaps 1 to 25 are closed (20 and 25 in part, as
+panir declined the rest); none is open. Each filter's `NOTES.md` has the
+details.
 
 A gap stays here once closed, marked so, with what closed it: the list is
 also the history of what the ports found. Gaps 1 to 10 were found with
@@ -19,7 +20,10 @@ metadata. 17 to 25 with the third, the metadata cluster
 (`scholarly-metadata`, `author-info-blocks`, `pandoc-quotes`,
 `abstract-section`, `cito`), the first batch of Lua originals: what Lua's
 plain metadata values cost in panir's typed ones (below, "Metadata, by
-language"), and what each "Coming from Lua" says or doesn't.
+language"), and what each "Coming from Lua" says or doesn't; closed by
+[ickc/panir#16](https://github.com/ickc/panir/pull/16), which those five
+ports now use (`run.py test`, `CHECK_UNIQUE=1` and the differential runs
+the same).
 
 | # | gap | languages | round 1 filters hitting it | status |
 |---|---|---|---|---|
@@ -39,15 +43,15 @@ language"), and what each "Coming from Lua" says or doesn't.
 | 14 | Rust's `Filter` has no function for metadata values | Rust | 1: comments (a `MetaList`'s items) | closed, panir#15: `meta_value`, `ctx.in_list()` |
 | 15 | `[]` for a metadata value in a map: Python deletes the key, TypeScript and Julia refuse | Python, TypeScript, Julia | 1: comments | closed, panir#15: an error in every language |
 | 16 | TypeScript's `ctx.parent` is typed `ASTNode`: `ctx.parent?.t` doesn't type-check | TypeScript | 1: comments | closed, panir#15: typed by the function |
-| 17 | Lua's metadata, as panir has it, is not said: what each Lua value is here, its fields, `pandoc.utils.type`, tables as references | all (documentation) | 11: every Lua original but list-table | open |
-| 18 | Lua's `if meta.x then` (set and not false): every port writes it, and a node is always true in Python and TypeScript | Python, TypeScript, Julia (Rust matches) | 9: scholarly-metadata, author-info-blocks, pandoc-quotes, abstract-section, pagebreak, track-changes, first-line-indent, amsthm, auto-lang | open |
-| 19 | Python's `from_python` refuses inlines and blocks, which Lua, TypeScript and Julia make `MetaInlines` and `MetaBlocks` | Python | 7: scholarly-metadata, author-info-blocks, abstract-section, track-changes, first-line-indent, count-para, amsthm | open (low) |
-| 20 | several filters as one program: Python's `main` and Julia's `run_filter` take one | Python, Julia | 4: pandoc-quotes, count-para, auto-lang, amsthm | open |
-| 21 | a nested option: no lookup by path | all | 4: abstract-section, pagebreak, first-line-indent, amsthm | open |
-| 22 | one value or a list of them (Lua's `ensure_list`, `header-includes` "whatever shape"): one arm per constructor | all (Rust most) | 7: scholarly-metadata, pandoc-quotes, abstract-section, track-changes, first-line-indent, count-para, amsthm | open |
-| 23 | Rust has no metadata from plain values | Rust | 3: cito, scholarly-metadata, first-line-indent | open |
-| 24 | Rust: `ctx.fail` and `ctx.apply` from a function returning `()` (`meta`, `pandoc`, list functions) | Rust | 6: scholarly-metadata, author-info-blocks, pandoc-quotes, abstract-section, pagebreak, track-changes | open |
-| 25 | Rust's `Link` and `Target` are built field by field | Rust | 2: author-info-blocks, count-para | open (low) |
+| 17 | Lua's metadata, as panir has it, is not said: what each Lua value is here, its fields, `pandoc.utils.type`, tables as references | all (documentation) | 11: every Lua original but list-table | closed, panir#16: a "Metadata" part in each "Coming from Lua" |
+| 18 | Lua's `if meta.x then` (set and not false): every port writes it, and a node is always true in Python and TypeScript | Python, TypeScript, Julia (Rust matches) | 9: scholarly-metadata, author-info-blocks, pandoc-quotes, abstract-section, pagebreak, track-changes, first-line-indent, amsthm, auto-lang | closed, panir#16: Python `bool()`, `truthy` in the others |
+| 19 | Python's `from_python` refuses inlines and blocks, which Lua, TypeScript and Julia make `MetaInlines` and `MetaBlocks` | Python | 7: scholarly-metadata, author-info-blocks, abstract-section, track-changes, first-line-indent, count-para, amsthm | closed, panir#16 |
+| 20 | several filters as one program: Python's `main` and Julia's `run_filter` take one | Python, Julia | 4: pandoc-quotes, count-para, auto-lang, amsthm | closed, panir#16 (Python, Julia); Rust: apply after apply, shown |
+| 21 | a nested option: no lookup by path | all | 4: abstract-section, pagebreak, first-line-indent, amsthm | closed, panir#16: `lookup` |
+| 22 | one value or a list of them (Lua's `ensure_list`, `header-includes` "whatever shape"): one arm per constructor | all (Rust most) | 7: scholarly-metadata, pandoc-quotes, abstract-section, track-changes, first-line-indent, count-para, amsthm | closed, panir#16: `items` |
+| 23 | Rust has no metadata from plain values | Rust | 3: cito, scholarly-metadata, first-line-indent | closed, panir#16 |
+| 24 | Rust: `ctx.fail` and `ctx.apply` from a function returning `()` (`meta`, `pandoc`, list functions) | Rust | 6: scholarly-metadata, author-info-blocks, pandoc-quotes, abstract-section, pagebreak, track-changes | closed, panir#16 |
+| 25 | Rust's `Link` and `Target` are built field by field | Rust | 2: author-info-blocks, count-para | closed, panir#16: `Target::new`; no `Default` (declined) |
 
 Not panir's, but met: Julia has no full Unicode case mapping (`caps`); an
 error that shows the offending blocks as markdown needs pandoc's writer,
@@ -445,32 +449,42 @@ apart, Lua's truth (`if v then`, `v or default`) is "set and not false",
 becomes a `MetaMap` (or a `MetaList`). panir has a typed node for each.
 What the common operations cost in the five ports (lines of each piece,
 its signature included, comments out; "a field, missing or false" counts
-the helper each port wrote):
+the helper each port wrote), as found, then what was proposed and what
+the ports are after panir#16 (`run.py test` and the differential runs
+the same):
 
-| operation | Lua | Python | TypeScript | Rust | Julia | what would remove the cost |
-|---|---|---|---|---|---|---|
-| a field, with a default if missing | `meta.x or d` | `meta.get("x", d)` | `meta.x ?? d` | `meta.get("x")`, an `Option` | `get(meta, "x", d)` | nothing: the same |
-| set and not false (Lua's `if meta.x`) | built in | a 2-line `given` in each of four ports; `if meta.get("x"):` is wrong (`bool(MetaBool(False))` is `True`), silently | 1 line, four times; `if (meta.x)` is wrong, silently | `matches!` (1–3), four times | 3 one-line methods, four times; `if MetaBool(false)` throws | a `truthy(value)` in each language, and a line in "Coming from Lua" (gap 18) |
-| a nested option (`(meta.a or {}).b`) | 1 | 2 (`isinstance`) to 7 (a `match` that also fails on `true`, as Lua) | 1–3 | 3–5 (`match`) | 2–3 (methods) | `get(meta, "a", "b")`: through maps, `None` if not there (gap 21) |
-| one value or a list of them (scholarly-metadata's `ensure_list`, with its comma split) | 22 | 11 | 9 | 18 | 7 | `items(value)`: a list's items, else the value alone, none if missing (gap 22) |
-| a string, a list of strings, or inlines, to texts (pandoc-quotes' marks; abstract-section's identifiers with their configuration) | 19; 8 | 11; 16 | 8; 17 | 10; 19 (an arm per constructor: their items differ in type) | 4; 8 | `items` and `stringify` make most of it one line (each filter's quirk aside: four characters, an identifier per inline) |
-| a value's kind (`pandoc.utils.type`) | `type(v) == 'Inlines'` | `match`, `isinstance` | `v.t`, narrowing | `match` | dispatch | nothing: each language's own is better than Lua's strings; say which is which (gap 17) |
-| metadata from plain values (cito's map of lists of strings) | `meta.x = t`, 1 | `doc.meta["x"] = by_property`, 1 (but not inlines: gap 19) | `MetaMap(Object.fromEntries(m))`, 1 | 14 (rustfmt's) of nested constructors | `doc.meta["x"] = by_property`, 1 | `From` and `FromIterator` for `MetaValue` (gap 23) |
-| a map worked on, then written back (a named object) | a table | `dict[str, MetaValue]` (`MetaMap`'s content), `MetaMap(d)` | a `Map` (its keys are the document's: `__proto__` too), `Object.fromEntries` | `BTreeMap<Text, MetaValue>`, `MetaMap`'s own: nothing to convert | `Dict{String, MetaValue}`, `MetaMap`'s own; `meta["x"] = [dicts...]` converts | nothing |
-| one value in two maps (Lua copies when it converts back) | built in | `deepcopy` (found by `check_unique`) | `copy` (same) | `clone`, and an `enum Ref { Known, New }` with a pass for the identifiers: 19 lines | `deepcopy` | a line in "Coming from Lua" (gap 17) |
-| metadata to text (`pandoc.utils.stringify`, `tostring` of a string or a boolean) | 1 | 1 | 1 | 1 | 1 | nothing: `stringify` is exact in every language |
-| metadata to plain values | (it is) | `to_python` | `toPlain` | none | none | nothing: both turn inlines into text, so no port could use them (a name keeps its emphasis); Python's, TypeScript's and Julia's maps and lists are already plain containers of nodes |
+| operation | Lua | Python | TypeScript | Rust | Julia | proposed | after panir#16 |
+|---|---|---|---|---|---|---|---|
+| a field, with a default if missing | `meta.x or d` | `meta.get("x", d)` | `meta.x ?? d` | `meta.get("x")`, an `Option` | `get(meta, "x", d)` | nothing: the same | the same |
+| set and not false (Lua's `if meta.x`) | built in | a 2-line `given` in each of four ports; `if meta.get("x"):` is wrong (`bool(MetaBool(False))` is `True`), silently | 1 line, four times; `if (meta.x)` is wrong, silently | `matches!` (1–3), four times | 3 one-line methods, four times; `if MetaBool(false)` throws | a `truthy(value)` in each language, and a line in "Coming from Lua" (gap 18) | no helper left: Python `if meta.get("x"):` and `or`, as Lua; `truthy(...)` in the others (TypeScript's not a type guard: a `!` after it, once) |
+| a nested option (`(meta.a or {}).b`) | 1 | 2 (`isinstance`) to 7 (a `match` that also fails on `true`, as Lua) | 1–3 | 3–5 (`match`) | 2–3 (methods) | `get(meta, "a", "b")`: through maps, `None` if not there (gap 21) | `lookup(meta, "a", "b")`, 1 (Rust `lookup(&meta, &["a", "b"])`, from the metadata only); abstract-section's test for `true` stays |
+| one value or a list of them (scholarly-metadata's `ensure_list`, with its comma split) | 22 | 11 | 9 | 18 | 7 | `items(value)`: a list's items, else the value alone, none if missing (gap 22) | 6, 7, 10, 4: the comma split, then `items`; author-info-blocks' `maps` 8, 5, 12, 1 (from 11, 9, 24, 3) |
+| a string, a list of strings, or inlines, to texts (pandoc-quotes' marks; abstract-section's identifiers with their configuration) | 19; 8 | 11; 16 | 8; 17 | 10; 19 (an arm per constructor: their items differ in type) | 4; 8 | `items` and `stringify` make most of it one line (each filter's quirk aside: four characters, an identifier per inline) | 11; 13, 8; 16, 10; 17, 4; 8: `items` doesn't fit these (Lua's `ipairs` takes inlines as a list; a non-empty string is no identifier), `lookup` saves the nested option |
+| a value's kind (`pandoc.utils.type`) | `type(v) == 'Inlines'` | `match`, `isinstance` | `v.t`, narrowing | `match` | dispatch | nothing: each language's own is better than Lua's strings; say which is which (gap 17) | the same; each README's table says which is which |
+| metadata from plain values (cito's map of lists of strings) | `meta.x = t`, 1 | `doc.meta["x"] = by_property`, 1 (but not inlines: gap 19) | `MetaMap(Object.fromEntries(m))`, 1 | 14 (rustfmt's) of nested constructors | `doc.meta["x"] = by_property`, 1 | `From` and `FromIterator` for `MetaValue` (gap 23) | Rust 4 (`collect::<MetaValue>()` inside, `collect()` outside); Python takes inlines and blocks |
+| a map worked on, then written back (a named object) | a table | `dict[str, MetaValue]` (`MetaMap`'s content), `MetaMap(d)` | a `Map` (its keys are the document's: `__proto__` too), `Object.fromEntries` | `BTreeMap<Text, MetaValue>`, `MetaMap`'s own: nothing to convert | `Dict{String, MetaValue}`, `MetaMap`'s own; `meta["x"] = [dicts...]` converts | nothing | Python `meta["x"] = [dicts...]` converts too; Rust `collect()` of the maps |
+| one value in two maps (Lua copies when it converts back) | built in | `deepcopy` (found by `check_unique`) | `copy` (same) | `clone`, and an `enum Ref { Known, New }` with a pass for the identifiers: 19 lines | `deepcopy` | a line in "Coming from Lua" (gap 17) | the same, and said in each README |
+| metadata to text (`pandoc.utils.stringify`, `tostring` of a string or a boolean) | 1 | 1 | 1 | 1 | 1 | nothing: `stringify` is exact in every language | the same |
+| metadata to plain values | (it is) | `to_python` | `toPlain` | none | none | nothing: both turn inlines into text, so no port could use them (a name keeps its emphasis); Python's, TypeScript's and Julia's maps and lists are already plain containers of nodes | `to_python` and `toPlain` keep inlines and blocks as lists of them (gap 19); still no port needs them |
 
-So: the metadata costs least in Julia (dispatch on the constructors,
-conversion on assignment, `Dict`s that are `MetaMap`'s own: scholarly-
-metadata is 77 lines to Lua's 129) and TypeScript (narrowing, conversion
-in the constructors), more in Python (`match` is good, but `ruff format`
-spreads it, and there is no conversion of inlines), most in Rust, where
-plain values have no conversion (cito's one Lua line is 14) and Lua's
-aliasing of tables needs indices (scholarly-metadata's `Ref`). In every
-language the one trap is Lua's truth, which no README mentions and every
-port reimplemented (18); the one missing piece of plain reading is the
-nested option (21) and "one or a list" (22).
+So, as found: the metadata costs least in Julia (dispatch on the
+constructors, conversion on assignment, `Dict`s that are `MetaMap`'s own:
+scholarly-metadata is 77 lines to Lua's 129) and TypeScript (narrowing,
+conversion in the constructors), more in Python (`match` is good, but
+`ruff format` spreads it, and there is no conversion of inlines), most in
+Rust, where plain values have no conversion (cito's one Lua line is 14)
+and Lua's aliasing of tables needs indices (scholarly-metadata's `Ref`).
+In every language the one trap is Lua's truth, which no README mentions
+and every port reimplemented (18); the one missing piece of plain reading
+is the nested option (21) and "one or a list" (22).
+
+After panir#16 the four ports it touched lost 3 to 12% of their lines in
+Python, 1 to 8% in TypeScript, 2 to 10% in Rust (cito's too), 5 to 12% in
+Julia (`RESULTS.md`), all
+sixteen `given`s and the four `items`-like helpers; scholarly-metadata in
+Julia is 71 lines. Rust's cost is now the aliasing alone. What the fourth
+batch, which reads options and writes `header-includes`, found of this API
+in use will be in the section after this one.
 
 ## The API of panir#14 and #15, used here
 
@@ -497,7 +511,16 @@ nested option (21) and "one or a list" (22).
   missing (scholarly-metadata's merge, below in 17), and agrees with
   author-info-blocks' copies.
 
-## 17. Lua's metadata, as panir has it, is not said
+## 17. Lua's metadata, as panir has it, is not said (closed)
+
+**Closed** in panir#16: each README's "Coming from Lua" has a
+"Metadata" part: a table of what a field is in the document, in Lua
+(`pandoc.utils.type`) and here (the node and its field), Lua's truth,
+the nested option, one value or a list, writing metadata, Lua's tables
+as references; and lists the field names that are not Lua's (Python's
+"as in pandoc's Lua API" is gone), `FORMAT`, a list of filters, Lua's
+string patterns.
+
 
 Found with scholarly-metadata, author-info-blocks and pandoc-quotes.
 
@@ -536,7 +559,15 @@ field, how to test for it in the language); Lua's truth and its helper
 How common: every Lua original that reads or writes the metadata, 11 of
 21 (all but list-table).
 
-## 18. Lua's `if meta.x then`: set and not false
+## 18. Lua's `if meta.x then`: set and not false (closed)
+
+**Closed** in panir#16, not as proposed in Python: a metadata node's
+`bool()` is Lua's truth (`MetaValue.__bool__` true, `MetaBool`'s its
+value), so `if meta.get("x"):` and `meta.get("x") or d` are the Lua
+lines as written; `truthy(v)` in TypeScript (a `boolean`, not a type
+guard), Rust (`truthy(Option<&MetaValue>)`) and Julia. The scenario
+`truthy` pins the four. All sixteen `given`s are gone.
+
 
 Found with scholarly-metadata.
 
@@ -563,7 +594,12 @@ How common: 9 of 21: the four Lua originals here that read metadata, and
 pagebreak (`config['html-class'] and ...`), track-changes, first-line-
 indent, amsthm, auto-lang (`meta["auto-lang"] or {}`).
 
-## 19. Python's `from_python` refuses inlines and blocks
+## 19. Python's `from_python` refuses inlines and blocks (closed)
+
+**Closed** in panir#16: `from_python` makes `MetaInlines` of an inline
+or a list of them and `MetaBlocks` of blocks; `to_python` and `toPlain`
+give inlines and blocks as lists of them (not their text).
+
 
 Found with scholarly-metadata.
 
@@ -585,7 +621,17 @@ other languages and Lua; a list of other values stays a `MetaList`.
 How common: 7 of 21 put inlines or blocks into the metadata (three here,
 and the four that add to `header-includes`); low.
 
-## 20. Several filters as one program: Python's `main` and Julia's `run_filter` take one
+## 20. Several filters as one program: Python's `main` and Julia's `run_filter` take one (closed: Python, Julia)
+
+**Closed** in panir#16 for Python (`main([f, g])`, each filter handed
+over in turn to a host) and Julia (`run_filter([f, g])`, `walk!([f, g],
+doc)`, each a function or `f => traverse`); pandoc-quotes uses both.
+Rust: **not closed**, declined: a list type (a slice of `&mut dyn
+Filter`) could not share the earlier filter's state with the later one
+without a `RefCell`; the README shows `apply` after `apply`, `?` between,
+the state a field given to the second. (Rust was not among this gap's
+languages: its port did that already.)
+
 
 Found with pandoc-quotes.
 
@@ -610,7 +656,13 @@ the hand-off (`handoff`, `hand_over`) carrying a list.
 How common: 4 of 21 (pandoc-quotes, count-para, auto-lang, amsthm: the
 `multi` filters).
 
-## 21. A nested option: no lookup by path
+## 21. A nested option: no lookup by path (closed)
+
+**Closed** in panir#16: `lookup(meta, "a", "b")` (Python, TypeScript,
+Julia: from the metadata, a `MetaMap` or nothing), Rust `lookup(&meta,
+&["a", "b"])` (from a `Meta`, the metadata or a `MetaMap`'s content);
+`None` where a key is missing or a value on the way is not a map.
+
 
 Found with abstract-section.
 
@@ -631,7 +683,11 @@ not a map: Python `panir.get(meta, "abstract-section",
 How common: 4 of 21 (abstract-section, pagebreak, first-line-indent,
 amsthm).
 
-## 22. One value or a list of them
+## 22. One value or a list of them (closed)
+
+**Closed** in panir#16: `items(v)` in the four languages, a new list
+(Rust a slice borrowed from the document).
+
 
 Found with scholarly-metadata and abstract-section.
 
@@ -656,7 +712,12 @@ Julia `Panir.items`), the `header-includes` pattern in one call. (Lua's
 How common: 7 of 21: three here, and the four that add to
 `header-includes`.
 
-## 23. Rust has no metadata from plain values
+## 23. Rust has no metadata from plain values (closed)
+
+**Closed** in panir#16: `From` for strings, `bool`, inlines and blocks
+(one or a `Vec`), `Vec<MetaValue>` and `Meta`, and `FromIterator` of
+values (`MetaList`) and of pairs (`MetaMap`). cito's 14 lines are 4.
+
 
 Found with cito.
 
@@ -678,7 +739,12 @@ ks)| (p.into(), ks.into_iter().map(MetaValue::from).collect())).collect()`.
 How common: 3 of 21 (cito, scholarly-metadata, first-line-indent's
 `meta.indent = true`).
 
-## 24. Rust: `ctx.fail` and `ctx.apply` from a function returning `()`
+## 24. Rust: `ctx.fail` and `ctx.apply` from a function returning `()` (closed)
+
+**Closed** in panir#16 as proposed: `inlines`, `blocks`, `meta` and
+`pandoc` return `Option<()>`, so `ctx.apply(...)?` and `return
+ctx.fail(e)` in every function.
+
 
 Found with scholarly-metadata and abstract-section.
 
@@ -700,7 +766,14 @@ breaking change, as panir may make.
 How common: 6 of 21 (four here; pagebreak and track-changes walk from
 their `Pandoc` function).
 
-## 25. Rust's `Link` and `Target` are built field by field
+## 25. Rust's `Link` and `Target` are built field by field (closed in part)
+
+**Closed** in part by panir#16: `Target::new(url, title)`, as
+`Attr::new`, in the order of Lua's `pandoc.Link(content, target,
+title)`. **Not** `Default` for `Target` (declined: its url has no default
+in pandoc's Lua), nor `Link::new`: a link is still a struct literal with
+`attr: Attr::default()`.
+
 
 Found with author-info-blocks.
 
