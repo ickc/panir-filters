@@ -79,9 +79,13 @@ Here the README's "Lua's elements are values" is the whole story, and
   Before panir#16, `Link` and `Target` had no defaults or constructor
   (`GAPS.md` 25): now `Target::new(&url, "")` (no `Default`: a title is
   given), in a `Link { attr: Attr::default(), content, target }`; and
-  `ctx.fail` from `pandoc` needed `ctx.fail::<()>(e)` (`GAPS.md` 24): now
-  `Err(e) => ctx.fail(e)`. panir's `items` borrows, so `maps` clones each
-  author's map (`map.clone()`), where `remove` moved them before.
+  `ctx.fail` from `pandoc` needed `ctx.fail::<()>(e)` (`GAPS.md` 24): then
+  `Err(e) => ctx.fail(e)`, and since panir#17 `ctx.ok(Self::info_blocks(..))`
+  (`GAPS.md` 31). `maps` takes `author` and `institute` out with `remove`
+  and moves their maps with `into_items` (panir#17); with panir#16's
+  `items`, which borrows, it cloned each map (`GAPS.md` 28). The marks
+  are `Inline::raw("latex", ..)` (four-line struct literals before,
+  `GAPS.md` 30).
 - **Julia**: an array literal takes its element type from what is in it:
   `[mark(...)]` was a `Vector{Vector{RawInline}}`, and appending a `Str`
   to it failed; `Inline[...]` where a list mixes kinds.

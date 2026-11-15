@@ -51,7 +51,8 @@ before it changes anything, so returning early is safe in every language.
 - **Python**: `match` with `case Para(content)` reads as the rule does.
 - **Rust**: checks every block first (`blocks.iter().all(...)`), then
   takes them (`std::mem::take`): moving the inlines out of the note needs
-  the decision made before anything moves.
+  the decision made before anything moves. The opening `^[` is
+  `Inline::raw("html", "^[")` since panir#17 (`GAPS.md` 30).
 - **TypeScript, Julia**: a `switch` and an `if` chain; nothing missing.
 
 Differential runs (pandoc's test documents and eight real documents, three

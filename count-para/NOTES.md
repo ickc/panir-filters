@@ -51,7 +51,7 @@ longest list of filters in round 1.
 |---|---|---|---|---|---|
 | four filters, sharing state | `return {{Meta=..}, {Meta=..}, {Pandoc=..}, {Cite=..}}`, upvalues | `main([formatting, settings, numbering, references])`, a dataclass instance | `runFilter([...])`, module variables | four `apply`s, each filter borrowing what the ones before made (`&settings.0`, `&numbering.numbers`) | `run_filter([...])`, a `const` mutable struct and a `Dict` |
 | `header-includes` by its kind | 9 | a `match`, 9 | 4 | a `match`, 13 | 8 |
-| an option by Lua's truth | the value kept, tested later | `bool(value)` | `truthy(value)` | `truthy(Some(v))` (gap 27) | `truthy(value)` |
+| an option by Lua's truth | the value kept, tested later | `bool(value)` | `truthy(value)` | `truthy(v)` (`truthy(Some(v))` before panir#17, gap 27) | `truthy(value)` |
 | the name in the first inline (`{#(.*)}`) | `s:match` | `re.search`, `re.DOTALL` | a regular expression, `[\s\S]` | `find` and `rfind`, no regex crate | `match(r"..."s, ...)` |
 | a byte of a string, as pandoc reads it back | `s:sub(i, i)` | `.encode()[i:i+1].decode(errors="replace")` | `TextEncoder`, `TextDecoder` | `String::from_utf8_lossy` | `codeunit`, by hand |
 
@@ -72,7 +72,10 @@ longest list of filters in round 1.
   accident.
 - **Rust**: `Span { attr: Attr::new(&number, &["paragraph-number"], &[]),
   content: panir::inlines(&shown) }` and a `Link` with `Target::new`; the
-  raw inline and the raw blocks as metadata are helpers (gap 30).
+  raw inline is `Inline::raw("tex", tex)`, a raw block as metadata
+  `Block::raw("html", CSS).into()`, and an option's truth `truthy(v)` of
+  the value in hand, since panir#17 (before, two helpers and
+  `truthy(Some(v))`: `GAPS.md` 30, 27).
 - **Julia**: `insert!(content, 2, x)` at the end of a one-inline
   paragraph works, as Lua's `table.insert`.
 

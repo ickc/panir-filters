@@ -96,29 +96,33 @@ rustfmt leaves them. In brackets, for the first three, before panir#14
 (attributes by key, `ctx.fail`, `ctx.meta()`, `Attr::new`, `tag`,
 `inlines_mut`); for the third batch, before panir#16 (Lua's truth,
 `lookup`, `items`, plain values, a list of filters, Rust's `Option<()>`
-functions). caps' Rust was given as 12 at first; it is 13.
+functions); for the Rust ports since the fourth batch, the count before
+panir#17 (`Block::raw`, `Inline::raw`, `ctx.ok`, `given`, `into_items`,
+`lookup` from a value), and for those before it, in brackets alone,
+likewise. caps' Rust was given as 12 at first; it is 13. TypeScript's
+three ports changed by panir#17 (`given`) kept their counts.
 
 | filter | original | Python | TypeScript | Rust | Julia |
 |---|---|---|---|---|---|
 | caps | 6 (Python) | 7 | 6 | 13 | 3 |
 | metavars | 17 (Python) | 19 | 18 | 28 (40 before panir#14) | 13 |
-| list-table | 209 (Lua; 176 without its old-pandoc polyfill and markdown error context) | 139 (144) | 118 (119) | 218 (239) | 107 (111) |
+| list-table | 209 (Lua; 176 without its old-pandoc polyfill and markdown error context) | 139 (144) | 118 (119) | 216 (239; 218 before #17) | 107 (111) |
 | deemph | 7 (Python; 13 with `caps.py`) | 11 | 12 | 29 | 4 |
 | comments | 18 (Python) | 24 | 20 | 33 | 13 |
 | deflists | 8 (Python) | 7 | 5 | 21 | 4 |
-| theorem | 25 (Python) | 17 | 19 | 49 | 16 |
-| inlinenotes | 19 (Python) | 22 | 25 | 38 | 17 |
+| theorem | 25 (Python) | 17 | 19 | 42 (49) | 16 |
+| inlinenotes | 19 (Python) | 22 | 25 | 34 (38) | 17 |
 | gitlab_markdown | 14 (Python) | 13 | 10 | 28 | 10 |
-| french-spaces | 20 (Python, panflute) | 16 | 14 | 41 | 15 |
-| scholarly-metadata | 129 (Lua) | 92 (100) | 84 (87) | 175 (191) | 71 (77) |
-| author-info-blocks | 134 (Lua) | 108 (117) | 61 (66) | 160 (178) | 54 (61) |
-| pandoc-quotes | 178 (Lua; 104 without its table of 72 languages, 74 lines in every language) | 140 (144; 66 without the table) | 119 (120; 45) | 176 (180; 102) | 114 (120; 40) |
-| abstract-section | 63 (Lua) | 61 (69) | 52 (53) | 78 (84) | 40 (42) |
+| french-spaces | 20 (Python, panflute) | 16 | 14 | 37 (41) | 15 |
+| scholarly-metadata | 129 (Lua) | 92 (100) | 84 (87) | 172 (191; 175 before #17) | 71 (77) |
+| author-info-blocks | 134 (Lua) | 108 (117) | 61 (66) | 148 (178; 160 before #17) | 54 (61) |
+| pandoc-quotes | 178 (Lua; 104 without its table of 72 languages, 74 lines in every language) | 140 (144; 66 without the table) | 119 (120; 45) | 171 (180; 97; 176 before #17) | 114 (120; 40) |
+| abstract-section | 63 (Lua) | 61 (69) | 52 (53) | 75 (84; 78 before #17) | 40 (42) |
 | cito | 207 (Lua; 52 without its table of properties, 155 lines) | 126 (46; the table 80) | 91 (39; 52) | 225 (89; 136; 233 before) | 89 (43; 46) |
-| pagebreak | 103 (Lua) | 79 | 48 | 101 | 42 |
-| track-changes | 221 (Lua; 174 without its LaTeX preamble, a string) | 152 (102 without it) | 127 (80) | 229 (182) | 131 (80) |
-| first-line-indent | 192 (Lua; 173 without its CSS) | 148 (130) | 106 (88) | 229 (211) | 111 (92) |
-| count-para | 130 (Lua; 117 without its CSS) | 138 (125) | 102 (89) | 235 (224) | 91 (90) |
+| pagebreak | 103 (Lua) | 79 | 48 | 91 (101) | 42 |
+| track-changes | 221 (Lua; 174 without its LaTeX preamble, a string) | 152 (102 without it) | 127 (80) | 216 (169; 229 before #17) | 131 (80) |
+| first-line-indent | 192 (Lua; 173 without its CSS) | 148 (130) | 106 (88) | 212 (194; 229 before #17) | 111 (92) |
+| count-para | 130 (Lua; 117 without its CSS) | 138 (125) | 102 (89) | 221 (210; 235 before #17) | 91 (90) |
 
 Rust is two to five times the others on these small filters: rustfmt's
 layout (a `let ... else` is three lines, a struct literal one per field),

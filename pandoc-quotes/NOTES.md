@@ -90,16 +90,22 @@ it), under which its own tests pass again. For upstream: those two lines.
 - **TypeScript**: as the original; the marks a module variable the first
   filter sets. `[...stringify(v)]` splits into characters (code points).
   `truthy` is a `boolean`, not a type guard: after `if (truthy(marks))`
-  `marks` is still `MetaValue | undefined`, so `marks!` (the port's own
-  `given` was `v is MetaValue`; `GAPS.md` 26).
+  `marks` was still `MetaValue | undefined`, so `marks!` (the port's own
+  `given` was `v is MetaValue`; `GAPS.md` 26). Since panir#17, `const
+  marks = given(meta["quot-marks"]); if (marks) ...` narrows, and the
+  language is `given(meta["quot-lang"]) ?? given(meta.lang)`, Lua's
+  `meta['quot-lang'] or meta.lang` as written.
 - **Rust**: `Configure` (with `meta`) keeps the marks in its struct;
   `main` applies `InsertMarks` only if there are some. `marks.try_into()`
   makes the four-element array or the "not four" error in one line; the
   table a `BTreeMap`, so a region is the first in key order. Since
-  panir#16 `meta` returns `Option<()>`: `Err(e) => return ctx.fail(e)`.
-  `truthy` takes an `Option<&MetaValue>`, as `meta.get` gives; a value in
-  hand is `truthy(Some(m))` (`.filter(|m| truthy(Some(m)))`; `GAPS.md`
-  27).
+  panir#16 `meta` returns `Option<()>`, and since panir#17 the helper's
+  `Result` is `self.marks = ctx.ok(configure(meta))?;` (a `match` before,
+  `GAPS.md` 31). `given(meta.get("quot-marks"))` is the value if Lua's
+  truth says so, and the language field `.find_map(|k|
+  given(meta.get(*k)))`, where `truthy` of an `Option` needed
+  `.filter(|m| truthy(Some(m)))` and `.find(..).flatten()` before
+  (`GAPS.md` 27).
 - **Julia**: methods by kind for the marks; `findfirst(f, dict)` tests the
   values, not the keys (the first try failed on that): a comprehension over
   the pairs instead.

@@ -70,9 +70,13 @@ stays in every language.
   constructors (their items are different types). Before panir#16,
   `pandoc` returned `()`, so `if ctx.apply(...).is_none() { return; }`
   and `ctx.fail::<()>(e); return;` (`GAPS.md` 24); now `ctx.apply(...)?`
-  and `Err(e) => return ctx.fail(e)`. `lookup(&doc.meta,
-  &["abstract-section", "section-identifiers"])` takes the metadata, not
-  a value: the configuration is read from `doc.meta`, then removed.
+  and `Err(e) => return ctx.fail(e)`; since panir#17 `let identifiers =
+  ctx.ok(section_identifiers(config.as_ref()))?;` (`GAPS.md` 31). Since
+  panir#17 too, the configuration is taken out first (`let config =
+  doc.meta.remove("abstract-section")`) and read with `lookup(&config,
+  &["section-identifiers"])`, as the original and the other languages
+  read it; before, `lookup` took the metadata only, so the port read
+  `doc.meta`, then removed it (`GAPS.md` 29).
 - **Julia**: the identifiers by dispatch (`identifiers(::Union{MetaList,
   MetaInlines, MetaBlocks})`), the configuration a `lookup` (it was three
   methods of `configured`): the shortest; the list method a closure over
