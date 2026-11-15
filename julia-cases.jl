@@ -6,10 +6,12 @@
 # (`Panir.handoff`, as a host running filter scripts does) instead of
 # reading stdin.
 #
-# Reads lines `scripts<TAB>format<TAB>document` (the scripts of a chain,
-# run in turn, separated by the unit separator, \x1f; the document as
-# pandoc's JSON, on one line); writes a line per case, `output<TAB>document`
-# or `error<TAB>message` (the message's newlines as \n).
+# Reads lines `scripts<TAB>format<TAB>environment<TAB>document` (the scripts
+# of a chain, run in turn, separated by the unit separator, \x1f; the case's
+# environment variables, `KEY=VALUE` separated by \x1f, set while it runs;
+# the document as pandoc's JSON, on one line); writes a line per case,
+# `output<TAB>document` or `error<TAB>message` (the message's newlines as
+# \n).
 
 using Panir
 
@@ -26,9 +28,12 @@ function run_case(scripts, format, json)
 end
 
 for line in eachline(stdin)
-    scripts, format, json = split(line, '\t'; limit = 3)
+    scripts, format, environment, json = split(line, '\t'; limit = 4)
+    variables = [String(k) => String(v) for (k, v) in split.(split(environment, '\x1f'; keepempty = false), '='; limit = 2)]
     result = try
-        "output\t" * run_case(String.(split(scripts, '\x1f')), String(format), String(json))
+        "output\t" * withenv(variables...) do
+            run_case(String.(split(scripts, '\x1f')), String(format), String(json))
+        end
     catch e
         "error\t" * replace(sprint(showerror, e), "\n" => "\\n")
     end

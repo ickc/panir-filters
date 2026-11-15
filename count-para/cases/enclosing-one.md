@@ -1,0 +1,5 @@
+---
+enclosing: "|"
+---
+
+One character, twice.

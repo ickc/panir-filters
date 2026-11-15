@@ -1,0 +1,8 @@
+url: https://github.com/cysouw/count-para/blob/22e3c978accaba6a42c9c63062f6696933da8359/count-para.lua
+repository: https://github.com/cysouw/count-para
+commit: 22e3c978accaba6a42c9c63062f6696933da8359
+path: count-para.lua
+licence: CC0-1.0 (../LICENSE, the repository's, verbatim); the file's own header is ISC text, Copyright © 2021, 2023 Michael Cysouw; both cover the original and the ports here
+cases: cases/readme.md is the repository's README.md, verbatim; the others are written for the ports
+run: lua count-para.lua
+formats: html latex markdown

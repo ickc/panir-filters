@@ -21,24 +21,16 @@ const Named = Dict{String, MetaValue}
 
 const LUA_SPACE = (' ', '\t', '\n', '\v', '\f', '\r')  # Lua's %s (and its tonumber's)
 
-"Whether Lua counts the value: anything but missing or false."
-given(::Nothing) = false
-given(v::MetaBool) = v.value
-given(::MetaValue) = true
-
 "A number as Lua's `tonumber` reads a string (decimal only), else `nothing`."
 number(text) = occursin(r"^[ \t\n\v\f\r]*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?[ \t\n\v\f\r]*$", text) ?
                parse(Float64, strip(text, LUA_SPACE)) : nothing
 
 "A list as the original takes one: a list's items, text with commas split there
 (each a string), anything else alone (nothing if missing)."
-as_list(::Nothing) = MetaValue[]
-as_list(v::MetaList) = copy(v.content)
-function as_list(v::MetaInlines)
-    names = [strip(name, LUA_SPACE) for name in split(stringify(v), ',')]
-    length(names) >= 2 ? MetaValue[MetaString(name) for name in names] : MetaValue[v]
+function as_list(v)
+    names = v isa MetaInlines ? [strip(name, LUA_SPACE) for name in split(stringify(v), ',')] : []
+    length(names) >= 2 ? MetaValue[MetaString(name) for name in names] : items(v)
 end
-as_list(v::MetaValue) = MetaValue[v]
 
 "An author or institute as a map with a name and an identifier."
 named(obj::MetaInlines) = Named("name" => obj, "id" => MetaString(stringify(obj)))
@@ -50,12 +42,12 @@ function named(obj::MetaMap)
     entries = obj.content
     if haskey(entries, "name")
         out = copy(entries)
-        out["id"] = MetaString(stringify(given(get(out, "id", nothing)) ? out["id"] : out["name"]))
+        out["id"] = MetaString(stringify(truthy(get(out, "id", nothing)) ? out["id"] : out["name"]))
         return out
     elseif length(entries) == 1
         ((key, value),) = entries
         out = attributes(key, value)
-        out["id"] = given(get(out, "id", nothing)) ? MetaString(stringify(out["id"])) : MetaString(key)
+        out["id"] = truthy(get(out, "id", nothing)) ? MetaString(stringify(out["id"])) : MetaString(key)
         return out
     end
     error("scholarly-metadata: not a named object: $(stringify(obj))")
@@ -67,7 +59,7 @@ named(obj::MetaValue) = error("scholarly-metadata: not a named object: $(stringi
 attributes(_, value::Union{MetaString, MetaInlines}) = Named("name" => value)
 function attributes(key, value::MetaMap)
     out = copy(value.content)
-    given(get(out, "name", nothing)) || (out["name"] = MetaInlines([Str(key)]))
+    truthy(get(out, "name", nothing)) || (out["name"] = MetaInlines([Str(key)]))
     out
 end
 attributes(key, ::MetaValue) = error("scholarly-metadata: $key: neither a name nor a map")
@@ -91,7 +83,7 @@ function add_institute!(institutes, inst)
     i === nothing && return push!(institutes, inst)
     for (key, value) in inst
         # a copy: inst may stay too (a second top-level one, referred to by number)
-        given(get(institutes[i], key, nothing)) || (institutes[i][key] = deepcopy(value))
+        truthy(get(institutes[i], key, nothing)) || (institutes[i][key] = deepcopy(value))
     end
 end
 

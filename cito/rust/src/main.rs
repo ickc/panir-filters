@@ -239,21 +239,13 @@ impl Filter for Cito {
     }
 
     // after every inline, the metadata's first
-    fn meta(&mut self, meta: &mut Meta, _: &mut Ctx) {
+    fn meta(&mut self, meta: &mut Meta, _: &mut Ctx) -> Option<()> {
         let cites = std::mem::take(&mut self.by_property)
             .into_iter()
-            .map(|(p, keys)| {
-                (
-                    p.into(),
-                    MetaValue::MetaList(
-                        keys.into_iter()
-                            .map(|k| MetaValue::MetaString(k.into()))
-                            .collect(),
-                    ),
-                )
-            })
+            .map(|(p, keys)| (p, keys.into_iter().collect::<MetaValue>()))
             .collect();
-        meta.insert("cito_cites".into(), MetaValue::MetaMap(cites));
+        meta.insert("cito_cites".into(), cites);
+        Some(())
     }
 }
 

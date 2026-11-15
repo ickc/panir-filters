@@ -13,21 +13,19 @@ Kroeger; MIT, see ../LICENSE).
 """
 
 import re
-from typing import TypeGuard
 
 from panir import (
     Filter,
     Inline,
     Meta,
-    MetaBool,
     MetaInlines,
     MetaList,
     MetaMap,
     MetaValue,
-    Pandoc,
     Quoted,
     QuoteType,
     Str,
+    main,
     stringify,
 )
 
@@ -113,11 +111,6 @@ class QuotesError(ValueError):
     """The original warns, then fails as its warning does (NOTES.md)."""
 
 
-def given(value: MetaValue | None) -> TypeGuard[MetaValue]:
-    """Whether Lua counts the value: anything but missing or false."""
-    return value is not None and value != MetaBool(False)
-
-
 def quotation_marks(value: MetaValue, field: str) -> tuple[str, ...]:
     """Four marks: text of four characters, or a list of four."""
     match value:
@@ -132,7 +125,7 @@ def quotation_marks(value: MetaValue, field: str) -> tuple[str, ...]:
     return marks
 
 
-def configure(meta: Meta) -> tuple[str, ...] | None:
+def quot_marks(meta: Meta) -> tuple[str, ...] | None:
     by_lang = dict(QUOT_MARKS_BY_LANG)
     match meta.get("quot-marks-by-lang"):
         case MetaMap(entries):
@@ -140,12 +133,12 @@ def configure(meta: Meta) -> tuple[str, ...] | None:
                 by_lang[lang] = quotation_marks(
                     marks, f'metadata field "quot-marks-by-lang": lang "{lang}"'
                 )
-        case other if given(other):
+        case other if other:
             raise QuotesError('metadata field "quot-marks-by-lang": not a map')
-    if given(marks := meta.get("quot-marks")):
+    if marks := meta.get("quot-marks"):
         return quotation_marks(marks, 'metadata field "quot-marks"')
-    field = next((meta[k] for k in ("quot-lang", "lang") if given(meta.get(k))), None)
-    if field is None:
+    field = meta.get("quot-lang") or meta.get("lang")
+    if not field:
         return None
     lang = stringify(field)
     # the language and region, the language, a region of the language
@@ -163,23 +156,23 @@ def configure(meta: Meta) -> tuple[str, ...] | None:
     raise QuotesError(f"{language[0]}: unknown language.")
 
 
-f = Filter()
+configure, quotes = Filter(), Filter()
+marks: tuple[str, ...] | None = None
 
 
-@f.on(Pandoc)
-def pandoc_quotes(doc: Pandoc) -> None:
-    marks = configure(doc.meta)
+@configure.on_meta
+def read(meta: Meta) -> None:
+    global marks
+    marks = quot_marks(meta)
+
+
+@quotes.on(Quoted)
+def insert_marks(quoted: Quoted) -> list[Inline] | None:
     if marks is None:
-        return
-    quotes = Filter()
-
-    @quotes.on(Quoted)
-    def insert_marks(quoted: Quoted) -> list[Inline]:
-        left, right = marks[:2] if quoted.quote_type == QuoteType.DoubleQuote else marks[2:]
-        return [Str(left), *quoted.content, Str(right)]
-
-    doc.walk(quotes)  # after the metadata is read: every quotation, inner ones first
+        return None
+    left, right = marks[:2] if quoted.quote_type == QuoteType.DoubleQuote else marks[2:]
+    return [Str(left), *quoted.content, Str(right)]
 
 
 if __name__ == "__main__":
-    f.main()
+    main([configure, quotes])  # the metadata, then every quotation, inner ones first

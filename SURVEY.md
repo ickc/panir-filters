@@ -115,6 +115,13 @@ are made with those two tests fixed (`pandoc-quotes/upstream/ORIGIN`).
 author-info-blocks is run after scholarly-metadata, the originals and the
 ports alike (`after:` in its `ORIGIN`).
 
+The fourth batch kept its four as chosen. track-changes' `env` turned out
+to be pandoc 2's: it reads `PANDOC_READER_OPTIONS.trackChanges`, which
+pandoc 3 names `track_changes`, so under pandoc 3.14 only the metadata
+decides; the reader's option still makes its input (docx read with
+`--track-changes=all`), which its cases go through (`NAME.via`).
+pagebreak's `env` is two environment variables (`NAME.env`).
+
 How the features are covered (each at least twice where possible):
 
 | feature | filters |

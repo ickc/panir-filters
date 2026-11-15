@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use panir::{Ctx, Filter, Inline, Meta, MetaValue, QuoteType, stringify};
+use panir::{Ctx, Filter, Inline, Meta, MetaValue, QuoteType, stringify, truthy};
 
 /// Primary left, primary right, secondary left, secondary right.
 type Marks = [String; 4];
@@ -93,11 +93,6 @@ const QUOT_MARKS_BY_LANG: &[(&str, [&str; 4])] = &[
     ("wen", ["„", "“", "‚", "‘"]),
 ];
 
-/// Whether Lua counts the value: there, and not false.
-fn given(value: Option<&MetaValue>) -> bool {
-    !matches!(value, None | Some(MetaValue::MetaBool(false)))
-}
-
 /// Four marks: text of four characters, or a list of four. (The original
 /// warns, then fails as its warning does: NOTES.md.)
 fn quotation_marks(value: &MetaValue, field: &str) -> Result<Marks, String> {
@@ -123,18 +118,18 @@ fn configure(meta: &Meta) -> Result<Option<Marks>, String> {
                 by_lang.insert(lang.to_string(), quotation_marks(marks, &field)?);
             }
         }
-        other if given(other) => {
+        other if truthy(other) => {
             return Err("metadata field \"quot-marks-by-lang\": not a map".into());
         }
         _ => {}
     }
-    if let Some(marks) = meta.get("quot-marks").filter(|m| given(Some(m))) {
+    if let Some(marks) = meta.get("quot-marks").filter(|m| truthy(Some(m))) {
         return quotation_marks(marks, "metadata field \"quot-marks\"").map(Some);
     }
     let Some(field) = ["quot-lang", "lang"]
         .iter()
         .map(|k| meta.get(*k))
-        .find(|v| given(*v))
+        .find(|v| truthy(*v))
         .flatten()
     else {
         return Ok(None);
@@ -171,13 +166,12 @@ struct Configure {
 }
 
 impl Filter for Configure {
-    fn meta(&mut self, meta: &mut Meta, ctx: &mut Ctx) {
+    fn meta(&mut self, meta: &mut Meta, ctx: &mut Ctx) -> Option<()> {
         match configure(meta) {
             Ok(marks) => self.marks = marks,
-            Err(e) => {
-                ctx.fail::<()>(e);
-            }
+            Err(e) => return ctx.fail(e),
         }
+        Some(())
     }
 }
 

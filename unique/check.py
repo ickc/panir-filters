@@ -8,13 +8,11 @@ import panir
 from panir.conversion import Conversion
 from panir.filter import handoff
 
-
-def take(f: panir.Filter) -> None:
-    doc = f(panir.loads(sys.stdin.buffer.read()), conversion=Conversion.from_environment(sys.argv[1:]))
-    panir.check_unique(doc)
-    sys.stdout.write(panir.dumps(doc))
-
-
 script = sys.argv.pop(1)
-handoff.set(take)
+handed: list[panir.Filter] = []  # (main([f, g]) hands each over, in turn)
+handoff.set(handed.append)
 runpy.run_path(script, run_name="__main__")
+conversion = Conversion.from_environment(sys.argv[1:])
+doc = panir.run(panir.loads(sys.stdin.buffer.read()), handed, conversion=conversion)
+panir.check_unique(doc)
+sys.stdout.write(panir.dumps(doc))

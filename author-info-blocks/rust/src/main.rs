@@ -13,7 +13,8 @@
 use std::collections::BTreeMap;
 
 use panir::{
-    Attr, Block, Ctx, Filter, Inline, Link, MetaValue, Pandoc, RawInline, Target, Text, stringify,
+    Attr, Block, Ctx, Filter, Inline, Link, MetaValue, Pandoc, RawInline, Target, Text, items,
+    stringify, truthy,
 };
 
 type Map = BTreeMap<Text, MetaValue>;
@@ -24,34 +25,16 @@ enum Mark {
     CorrespondingAuthor,
 }
 
-/// Whether Lua counts the field: there, and not false.
-fn given(author: &Map, key: &str) -> bool {
-    !matches!(author.get(key), None | Some(MetaValue::MetaBool(false)))
-}
-
 fn corresponding(author: &Map) -> bool {
-    given(author, "correspondence") && given(author, "email")
-}
-
-fn items(value: Option<&MetaValue>) -> Result<&[MetaValue], String> {
-    match value {
-        Some(MetaValue::MetaList(items)) => Ok(items),
-        other => Err(format!(
-            "author-info-blocks: expected a list, got {:?}",
-            other.map(MetaValue::tag)
-        )),
-    }
+    truthy(author.get("correspondence")) && truthy(author.get("email"))
 }
 
 /// `author` or `institute`, as scholarly-metadata leaves them.
-fn maps(value: Option<MetaValue>) -> Result<Vec<Map>, String> {
-    let Some(MetaValue::MetaList(items)) = value else {
-        return Err("author-info-blocks: expected a list".into());
-    };
-    items
-        .into_iter()
+fn maps(value: Option<&MetaValue>) -> Result<Vec<Map>, String> {
+    items(value)
+        .iter()
         .map(|x| match x {
-            MetaValue::MetaMap(map) => Ok(map),
+            MetaValue::MetaMap(map) => Ok(map.clone()),
             other => Err(format!(
                 "author-info-blocks: expected a map, got {}",
                 other.tag()
@@ -105,10 +88,10 @@ impl AuthorInfoBlocks {
         // the name, with its marks as a superscript
         let author_line = |author: &Map| -> Result<Vec<Inline>, String> {
             let mut marks = vec![];
-            if given(author, "equal_contributor") {
+            if truthy(author.get("equal_contributor")) {
                 marks.push(vec![mark(Mark::EqualContributor)]);
             }
-            for i in items(author.get("institute"))? {
+            for i in items(author.get("institute")) {
                 marks.push(vec![Inline::Str(stringify(i).into())]);
             }
             if corresponding(author) {
@@ -119,14 +102,12 @@ impl AuthorInfoBlocks {
             Ok(line)
         };
 
-        let authors = maps(doc.meta.remove("author"))?;
-        let institutes = match doc.meta.remove("institute") {
-            None => vec![],
-            some => maps(some)?,
-        };
+        let authors = maps(doc.meta.get("author"))?;
+        let institutes = maps(doc.meta.get("institute"))?;
+        doc.meta.remove("institute");
 
         let mut body = vec![];
-        if authors.iter().any(|a| given(a, "equal_contributor")) {
+        if authors.iter().any(|a| truthy(a.get("equal_contributor"))) {
             body.push(Block::Para(vec![
                 Inline::Superscript(vec![mark(Mark::EqualContributor)]),
                 Inline::Space,
@@ -150,10 +131,7 @@ impl AuthorInfoBlocks {
             content.extend([Inline::Space, "<".into()]);
             content.extend(email.iter().cloned());
             content.push(">".into());
-            let target = Target {
-                url: format!("mailto:{}", stringify(email)).into(),
-                title: "".into(),
-            };
+            let target = Target::new(&format!("mailto:{}", stringify(email)), "");
             links.push(vec![
                 Link {
                     attr: Attr::default(),
@@ -199,9 +177,10 @@ impl AuthorInfoBlocks {
 }
 
 impl Filter for AuthorInfoBlocks {
-    fn pandoc(&mut self, doc: &mut Pandoc, ctx: &mut Ctx) {
-        if let Err(e) = Self::info_blocks(doc, ctx.format().unwrap_or_default()) {
-            ctx.fail::<()>(e);
+    fn pandoc(&mut self, doc: &mut Pandoc, ctx: &mut Ctx) -> Option<()> {
+        match Self::info_blocks(doc, ctx.format().unwrap_or_default()) {
+            Ok(()) => Some(()),
+            Err(e) => ctx.fail(e),
         }
     }
 }

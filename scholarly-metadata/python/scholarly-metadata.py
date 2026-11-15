@@ -17,7 +17,6 @@ Albert Krewinkel, Robert Winkler; ISC; the repository's MIT licence, see
 
 import copy
 import re
-from typing import TypeGuard
 
 from panir import (
     Filter,
@@ -29,6 +28,7 @@ from panir import (
     MetaString,
     MetaValue,
     Str,
+    items,
     stringify,
 )
 
@@ -38,11 +38,6 @@ Named = dict[str, MetaValue]
 LUA_SPACE = " \t\n\v\f\r"  # Lua's %s (and its tonumber's)
 
 f = Filter()
-
-
-def given(value: MetaValue | None) -> TypeGuard[MetaValue]:
-    """Whether Lua counts the value: anything but missing or false."""
-    return value is not None and value != MetaBool(False)
 
 
 def number(text: str) -> float | None:
@@ -55,15 +50,11 @@ def number(text: str) -> float | None:
 def as_list(value: MetaValue | None) -> list[MetaValue]:
     """A list as the original takes one: a list's items, text with commas
     split there (each a string), anything else alone (nothing if missing)."""
-    match value:
-        case None:
-            return []
-        case MetaList(items):
-            return list(items)
-        case MetaInlines():
-            names = [name.strip(LUA_SPACE) for name in stringify(value).split(",")]
-            return [MetaString(name) for name in names] if len(names) >= 2 else [value]
-    return [value]
+    if isinstance(value, MetaInlines):
+        names = [name.strip(LUA_SPACE) for name in stringify(value).split(",")]
+        if len(names) >= 2:
+            return [MetaString(name) for name in names]
+    return items(value)
 
 
 def named(obj: MetaValue) -> Named:
@@ -76,7 +67,7 @@ def named(obj: MetaValue) -> Named:
             return {"name": MetaInlines(Str(text)), "id": MetaString(text)}
         case MetaMap(entries) if "name" in entries:
             out = dict(entries)
-            out["id"] = MetaString(stringify(out["id"] if given(out.get("id")) else out["name"]))
+            out["id"] = MetaString(stringify(out.get("id") or out["name"]))
             return out
         case MetaMap(entries) if len(entries) == 1:
             ((key, value),) = entries.items()
@@ -86,13 +77,11 @@ def named(obj: MetaValue) -> Named:
                     out = {"name": value}
                 case MetaMap(more):
                     out = dict(more)
-                    if not given(out.get("name")):
+                    if not out.get("name"):
                         out["name"] = MetaInlines(Str(key))
                 case _:
                     raise ValueError(f"scholarly-metadata: {key}: neither a name nor a map")
-            out["id"] = (
-                MetaString(stringify(out["id"])) if given(out.get("id")) else MetaString(key)
-            )
+            out["id"] = MetaString(stringify(out["id"]) if out.get("id") else key)
             return out
     # a map of none or several entries; a list or blocks, which the original
     # names after Lua's tostring of them (NOTES.md)
@@ -127,7 +116,7 @@ def merge(institutes: list[Named], inst: Named) -> None:
         institutes.append(inst)
         return
     for key, value in inst.items():
-        if not given(same.get(key)):
+        if not same.get(key):
             same[key] = copy.deepcopy(value)  # (inst may stay too: a second top-level one)
 
 
@@ -144,8 +133,8 @@ def canonicalize(meta: Meta) -> None:
         numbers.setdefault(ident(inst), str(i))
     for author, insts in zip(authors, theirs):
         author["institute"] = MetaList(*(MetaString(numbers[ident(x)]) for x in insts))
-    meta["author"] = MetaList(*map(MetaMap, authors))
-    meta["institute"] = MetaList(*map(MetaMap, institutes))
+    meta["author"] = authors
+    meta["institute"] = institutes
 
 
 if __name__ == "__main__":

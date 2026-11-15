@@ -12,15 +12,12 @@
 
 using Panir
 
-"Whether Lua counts the value: anything but missing or false."
-given(::Nothing) = false
-given(v::MetaBool) = v.value
-given(::MetaValue) = true
-
-# `abstract-section.section-identifiers`, as the original reads it
-configured(config::MetaMap) = get(config.content, "section-identifiers", nothing)
-configured(config::MetaBool) = config.value ? error("abstract-section: the configuration is true, not a map") : nothing
-configured(_) = nothing  # (a string, a list... has no field in Lua)
+# `abstract-section.section-identifiers`, as the original reads it (a string, a
+# list... has no field in Lua; true fails)
+function configured(config)
+    config == MetaBool(true) && error("abstract-section: the configuration is true, not a map")
+    lookup(config, "section-identifiers")
+end
 
 const DEFAULT = Set(["abstract"])
 # (each inline of text too)
@@ -54,7 +51,7 @@ function abstract_section(doc::Pandoc)
     end
     walk!(sections, doc.blocks)  # the body's lists, inner ones first
     for (key, blocks) in collected
-        !isempty(blocks) && !given(get(doc.meta, key, nothing)) && (doc.meta[key] = MetaBlocks(blocks))
+        !isempty(blocks) && !truthy(get(doc.meta, key, nothing)) && (doc.meta[key] = MetaBlocks(blocks))
     end
     nothing
 end

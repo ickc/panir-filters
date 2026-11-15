@@ -11,17 +11,15 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use panir::{Block, Ctx, Filter, MetaValue, Pandoc, stringify};
+use panir::{Block, Ctx, Filter, Meta, MetaValue, Pandoc, lookup, stringify, truthy};
 
 /// `abstract-section.section-identifiers`, as the original reads it.
-fn section_identifiers(config: Option<MetaValue>) -> Result<BTreeSet<String>, String> {
-    let identifiers = match config {
-        Some(MetaValue::MetaMap(mut config)) => config.remove("section-identifiers"),
-        Some(MetaValue::MetaBool(true)) => {
-            return Err("abstract-section: the configuration is true, not a map".into());
-        }
-        _ => None, // (a string, a list... has no field in Lua)
-    };
+fn section_identifiers(meta: &Meta) -> Result<BTreeSet<String>, String> {
+    // (a string, a list... has no field in Lua; true fails)
+    if let Some(MetaValue::MetaBool(true)) = meta.get("abstract-section") {
+        return Err("abstract-section: the configuration is true, not a map".into());
+    }
+    let identifiers = lookup(meta, &["abstract-section", "section-identifiers"]);
     Ok(match identifiers {
         // (each inline of text too)
         Some(MetaValue::MetaList(xs)) if !xs.is_empty() => xs.iter().map(stringify).collect(),
@@ -43,7 +41,7 @@ struct Sections<'a> {
 }
 
 impl Filter for Sections<'_> {
-    fn blocks(&mut self, xs: &mut Vec<Block>, _: &mut Ctx) {
+    fn blocks(&mut self, xs: &mut Vec<Block>, _: &mut Ctx) -> Option<()> {
         let mut body = vec![];
         let mut section = None; // the identifier of the section being collected
         for block in std::mem::take(xs) {
@@ -69,35 +67,32 @@ impl Filter for Sections<'_> {
             }
         }
         *xs = body;
+        Some(())
     }
 }
 
 struct AbstractSection;
 
 impl Filter for AbstractSection {
-    fn pandoc(&mut self, doc: &mut Pandoc, ctx: &mut Ctx) {
-        let identifiers = match section_identifiers(doc.meta.remove("abstract-section")) {
+    fn pandoc(&mut self, doc: &mut Pandoc, ctx: &mut Ctx) -> Option<()> {
+        let identifiers = match section_identifiers(&doc.meta) {
             Ok(identifiers) => identifiers,
-            Err(e) => {
-                ctx.fail::<()>(e);
-                return;
-            }
+            Err(e) => return ctx.fail(e),
         };
+        doc.meta.remove("abstract-section");
         let mut sections = Sections {
             identifiers: &identifiers,
             collected: BTreeMap::new(),
             toplevel: 6,
         };
         // the body's lists, inner ones first
-        if ctx.apply(&mut doc.blocks, &mut sections).is_none() {
-            return;
-        }
+        ctx.apply(&mut doc.blocks, &mut sections)?;
         for (key, blocks) in sections.collected {
-            let set = matches!(doc.meta.get(key.as_str()), Some(v) if !matches!(v, MetaValue::MetaBool(false)));
-            if !blocks.is_empty() && !set {
-                doc.meta.insert(key.into(), MetaValue::MetaBlocks(blocks));
+            if !blocks.is_empty() && !truthy(doc.meta.get(key.as_str())) {
+                doc.meta.insert(key.into(), blocks.into());
             }
         }
+        Some(())
     }
 }
 

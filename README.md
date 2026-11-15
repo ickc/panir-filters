@@ -12,7 +12,9 @@ Round 1 (filters that need only the AST) is chosen in
 `list-table`, then `deemph`, `comments`, `deflists`, `theorem`,
 `inlinenotes`, `gitlab_markdown`, `french-spaces`, then the metadata
 cluster, `scholarly-metadata`, `author-info-blocks`, `pandoc-quotes`,
-`abstract-section`, `cito`; lines and times in [`RESULTS.md`](RESULTS.md).
+`abstract-section`, `cito`, then `pagebreak`, `track-changes`,
+`first-line-indent`, `count-para`; lines and times in
+[`RESULTS.md`](RESULTS.md).
 
 ## What goes here
 
@@ -30,10 +32,16 @@ One folder per filter:
   the reader's options in `NAME.args` beside one, if any: `-M lang=en-GB`,
   which makes a `MetaString` as a command line does, or `-f
   markdown-smart`; or `*.json`, a document as pandoc's JSON, for metadata
-  no reader makes), and `expected.jsonl`, what the
+  no reader makes; with `NAME.via` beside a markdown case, a format's name
+  such as `docx`, pandoc writes it in that format, then reads it back,
+  with `NAME.args` as that reader's options, `--track-changes=all`: input
+  only that reader makes, with nothing but markdown kept; with `NAME.env`,
+  `KEY=VALUE` lines, the original and the ports run that case with those
+  environment variables), and `expected.jsonl`, what the
   original made of each under pandoc 3.14, one line per document and
-  format (`{"name", "format", "input", "output"}`, or `"error": true` where
-  the original fails); committed, so the tests need neither pandoc nor the
+  format (`{"name", "format", "input", "output"}`, `"env"` if any, or
+  `"error": true` where the original fails); committed, so the tests need
+  neither pandoc nor the
   original's runtime;
 - `python/`, `ts/`, `rust/`, `julia/`: the ports, each written as someone
   using that language and panir would write it;

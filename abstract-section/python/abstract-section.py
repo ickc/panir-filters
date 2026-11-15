@@ -11,8 +11,6 @@ A port of pandoc-ext/abstract-section (Copyright © 2017-2023 Albert
 Krewinkel; MIT, see ../LICENSE).
 """
 
-from typing import TypeGuard
-
 from panir import (
     Block,
     Filter,
@@ -23,31 +21,21 @@ from panir import (
     MetaBool,
     MetaInlines,
     MetaList,
-    MetaMap,
     MetaString,
-    MetaValue,
     Pandoc,
+    lookup,
     stringify,
 )
 
 f = Filter()
 
 
-def given(value: MetaValue | None) -> TypeGuard[MetaValue]:
-    """Whether Lua counts the value: anything but missing or false."""
-    return value is not None and value != MetaBool(False)
-
-
 def section_identifiers(meta: Meta) -> set[str]:
     """`abstract-section.section-identifiers`, as the original reads it."""
-    match meta.pop("abstract-section", None):
-        case MetaMap(config):
-            identifiers = config.get("section-identifiers")
-        case MetaBool(True):
-            raise ValueError("abstract-section: the configuration is true, not a map")
-        case _:
-            identifiers = None  # (a string, a list... has no field in Lua)
-    match identifiers:
+    config = meta.pop("abstract-section", None)
+    if config == MetaBool(True):  # (a string, a list... has no field in Lua; true fails)
+        raise ValueError("abstract-section: the configuration is true, not a map")
+    match lookup(config, "section-identifiers"):
         case MetaList(items) | MetaInlines(items) | MetaBlocks(items) if items:
             return {stringify(x) for x in items}  # (each inline of text too)
         case MetaString(text) if text:
@@ -89,7 +77,7 @@ def abstract_section(doc: Pandoc) -> None:
 
     doc.blocks.walk(sections)  # the body's lists, inner ones first
     for key, blocks in collected.items():
-        if key in identifiers and blocks and not given(doc.meta.get(key)):
+        if key in identifiers and blocks and not doc.meta.get(key):
             doc.meta[key] = MetaBlocks(*blocks)
 
 

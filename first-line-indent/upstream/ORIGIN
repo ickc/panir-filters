@@ -1,0 +1,8 @@
+url: https://github.com/pandoc/lua-filters/blob/818f901a56cff8629dbd3d3d2d719320279ef6d1/first-line-indent/first-line-indent.lua
+repository: https://github.com/pandoc/lua-filters
+commit: 818f901a56cff8629dbd3d3d2d719320279ef6d1
+path: first-line-indent/first-line-indent.lua
+licence: MIT, Copyright (c) 2021 Julien Dutant (../LICENSE, the folder's own, verbatim; it covers the original and the ports here; the file's header says MIT too)
+cases: cases/sample.md is the repository's first-line-indent/sample.md, verbatim; the others are written for the ports
+run: lua first-line-indent.lua
+formats: html latex markdown

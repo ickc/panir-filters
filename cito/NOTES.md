@@ -46,14 +46,17 @@ lists as metadata: a map of lists of strings, built from plain values.
 | what | Lua | Python | TypeScript | Rust | Julia |
 |---|---|---|---|---|---|
 | the table of properties and aliases | 155 lines | 80 (`ruff format`) | 52 | 136 (`rustfmt`) | 46 |
-| `cito_cites` from plain values (a map of lists of strings) | `doc.meta.cito_cites = t` | `doc.meta["cito_cites"] = by_property` | `MetaMap(Object.fromEntries(byProperty))` | 14 lines (rustfmt's) of `MetaValue::MetaMap(... MetaValue::MetaList(... MetaValue::MetaString(k.into()) ...))` | `doc.meta["cito_cites"] = by_property` |
+| `cito_cites` from plain values (a map of lists of strings) | `doc.meta.cito_cites = t` | `doc.meta["cito_cites"] = by_property` | `MetaMap(Object.fromEntries(byProperty))` | 14 lines (rustfmt's) of `MetaValue::MetaMap(... MetaValue::MetaList(... MetaValue::MetaString(k.into()) ...))` → 4, `.map(\|(p, keys)\| (p, keys.into_iter().collect::<MetaValue>())).collect()` | `doc.meta["cito_cites"] = by_property` |
 | the id as a Lua pattern | built in | 15 | 11 | 25 | 20 |
 | the content's walk, from the `Cite` function | `cite.content:walk{Str = f}` | `cite.content.walk(rewrite(id, key))` | `applyFilter(cite.content, { Str })` | `ctx.apply(&mut cite.content, &mut Rewrite { .. })?` | `walk!((s::Str) -> ..., cite.content)` |
 
 - **Building metadata from plain values** is one line where the
   language converts them (Python's `from_python` when setting a field,
-  TypeScript's `MetaMap`, Julia's `convert`), as in Lua; Rust has no
-  conversion: the nested constructors by hand (`GAPS.md` 23).
+  TypeScript's `MetaMap`, Julia's `convert`), as in Lua; Rust had no
+  conversion, so the nested constructors by hand (`GAPS.md` 23), until
+  panir#16's `From` and `FromIterator`: the outer `collect()` makes the
+  `MetaMap`, but the inner one needs its type named
+  (`collect::<MetaValue>()`), as a pair's value is generic.
 - **Python**: `rewrite(id, key)` makes the second filter (a closure per
   citation; one defined in the loop is ruff's B023); `re.sub` with a
   function, so the key is not a template.
@@ -64,7 +67,8 @@ lists as metadata: a map of lists of strings, built from plain values.
   `regex::escape`), as no pattern matching is in the standard library.
   The `inline` function collects into the filter's struct; its `meta`
   function, called after every inline in the typewise order, writes
-  `cito_cites`: no `Pandoc` function, no walk of the document by hand.
+  `cito_cites`: no `Pandoc` function, no walk of the document by hand
+  (it returns `Some(())` since panir#16).
   `ctx.apply(...)?` works here, in an `inline` function. A `Str` becomes
   `panir::inlines(&text)`, the words Lua would make of the string.
 - **Julia**: `walk!` with an anonymous function of one typed argument

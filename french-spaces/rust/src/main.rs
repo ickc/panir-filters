@@ -22,9 +22,9 @@ struct FrenchSpaces;
 impl Filter for FrenchSpaces {
     // a space's neighbours: a function for each list of inlines, as a
     // function's context has no siblings in Rust
-    fn inlines(&mut self, xs: &mut Vec<Inline>, ctx: &mut Ctx) {
+    fn inlines(&mut self, xs: &mut Vec<Inline>, ctx: &mut Ctx) -> Option<()> {
         if !matches!(ctx.format(), Some("latex" | "beamer")) {
-            return;
+            return None;
         }
         for i in 0..xs.len() {
             if !matches!(xs[i], Inline::Space) {
@@ -47,6 +47,7 @@ impl Filter for FrenchSpaces {
             }
             .into();
         }
+        Some(())
     }
 }
 

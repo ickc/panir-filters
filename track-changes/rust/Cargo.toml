@@ -1,0 +1,11 @@
+[package]
+name = "track-changes"
+description = "Tracked changes accepted, rejected, or shown: a pandoc filter (a port of pandoc/lua-filters' track-changes)"
+license = "MIT"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true

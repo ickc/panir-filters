@@ -69,29 +69,37 @@ it), under which its own tests pass again. For upstream: those two lines.
 | the table (72 languages) | 74 lines | 74 | 74 | 74 | 74 |
 | four marks from a string or a list (`get_quotation_marks`) | 19 | 11 | 8 | 10 | 4 |
 | `quot-marks-by-lang`: a map, else an error | 11 | 8 | 8 | 12 | 8 |
-| a field, missing or false (`GAPS.md` 18) | built in | `given`, 2 lines | 1 | 3 | 3 |
+| a field, missing or false (`GAPS.md` 18) | built in | `given`, 2 lines → none (`meta.get("quot-lang") or meta.get("lang")`, as Lua) | 1 → `truthy` | 3 → `truthy` | 3 → `truthy` |
 | the field, then the language: as given, its letters, a region | 18 | 13 | 10 | 28 | 11 |
-| two filters, metadata then quotations | `return {{Meta=...}, {Quoted=...}}` | a `Pandoc` function walking the document with a second filter | `runFilter([configure, quotes])`, as Lua | two `apply` in `main` | a `Pandoc` method calling `walk!` |
+| two filters, metadata then quotations | `return {{Meta=...}, {Quoted=...}}` | a `Pandoc` function walking the document with a second filter → `main([configure, quotes])` | `runFilter([configure, quotes])`, as Lua | two `apply` in `main` | a `Pandoc` method calling `walk!` → `run_filter([configure, insert_marks])` |
 
 - **Two filters in turn** is the original's shape, and needed: in one
   typewise walk the metadata comes after the inlines, and one top-down walk
   would leave a quotation directly in a quotation unrewritten (what a
   top-down function returns is not given to a function again). TypeScript
   (`runFilter` takes an array) and Rust (`main` applies one filter, then
-  the other) say it as Lua does. Python's `Filter.main` and Julia's
-  `run_filter` take one filter, so the ports have a `Pandoc` function that
-  reads the metadata and walks the document with the second
-  (`doc.walk(quotes)`, `walk!(insert_marks, doc)`): `GAPS.md` 20.
-- **Python**: the second filter is made inside the `Pandoc` function, its
-  function a closure over the marks. `QuoteType.DoubleQuote` (an enum),
-  `quoted.quote_type` (Lua's `quotetype`).
+  the other) say it as Lua does. Before panir#16, Python's `Filter.main`
+  and Julia's `run_filter` took one filter, so those ports had a `Pandoc`
+  function that read the metadata and walked the document with the second
+  (`GAPS.md` 20); now `main([configure, quotes])` and
+  `run_filter([configure, insert_marks])`, as Lua, the marks a module
+  variable the first sets (a `global` in Python, a `Ref` in Julia).
+- **Python**: `QuoteType.DoubleQuote` (an enum), `quoted.quote_type`
+  (Lua's `quotetype`). A metadata value's truth is Lua's since panir#16:
+  `if marks := meta.get("quot-marks"):` and `or` are the Lua lines.
 - **TypeScript**: as the original; the marks a module variable the first
   filter sets. `[...stringify(v)]` splits into characters (code points).
+  `truthy` is a `boolean`, not a type guard: after `if (truthy(marks))`
+  `marks` is still `MetaValue | undefined`, so `marks!` (the port's own
+  `given` was `v is MetaValue`; `GAPS.md` 26).
 - **Rust**: `Configure` (with `meta`) keeps the marks in its struct;
   `main` applies `InsertMarks` only if there are some. `marks.try_into()`
   makes the four-element array or the "not four" error in one line; the
-  table a `BTreeMap`, so a region is the first in key order. `ctx.fail`
-  from `meta` needs `ctx.fail::<()>` (`GAPS.md` 24).
+  table a `BTreeMap`, so a region is the first in key order. Since
+  panir#16 `meta` returns `Option<()>`: `Err(e) => return ctx.fail(e)`.
+  `truthy` takes an `Option<&MetaValue>`, as `meta.get` gives; a value in
+  hand is `truthy(Some(m))` (`.filter(|m| truthy(Some(m)))`; `GAPS.md`
+  27).
 - **Julia**: methods by kind for the marks; `findfirst(f, dict)` tests the
   values, not the keys (the first try failed on that): a comprehension over
   the pairs instead.
