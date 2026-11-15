@@ -11,7 +11,7 @@
 // A port of pandoc/lua-filters' pandoc-quotes.lua (Copyright (c) 2018 Odin
 // Kroeger; MIT, see ../LICENSE).
 
-import { Str, stringify, truthy, type Meta, type MetaValue } from "panir";
+import { given, Str, stringify, truthy, type Meta, type MetaValue } from "panir";
 import { runFilter } from "panir/node";
 
 type Marks = readonly string[]; // primary left, right, secondary left, right
@@ -115,10 +115,10 @@ function configure(meta: Meta): Marks | undefined {
   } else if (truthy(custom)) {
     throw new QuotesError('metadata field "quot-marks-by-lang": not a map');
   }
-  const marks = meta["quot-marks"];
-  if (truthy(marks)) return quotationMarks(marks!, 'metadata field "quot-marks"');
-  const field = truthy(meta["quot-lang"]) ? meta["quot-lang"] : meta.lang;
-  if (!truthy(field)) return undefined;
+  const marks = given(meta["quot-marks"]);
+  if (marks) return quotationMarks(marks, 'metadata field "quot-marks"');
+  const field = given(meta["quot-lang"]) ?? given(meta.lang);
+  if (!field) return undefined;
   // the language and region, the language, a region of the language: the
   // original's Lua pattern `^lang-`, where `-` repeats the last letter, takes
   // any key starting with the language but its last letter (the first in this

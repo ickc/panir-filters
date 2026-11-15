@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use panir::{Ctx, Filter, Inline, Meta, MetaValue, QuoteType, stringify, truthy};
+use panir::{Ctx, Filter, Inline, Meta, MetaValue, QuoteType, given, stringify, truthy};
 
 /// Primary left, primary right, secondary left, secondary right.
 type Marks = [String; 4];
@@ -123,14 +123,12 @@ fn configure(meta: &Meta) -> Result<Option<Marks>, String> {
         }
         _ => {}
     }
-    if let Some(marks) = meta.get("quot-marks").filter(|m| truthy(Some(m))) {
+    if let Some(marks) = given(meta.get("quot-marks")) {
         return quotation_marks(marks, "metadata field \"quot-marks\"").map(Some);
     }
     let Some(field) = ["quot-lang", "lang"]
         .iter()
-        .map(|k| meta.get(*k))
-        .find(|v| truthy(*v))
-        .flatten()
+        .find_map(|k| given(meta.get(*k)))
     else {
         return Ok(None);
     };
@@ -167,10 +165,7 @@ struct Configure {
 
 impl Filter for Configure {
     fn meta(&mut self, meta: &mut Meta, ctx: &mut Ctx) -> Option<()> {
-        match configure(meta) {
-            Ok(marks) => self.marks = marks,
-            Err(e) => return ctx.fail(e),
-        }
+        self.marks = ctx.ok(configure(meta))?;
         Some(())
     }
 }

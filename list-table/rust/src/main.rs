@@ -247,10 +247,8 @@ struct ListTable;
 
 impl Filter for ListTable {
     fn block(&mut self, x: &mut Block, ctx: &mut Ctx) -> Option<Vec<Block>> {
-        match list_table(x) {
-            Ok(table) => table.map(|t| vec![t.into()]),
-            Err(e) => ctx.fail(e),
-        }
+        let table = ctx.ok(list_table(x))?;
+        table.map(|t| vec![t.into()])
     }
 }
 

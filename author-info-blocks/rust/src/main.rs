@@ -13,7 +13,7 @@
 use std::collections::BTreeMap;
 
 use panir::{
-    Attr, Block, Ctx, Filter, Inline, Link, MetaValue, Pandoc, RawInline, Target, Text, items,
+    Attr, Block, Ctx, Filter, Inline, Link, MetaValue, Pandoc, Target, Text, into_items, items,
     stringify, truthy,
 };
 
@@ -29,12 +29,12 @@ fn corresponding(author: &Map) -> bool {
     truthy(author.get("correspondence")) && truthy(author.get("email"))
 }
 
-/// `author` or `institute`, as scholarly-metadata leaves them.
-fn maps(value: Option<&MetaValue>) -> Result<Vec<Map>, String> {
-    items(value)
-        .iter()
+/// `author` or `institute`, as scholarly-metadata leaves them, taken out.
+fn maps(value: Option<MetaValue>) -> Result<Vec<Map>, String> {
+    into_items(value)
+        .into_iter()
         .map(|x| match x {
-            MetaValue::MetaMap(map) => Ok(map.clone()),
+            MetaValue::MetaMap(map) => Ok(map),
             other => Err(format!(
                 "author-info-blocks: expected a map, got {}",
                 other.tag()
@@ -71,17 +71,9 @@ impl AuthorInfoBlocks {
     fn info_blocks(doc: &mut Pandoc, format: &str) -> Result<(), String> {
         let mark = |m: Mark| -> Inline {
             match (m, format == "latex") {
-                (Mark::CorrespondingAuthor, true) => RawInline {
-                    format: "latex".into(),
-                    text: "*".into(),
-                }
-                .into(),
+                (Mark::CorrespondingAuthor, true) => Inline::raw("latex", "*"),
                 (Mark::CorrespondingAuthor, false) => "✉".into(),
-                (Mark::EqualContributor, true) => RawInline {
-                    format: "latex".into(),
-                    text: "$\\dagger{}$".into(),
-                }
-                .into(),
+                (Mark::EqualContributor, true) => Inline::raw("latex", "$\\dagger{}$"),
                 (Mark::EqualContributor, false) => "*".into(),
             }
         };
@@ -102,9 +94,8 @@ impl AuthorInfoBlocks {
             Ok(line)
         };
 
-        let authors = maps(doc.meta.get("author"))?;
-        let institutes = maps(doc.meta.get("institute"))?;
-        doc.meta.remove("institute");
+        let authors = maps(doc.meta.remove("author"))?; // (written back below)
+        let institutes = maps(doc.meta.remove("institute"))?;
 
         let mut body = vec![];
         if authors.iter().any(|a| truthy(a.get("equal_contributor"))) {
@@ -178,10 +169,7 @@ impl AuthorInfoBlocks {
 
 impl Filter for AuthorInfoBlocks {
     fn pandoc(&mut self, doc: &mut Pandoc, ctx: &mut Ctx) -> Option<()> {
-        match Self::info_blocks(doc, ctx.format().unwrap_or_default()) {
-            Ok(()) => Some(()),
-            Err(e) => ctx.fail(e),
-        }
+        ctx.ok(Self::info_blocks(doc, ctx.format().unwrap_or_default()))
     }
 }
 

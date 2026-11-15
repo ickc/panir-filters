@@ -13,7 +13,7 @@
 //! ../LICENSE).
 
 use panir::{
-    Block, Ctx, Filter, Inline, Meta, MetaValue, Pandoc, RawBlock, lookup, stringify, truthy,
+    Block, Ctx, Filter, Inline, Meta, MetaValue, Pandoc, given, lookup, stringify, truthy,
 };
 
 const FORM_FEED: &str = "\u{c}";
@@ -30,52 +30,42 @@ fn is_newpage(text: &str) -> bool {
 /// field: the original reads `html-class`, not `pagebreak.html-class` as
 /// its README says.)
 fn option(meta: &Meta, key: &str, variable: &str) -> Option<String> {
-    if truthy(meta.get(key)) {
-        Some(stringify(&meta[key]))
-    } else {
-        std::env::var(variable).ok()
-    }
-}
-
-fn raw(format: &str, text: &str) -> Block {
-    RawBlock {
-        format: format.into(),
-        text: text.into(),
-    }
-    .into()
+    given(meta.get(key))
+        .map(stringify)
+        .or_else(|| std::env::var(variable).ok())
 }
 
 /// A page break in the format.
 fn pagebreak(format: &str, meta: &Meta) -> Block {
     if format.contains("asciidoc") {
-        raw("asciidoc", "<<<\n\n")
+        Block::raw("asciidoc", "<<<\n\n")
     } else if format == "context" {
-        raw("context", "\\page")
+        Block::raw("context", "\\page")
     } else if format == "docx" {
-        raw("openxml", "<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>")
+        Block::raw("openxml", "<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>")
     } else if format.contains("epub") {
-        raw("html", "<p style=\"page-break-after: always;\"> </p>")
+        Block::raw("html", "<p style=\"page-break-after: always;\"> </p>")
     } else if format.contains("html") {
         match option(meta, "html-class", "PANDOC_PAGEBREAK_HTML_CLASS") {
             Some(class) if !class.is_empty() => {
-                raw("html", &format!("<div class=\"{class}\"></div>"))
+                Block::raw("html", format!("<div class=\"{class}\"></div>"))
             }
-            _ => raw("html", "<div style=\"page-break-after: always;\"></div>"),
+            _ => Block::raw("html", "<div style=\"page-break-after: always;\"></div>"),
         }
     } else if format.contains("latex") {
-        raw("tex", "\\newpage{}")
+        Block::raw("tex", "\\newpage{}")
     } else if format.contains("ms") {
-        raw("ms", ".bp")
+        Block::raw("ms", ".bp")
     } else if format.contains("odt") {
         let style = option(meta, "odt-style", "PANDOC_PAGEBREAK_ODT_STYLE")
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "Pagebreak".into());
-        raw(
+        Block::raw(
             "opendocument",
-            &format!("<text:p text:style-name=\"{style}\"/>"),
+            format!("<text:p text:style-name=\"{style}\"/>"),
         )
     } else if format.contains("typst") {
-        raw("typst", "#pagebreak()\n\n")
+        Block::raw("typst", "#pagebreak()\n\n")
     } else {
         Block::Para(vec![FORM_FEED.into()]) // a form feed, in any other format
     }
@@ -110,18 +100,17 @@ struct Pagebreak;
 impl Filter for Pagebreak {
     fn pandoc(&mut self, doc: &mut Pandoc, ctx: &mut Ctx) -> Option<()> {
         let format = ctx.format().unwrap_or_default();
-        let config = |path: &[&str]| lookup(&doc.meta, path);
+        let config = doc.meta.remove("pagebreak");
         let is_true = |v: Option<&MetaValue>| matches!(v, Some(MetaValue::MetaBool(true)));
-        if is_true(config(&["pagebreak"])) || is_true(config(&["pagebreak", "break-on"])) {
+        if is_true(config.as_ref()) || is_true(lookup(&config, &["break-on"])) {
             return ctx.fail("pagebreak: a configuration of true"); // (Lua indexes a boolean)
         }
         let mut breaks = Breaks {
             pagebreak: pagebreak(format, &doc.meta),
             raw_tex: !format.ends_with("tex"),
-            form_feed: truthy(config(&["pagebreak", "break-on", "form-feed"])),
-            plaintext: truthy(config(&["pagebreak", "break-on", "plaintext-command"])),
+            form_feed: truthy(lookup(&config, &["break-on", "form-feed"])),
+            plaintext: truthy(lookup(&config, &["break-on", "plaintext-command"])),
         };
-        doc.meta.remove("pagebreak");
         ctx.apply(doc, &mut breaks) // the metadata's blocks too
     }
 }

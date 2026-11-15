@@ -12,7 +12,7 @@
 // Dutant; MIT, see ../LICENSE).
 
 import {
-  equal, items, lookup, MetaBlocks, MetaBool, Plain, RawBlock, RawInline, stringify, toPlain, truthy,
+  equal, given, items, lookup, MetaBlocks, MetaBool, Plain, RawBlock, RawInline, stringify, toPlain, truthy,
   type Block, type Blocks, type Filter, type MetaValue, type Para,
 } from "panir";
 import { runFilter } from "panir/node";
@@ -103,8 +103,8 @@ const configure: Filter = {
     else if (format.includes("latex") && options.size !== "1em") header = RawBlock("tex", `\\setlength{\\parindent}{${options.size}}`);
     else return;
     // before what is there: a list's items, or one value
-    const existing = meta["header-includes"];
-    meta["header-includes"] = MetaBlocks([header, ...(truthy(existing) ? items(existing) : []).map(asBlock)] as Blocks);
+    const existing = items(given(meta["header-includes"]));
+    meta["header-includes"] = MetaBlocks([header, ...existing.map(asBlock)] as Blocks);
   },
 };
 

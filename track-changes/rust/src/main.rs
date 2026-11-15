@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use panir::{Block, Ctx, Filter, Inline, MetaValue, Pandoc, RawBlock, RawInline, Span, stringify};
+use panir::{Block, Ctx, Filter, Inline, MetaValue, Pandoc, Span, stringify};
 
 const HEADER: &str = r"
 \makeatletter
@@ -80,14 +80,6 @@ fn initials(name: &str) -> String {
         .collect()
 }
 
-fn raw(format: &str, text: String) -> Inline {
-    RawInline {
-        format: format.into(),
-        text: text.into(),
-    }
-    .into()
-}
-
 /// A comment's `¶` (a paragraph break in Word) as another inline.
 struct Pilcrows(fn() -> Inline);
 
@@ -129,20 +121,22 @@ impl Changes {
             Some("comment-start") => "\\note",
             Some("insertion") => "\\added",
             Some("deletion") => "\\deleted",
-            _ if span.attr.has_class("comment-end") => return Some(vec![raw("latex", "}".into())]),
+            _ if span.attr.has_class("comment-end") => {
+                return Some(vec![Inline::raw("latex", "}")]);
+            }
             _ => return None,
         };
-        let id = match self.author(span) {
-            Ok(id) => id,
-            Err(e) => return ctx.fail(e),
-        };
+        let id = ctx.ok(self.author(span))?;
         let text = if span.attr.has_class("comment-start") {
             ctx.apply(&mut span.content, &mut Pilcrows(|| "\\newline".into()))?;
             format!("{}}}\\hlnote{{", stringify(&span.content))
         } else {
             format!("{}}}", stringify(&span.content))
         };
-        Some(vec![raw("latex", format!("{command}[id={id}]{{{text}"))])
+        Some(vec![Inline::raw(
+            "latex",
+            format!("{command}[id={id}]{{{text}"),
+        )])
     }
 
     fn html(&mut self, span: &mut Span, ctx: &mut Ctx) -> Option<Vec<Inline>> {
@@ -151,13 +145,11 @@ impl Changes {
             Some("insertion") => "ins",
             Some("deletion") => "del",
             _ if span.attr.has_class("comment-end") => {
-                return Some(vec![raw("html", "</mark>".into())]);
+                return Some(vec![Inline::raw("html", "</mark>")]);
             }
             _ => return None,
         };
-        if let Err(e) = self.author(span) {
-            return ctx.fail(e);
-        }
+        ctx.ok(self.author(span))?;
         let mut s = format!("<{tag}");
         for (key, value) in &span.attr.attributes {
             let key = if key == "date" {
@@ -174,7 +166,7 @@ impl Changes {
         } else {
             s += &format!(">{}</{tag}>", stringify(&span.content));
         }
-        Some(vec![raw("html", s)])
+        Some(vec![Inline::raw("html", s)])
     }
 
     /// Accepting or rejecting: comments go, an insertion becomes its
@@ -220,13 +212,7 @@ impl Filter for Changes {
 /// author: the original wraps what is there in a list, a list too (its test
 /// for a list, of `.t`, fails since pandoc 2.17).
 fn header_includes(existing: Option<MetaValue>, authors: &BTreeMap<String, String>) -> MetaValue {
-    let latex = |text: String| -> MetaValue {
-        Block::from(RawBlock {
-            format: "latex".into(),
-            text: text.into(),
-        })
-        .into()
-    };
+    let latex = |text: String| MetaValue::from(Block::raw("latex", text));
     let mut out: Vec<MetaValue> = existing.into_iter().collect();
     out.push(latex(HEADER.into()));
     for (i, (inits, name)) in authors.iter().enumerate() {

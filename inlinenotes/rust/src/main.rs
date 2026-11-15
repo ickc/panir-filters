@@ -5,7 +5,7 @@
 //! A port of pandocfilters' examples/inlinenotes.py (Copyright (c) 2013,
 //! John MacFarlane; BSD-3-Clause, see ../LICENSE).
 
-use panir::{Block, Ctx, Filter, Inline, RawInline};
+use panir::{Block, Ctx, Filter, Inline};
 
 struct InlineNotes;
 
@@ -32,11 +32,7 @@ impl Filter for InlineNotes {
                 _ => {}                                 // a rule: dropped, as in the original
             }
         }
-        let open = RawInline {
-            format: "html".into(),
-            text: "^[".into(),
-        };
-        let mut note = vec![open.into()];
+        let mut note = vec![Inline::raw("html", "^[")];
         note.append(&mut inlines);
         note.push(Inline::Str("]".into()));
         Some(note)
