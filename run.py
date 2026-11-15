@@ -16,6 +16,12 @@ when their JSON is ("the same AST"), `pandoc-api-version` aside. A filter
 whose ORIGIN says `after: OTHER` runs after OTHER, always: the originals
 one after the other, and each language's ports likewise.
 
+A case may set environment variables (`NAME.env`, `KEY=VALUE` lines, kept
+in `expected.jsonl` as `"env"`): the original and the ports run with them.
+Its document may be read through another format (`NAME.via`, a format's
+name: pandoc writes the markdown in it, then reads that, with `NAME.args`,
+as track-changes' cases go through docx with `--track-changes=all`).
+
 `test` needs only the ports' toolchains; it runs the Julia ports' cases
 in one Julia process (`julia-cases.jl`), the others a process per case.
 `diff`, `expect` and `time` also run the originals: pandoc (`$PANDOC`) for
@@ -35,6 +41,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -170,16 +177,17 @@ def run(cmd: list[str], data: bytes, cwd: Path | None = None, environ: dict | No
     return Ran(p.returncode, out[0], err[0], seconds, usage.ru_maxrss)
 
 
-def run_original(folder: Path, data: bytes, fmt: str, as_read: bool = True) -> Ran:
+def run_original(folder: Path, data: bytes, fmt: str, as_read: bool = True, environ: dict | None = None) -> Ran:
     """The original's output; with `as_read`, as pandoc reads it (a Lua
     filter's always is): JSON that pandoc reads as the same AST is the same
     output (pandocfilters writes `{"t": "DisplayMath", "c": []}`, pandoc
     `{"t": "DisplayMath"}`), and JSON pandoc can't read is a failure, as it
     is when pandoc runs the filter."""
     cmd = original(folder)
+    environ = {**os.environ, **(environ or {})}
     if origin(folder)["run"].startswith("lua"):
-        return run(cmd + [fmt], data)
-    ran = run(cmd + [fmt], data, cwd=folder / "upstream")
+        return run(cmd + [fmt], data, environ=environ)
+    ran = run(cmd + [fmt], data, cwd=folder / "upstream", environ=environ)
     if not as_read or ran.code != 0:
         return ran
     read = run([env("PANDOC", "pandoc"), "--sandbox", "-f", "json", "-t", "json"], ran.out)
@@ -188,12 +196,13 @@ def run_original(folder: Path, data: bytes, fmt: str, as_read: bool = True) -> R
     return read
 
 
-def run_port(cmds: list[list[str]], data: bytes, fmt: str) -> Ran:
-    """The ports of a chain, each on what the one before made: the time
-    is theirs together, the memory the most any took."""
+def run_port(cmds: list[list[str]], data: bytes, fmt: str, environ: dict | None = None) -> Ran:
+    """The ports of a chain, each on what the one before made, with the
+    case's environment variables: the time is theirs together, the memory
+    the most any took."""
     total = Ran(0, data, b"", 0.0, 0)
     for cmd in cmds:
-        ran = run(cmd + [fmt], total.out, environ=port_env())
+        ran = run(cmd + [fmt], total.out, environ={**port_env(), **(environ or {})})
         total = Ran(ran.code, ran.out, ran.err, total.seconds + ran.seconds, max(total.rss_kb, ran.rss_kb))
         if ran.code != 0:
             break
@@ -250,7 +259,7 @@ def build(langs: list[str]) -> None:
 def check(cmds: list[list[str]] | Ran, case: dict, label: str) -> str | None:
     """None if the port (its commands, or what it made) makes what the
     original made, else what differs."""
-    ran = cmds if isinstance(cmds, Ran) else run_port(cmds, json.dumps(case["input"]).encode(), case["format"])
+    ran = cmds if isinstance(cmds, Ran) else run_port(cmds, json.dumps(case["input"]).encode(), case["format"], case.get("env"))
     if case.get("error"):
         return None if ran.code != 0 else f"{label}: the original failed, the port didn't"
     if ran.code != 0:
@@ -308,7 +317,8 @@ def julia_in_one(jobs: list[tuple[list[str], dict]]) -> list[Ran]:
     """What each Julia port made of its case, `(scripts, case)` (a chain's
     scripts in turn), all in one Julia process (julia-cases.jl): a process
     per case would compile Panir's walk each time."""
-    lines = "".join(f"{chr(0x1f).join(scripts)}\t{case['format']}\t{json.dumps(case['input'], ensure_ascii=False)}\n"
+    lines = "".join(f"{chr(0x1f).join(scripts)}\t{case['format']}\t{chr(0x1f).join(f'{k}={v}' for k, v in case.get('env', {}).items())}\t"
+                    f"{json.dumps(case['input'], ensure_ascii=False)}\n"
                     for scripts, case in jobs)
     driver = [env("JULIA", "julia"), f"--project={ROOT}", "--startup-file=no", str(ROOT / "julia-cases.jl")]
     ran = run(driver, lines.encode(), environ=port_env())
@@ -350,15 +360,40 @@ def cmd_test(args: argparse.Namespace) -> int:
 def document(path: Path) -> bytes:
     """A document's JSON: a .json file as it is, anything else read by
     pandoc as markdown, with the options in a file beside it of the same
-    name and `.args` (`-M lang=de`, `-f markdown-smart`), if any."""
+    name and `.args` (`-M lang=de`, `-f markdown-smart`), if any; or, if a
+    `.via` beside it names a format (`docx`), written in that format by
+    pandoc (with SOURCE_DATE_EPOCH=0), then read from it with the options
+    (`--track-changes=all`)."""
     if path.suffix == ".json":
         return path.read_bytes()
+    pandoc = env("PANDOC", "pandoc")
     args = path.with_suffix(".args")
     extra = shlex.split(args.read_text()) if args.exists() else []
-    ran = run([env("PANDOC", "pandoc"), "--sandbox", "-f", "markdown", *extra, "-t", "json", str(path)], b"")
+    via = path.with_suffix(".via")
+    with tempfile.TemporaryDirectory() as tmp:
+        source, reader = str(path), ["-f", "markdown"]
+        if via.exists():
+            fmt = via.read_text().strip()
+            source = str(Path(tmp) / f"{path.stem}.{fmt}")
+            wrote = run([pandoc, "--sandbox", "-f", "markdown", "-t", fmt, "-o", source, str(path)], b"",
+                        environ={**os.environ, "SOURCE_DATE_EPOCH": "0"})
+            if wrote.code != 0:
+                sys.exit(f"pandoc could not write {path} as {fmt}: {wrote.err.decode()}")
+            reader = ["-f", fmt]
+        ran = run([pandoc, "--sandbox", *reader, *extra, "-t", "json", source], b"")
     if ran.code != 0:
         sys.exit(f"pandoc could not read {path}: {ran.err.decode()}")
     return ran.out
+
+
+def case_env(path: Path) -> dict[str, str]:
+    """`NAME.env` beside a case: `KEY=VALUE` lines, the environment the
+    original and the ports run the case with (pagebreak reads some)."""
+    file = path.with_suffix(".env")
+    if not file.exists():
+        return {}
+    pairs = (line.partition("=") for line in file.read_text().splitlines() if line.strip())
+    return {key: value for key, _, value in pairs}
 
 
 def formats(folder: Path) -> list[str]:
@@ -400,9 +435,10 @@ def cmd_expect(args: argparse.Namespace) -> int:
         sources = (folder / "cases").glob("*.md"), (folder / "cases").glob("*.json")
         for md in sorted(p for found in sources for p in found):
             data = document(md)
+            environ = case_env(md)
             for fmt in formats(folder):
-                ran = run_original(folder, data, fmt)
-                case = {"name": md.stem, "format": fmt, "input": json.loads(data)}
+                ran = run_original(folder, data, fmt, environ=environ)
+                case = {"name": md.stem, "format": fmt, **({"env": environ} if environ else {}), "input": json.loads(data)}
                 if ran.code != 0:
                     case["error"] = True
                     print(f"{folder.name} {md.stem} ({fmt}): the original fails (expected so)")
