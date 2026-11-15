@@ -1,0 +1,8 @@
+url: https://github.com/pandoc-ext/pagebreak/blob/5b70d614cc602a4bdac663a323be77a9ac4514be/pagebreak.lua
+repository: https://github.com/pandoc-ext/pagebreak
+commit: 5b70d614cc602a4bdac663a323be77a9ac4514be
+path: pagebreak.lua
+licence: MIT, Copyright © 2017-2025 Albert Krewinkel, Benct Philip Jonsson (../LICENSE, the repository's, verbatim); the file's own header is ISC text, Copyright © 2017-2025 Benct Philip Jonsson, Albert Krewinkel; both cover the original and the ports here
+cases: cases/input.md is the repository's test/input.md, verbatim; the others are written for the ports (env.env and env-meta.env set the two environment variables it reads)
+run: lua pagebreak.lua
+formats: asciidoc context docx epub html latex beamer ms odt typst markdown
