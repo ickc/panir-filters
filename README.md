@@ -13,8 +13,9 @@ Round 1 (filters that need only the AST) is chosen in
 `inlinenotes`, `gitlab_markdown`, `french-spaces`, then the metadata
 cluster, `scholarly-metadata`, `author-info-blocks`, `pandoc-quotes`,
 `abstract-section`, `cito`, then `pagebreak`, `track-changes`,
-`first-line-indent`, `count-para`; lines and times in
-[`RESULTS.md`](RESULTS.md).
+`first-line-indent`, `count-para`, then the owner's `auto-lang` and
+`amsthm`: all 21; lines and times in [`RESULTS.md`](RESULTS.md), and
+the round in a page in [`ROUND1.md`](ROUND1.md).
 
 ## What goes here
 
@@ -114,10 +115,12 @@ every filter's cases, shuffled, at several depths, each with metadata of
 its own: the cases' fields, some missing, some in another shape, in
 `.cache/assembled`; with `--lang DOC...`, each document also with an
 `auto-lang` map of every script, and of every one but Latin, for
-auto-lang); none are kept here.
+auto-lang; with `--amsthm DOC...`, with an `amsthm` map declaring its
+divs' classes, for amsthm on the textbooks read from LaTeX); none are
+kept here.
 
 CI (`.github/workflows/ci.yml`) runs `run.py test` for the four languages
-on Linux, with `tsc`, pyright, rustfmt and clippy, panir's main checked
+on Linux, with `tsc`, pyright, rustfmt, clippy and `cargo test`, panir's main checked
 out beside this repository; it needs neither pandoc nor the originals.
 
 ## Licences
