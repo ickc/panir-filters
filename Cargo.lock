@@ -48,6 +48,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "count-para"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
 name = "deemph"
 version = "0.1.0"
 dependencies = [
@@ -56,6 +63,13 @@ dependencies = [
 
 [[package]]
 name = "deflists"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
+name = "first-line-indent"
 version = "0.1.0"
 dependencies = [
  "panir",
@@ -103,6 +117,13 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "metavars"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
+name = "pagebreak"
 version = "0.1.0"
 dependencies = [
  "panir",
@@ -233,6 +254,13 @@ dependencies = [
 
 [[package]]
 name = "theorem"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
+name = "track-changes"
 version = "0.1.0"
 dependencies = [
  "panir",

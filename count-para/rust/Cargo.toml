@@ -1,0 +1,11 @@
+[package]
+name = "count-para"
+description = "Numbered paragraphs, and citations of them: a pandoc filter (a port of cysouw/count-para)"
+license = "CC0-1.0"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true
