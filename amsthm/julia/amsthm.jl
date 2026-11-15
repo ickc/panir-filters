@@ -62,19 +62,6 @@ function note_inlines(info)
     inlines(info)
 end
 
-"pandoc.utils.to_roman_numeral."
-function to_roman(n)
-    out = ""
-    for (value, letters) in ((1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"), (50, "L"),
-                             (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"))
-        while n >= value
-            out *= letters
-            n -= value
-        end
-    end
-    out
-end
-
 # ---------------------------------------------------------------------------
 # Fonts: an element of one around each Str, and what that does to nesting
 
@@ -282,16 +269,6 @@ function numbered_depth(meta, writer, top)
     something(depth, 5) - PARENT_COUNTERS[top] + 2
 end
 
-# A metadata value as inlines, as Lua's `pandoc.Inlines` converts it: text as
-# its words, a list of strings a Str each, a map (a table with no items)
-# none; anything else fails.
-meta_inlines(v::MetaInlines) = v.content
-meta_inlines(v::MetaString) = inlines(v.text)
-meta_inlines(::MetaMap) = Inline[]
-meta_inlines(v::MetaList) = all(x -> x isa MetaString, v.content) ? Inline[Str(x.text) for x in v.content] :
-    error("amsthm: qed_symbol is MetaList, not inlines")
-meta_inlines(v) = error("amsthm: qed_symbol is $(nameof(typeof(v))), not inlines")
-
 function read_options(meta, writer)
     config = get(meta, "amsthm", nothing)
     # (an empty `amsthm:` is text, not a map: it defines nothing)
@@ -366,7 +343,7 @@ function read_options(meta, writer)
     qed_symbol = "\\Box"
     if haskey(opt, "qed_symbol")
         parts = String[]
-        walk!(meta_inlines(opt["qed_symbol"])) do x
+        walk!(inlines_of(opt["qed_symbol"])) do x
             x isa Union{Math, RawInline, Str} && push!(parts, x.text)
             nothing
         end
@@ -458,7 +435,7 @@ function header(o, theorem, identifier, info)
         parts = map(c.first:floor(Int, c.depth)) do level
             n = o.header_counters[level]
             # \thepart is a Roman numeral, and empty before the first part
-            level == o.part_level ? (n > 0 ? to_roman(n) : "") : string(n)
+            level == o.part_level ? (n > 0 ? to_roman_numeral(n) : "") : string(n)
         end
         number = join([parts; string(o.theorem_counters[name])], ".")
         if !isempty(identifier)

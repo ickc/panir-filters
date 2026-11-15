@@ -13,14 +13,12 @@
 
 import {
   copy, items, LineBreak, Link, MetaInlines, MetaList, Para, RawInline, Space, Str, stringify, Superscript, truthy,
-  type Block, type Inline, type MetaValue,
+  type Block, type Inline, type Meta, type MetaValue,
 } from "panir";
 import { runFilter } from "panir/node";
 
-type Map = { readonly [key: string]: MetaValue };
-
 /** `author` or `institute`, as scholarly-metadata leaves them. */
-const maps = (value: MetaValue | undefined): Map[] =>
+const maps = (value: MetaValue | undefined): Meta[] =>
   items(value).map((x) => {
     if (x.t !== "MetaMap") throw new Error(`author-info-blocks: expected a map, got ${x.t}`);
     return x.content;
@@ -37,7 +35,7 @@ function intercalate(lists: Inline[][], sep: () => Inline[]): Inline[] {
   return lists.flatMap((xs, i) => (i ? [...sep(), ...xs] : xs));
 }
 
-const corresponding = (author: Map) => truthy(author.correspondence) && truthy(author.email);
+const corresponding = (author: Meta) => truthy(author.correspondence) && truthy(author.email);
 
 await runFilter({
   Pandoc: (doc, ctx) => {
@@ -47,7 +45,7 @@ await runFilter({
       return [latex ? RawInline("latex", "$\\dagger{}$") : Str("*")];
     };
     /** The author's name, with its marks as a superscript. */
-    const authorLine = (author: Map): Inline[] => {
+    const authorLine = (author: Meta): Inline[] => {
       const marks = truthy(author.equal_contributor) ? [mark("equal_contributor")] : [];
       marks.push(...items(author.institute).map((i) => [Str(stringify(i))]));
       if (corresponding(author)) marks.push(mark("corresponding_author"));

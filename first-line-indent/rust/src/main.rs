@@ -10,7 +10,9 @@
 //! A port of pandoc/lua-filters' first-line-indent (Copyright (c) 2021
 //! Julien Dutant; MIT, see ../LICENSE).
 
-use panir::{Block, Ctx, Filter, Inline, Meta, MetaValue, Pandoc, given, items, lookup, stringify};
+use panir::{
+    Block, Ctx, Filter, Inline, Meta, MetaValue, Pandoc, blocks_of, given, items, lookup, stringify,
+};
 
 const CSS: &str = "  <style>
     p {
@@ -104,21 +106,6 @@ fn lua_replacement(text: &str, matched: &str) -> Result<String, &'static str> {
     Ok(out)
 }
 
-/// A metadata value where a block goes, as Lua converts it: text a `Plain`
-/// of it, a map (a table) an empty `Plain`; blocks, a list or a boolean
-/// fail.
-fn as_block(value: &MetaValue) -> Result<Block, String> {
-    match value {
-        MetaValue::MetaInlines(xs) => Ok(Block::Plain(xs.clone())),
-        MetaValue::MetaString(s) => Ok(Block::Plain(panir::inlines(s))),
-        MetaValue::MetaMap(_) => Ok(Block::Plain(vec![])),
-        other => Err(format!(
-            "first-line-indent: {} in header-includes, where a block goes",
-            other.tag()
-        )),
-    }
-}
-
 /// The first filter: the options, and the metadata.
 #[derive(Default)]
 struct Configure(Options);
@@ -175,10 +162,9 @@ impl Configure {
         // before what is there: a list's items, or one value
         let mut includes = None;
         if let Some(header) = header {
+            let existing = items(given(meta.get("header-includes"))).to_vec();
             let mut blocks = vec![header];
-            for value in items(given(meta.get("header-includes"))) {
-                blocks.push(as_block(value)?);
-            }
+            blocks.extend(blocks_of(&existing.into())?);
             includes = Some(blocks);
         }
         if changes {

@@ -24,18 +24,16 @@ from panir import (
     MetaBool,
     MetaInlines,
     MetaList,
-    MetaMap,
     MetaValue,
     Pandoc,
     Para,
-    Plain,
     RawBlock,
     RawInline,
+    blocks_of,
     items,
     lookup,
     main,
     stringify,
-    to_python,
 )
 
 CSS = """  <style>
@@ -115,13 +113,6 @@ def lua_replacement(text: str, match: str) -> str:
     return re.sub(r"%(.?)", escape, text, flags=re.DOTALL)
 
 
-def as_block(value: MetaValue) -> object:
-    """A metadata value where a block goes, as Lua converts it: text a
-    `Plain` of it, a map (a table) an empty `Plain`; blocks, a list or a
-    boolean fail."""
-    return Plain() if isinstance(value, MetaMap) else to_python(value)
-
-
 configure, body = Filter(), Filter()
 
 
@@ -157,7 +148,7 @@ def read(meta: Meta, ctx: Context) -> None:
         header = RawBlock("tex", f"\\setlength{{\\parindent}}{{{options.size}}}")
     # before what is there: a list's items, or one value
     existing = meta.get("header-includes")
-    includes = header and MetaBlocks(header, *map(as_block, items(existing) if existing else []))
+    includes = header and MetaBlocks(header, *blocks_of(MetaList(*(items(existing) if existing else []))))
     if changes:
         meta["indent"] = True
         if includes:

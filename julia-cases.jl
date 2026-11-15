@@ -17,8 +17,18 @@
 using Panir
 
 # A module of its own for a script, with `include` and `eval`, as `Main` has
-# them for a script run by `julia` (auto-lang includes its table).
-fresh_module() = Core.eval(Main, Expr(:module, true, gensym(:case), Expr(:block)))
+# them for a script run by `julia` (auto-lang includes its table). Its code
+# is compiled least (`compile = min`: run by the interpreter, mostly): a
+# script's code is new in every case's module, so compiling it took most of
+# each case's time (amsthm's 0.9 s; 0.45 s so), for documents of a few lines.
+# Inference still runs (an empty comprehension's type depends on it:
+# `infer = false` changed what deflists makes), so the script does what it
+# does compiled; Panir's own code, compiled once, runs as a host runs it.
+function fresh_module()
+    m = Core.eval(Main, Expr(:module, true, gensym(:case), Expr(:block)))
+    Core.eval(m, :(Base.Experimental.@compiler_options compile = min))
+    m
+end
 
 function run_case(scripts, format, options, json)
     doc = Panir.parse(json)

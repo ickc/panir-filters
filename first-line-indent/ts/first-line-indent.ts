@@ -12,8 +12,8 @@
 // Dutant; MIT, see ../LICENSE).
 
 import {
-  equal, given, items, lookup, MetaBlocks, MetaBool, Plain, RawBlock, RawInline, stringify, toPlain, truthy,
-  type Block, type Blocks, type Filter, type MetaValue, type Para,
+  blocksOf, equal, given, items, lookup, MetaBlocks, MetaBool, MetaList, RawBlock, RawInline, stringify, truthy,
+  type Block, type Filter, type MetaValue, type Para,
 } from "panir";
 import { runFilter } from "panir/node";
 
@@ -71,10 +71,6 @@ const luaReplacement = (text: string, match: string) =>
     throw new Error("first-line-indent: invalid use of '%' in replacement string");
   });
 
-/** A metadata value where a block goes, as Lua converts it: text a `Plain`
- * of it, a map (a table) an empty `Plain`; blocks, a list or a boolean fail. */
-const asBlock = (value: MetaValue) => (value.t === "MetaMap" ? Plain([]) : toPlain(value));
-
 const configure: Filter = {
   Meta: (meta, ctx) => {
     const user = meta["first-line-indent"];
@@ -102,7 +98,7 @@ const configure: Filter = {
     else if (format.includes("htm")) header = RawBlock("html", CSS.replaceAll("SIZE", luaReplacement(options.size, "SIZE")));
     else if (format.includes("latex") && options.size !== "1em") header = RawBlock("tex", `\\setlength{\\parindent}{${options.size}}`);
     // before what is there: a list's items, or one value
-    const includes = header && MetaBlocks([header, ...items(given(meta["header-includes"])).map(asBlock)] as Blocks);
+    const includes = header && MetaBlocks([header, ...blocksOf(MetaList(items(given(meta["header-includes"]))))]);
     if (!changes) return;
     meta.indent = MetaBool(true);
     if (includes) meta["header-includes"] = includes;

@@ -48,7 +48,6 @@ from panir import (
     MetaInlines,
     MetaList,
     MetaMap,
-    MetaString,
     MetaValue,
     Pandoc,
     Para,
@@ -62,9 +61,11 @@ from panir import (
     Str,
     Strong,
     inlines,
+    inlines_of,
     items,
     main,
     stringify,
+    to_roman_numeral,
 )
 
 # LaTeX's sectioning units, by depth: parent_counter's values.
@@ -112,15 +113,6 @@ def note_inlines(info: str) -> list[Inline]:
     if not PLAIN_NOTE.fullmatch(info):
         warn(f"the note {info!r} has markup, which needs pandoc's markdown reader: kept as text")
     return inlines(info)
-
-
-def to_roman(n: int) -> str:
-    """pandoc.utils.to_roman_numeral."""
-    out = ""
-    for value, letters in ((1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"), (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")):
-        while n >= value:
-            out, n = out + letters, n - value
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +306,7 @@ class Theorem:
             for level in range(counter.first, math.floor(counter.depth) + 1):
                 n = options.header_counters[level]
                 # \thepart is a Roman numeral, and empty before the first part
-                parts.append((to_roman(n) if n > 0 else "") if level == options.part_level else str(n))
+                parts.append((to_roman_numeral(n) if n > 0 else "") if level == options.part_level else str(n))
             number = ".".join([*parts, str(options.theorem_counters[name])])
             if identifier:
                 options.identifiers[identifier] = number
@@ -570,7 +562,7 @@ def read_options(meta: Meta, writer: Writer) -> Options:
         collect.on(Math)(lambda m: parts.append(m.text))
         collect.on(RawInline)(lambda r: parts.append(r.text))
         collect.on(Str)(lambda s: parts.append(s.text))
-        Para(*meta_inlines(opt["qed_symbol"])).walk(collect)
+        Para(*inlines_of(opt["qed_symbol"])).walk(collect)
         if parts:
             qed_symbol = " ".join(parts)
 
@@ -590,23 +582,6 @@ def read_options(meta: Meta, writer: Writer) -> Options:
         ignored_headings=ignored,
         header_counters=header_counters,
     )
-
-
-def meta_inlines(value: MetaValue) -> list[Inline]:
-    """A metadata value as inlines, as Lua's `pandoc.Inlines` converts it:
-    text as its words, a list of strings a Str each, a map (a table with no
-    items) none; anything else fails."""
-    match value:
-        case MetaInlines(content):
-            return list(content)
-        case MetaString(text):
-            return inlines(text)
-        case MetaList(content) if all(isinstance(v, MetaString) for v in content):
-            return [Str(v.text) for v in content]  # pyright: ignore[reportAttributeAccessIssue]
-        case MetaMap():
-            return []
-        case _:
-            raise ValueError(f"amsthm: qed_symbol is {type(value).__name__}, not inlines")
 
 
 def options_latex(options: Options) -> str:
