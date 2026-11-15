@@ -1,0 +1,8 @@
+url: https://github.com/pandoc/lua-filters/blob/818f901a56cff8629dbd3d3d2d719320279ef6d1/track-changes/track-changes.lua
+repository: https://github.com/pandoc/lua-filters
+commit: 818f901a56cff8629dbd3d3d2d719320279ef6d1
+path: track-changes/track-changes.lua
+licence: MIT, Copyright (c) 2017-2021 pandoc Lua filters contributors (../LICENSE, the repository's, verbatim; it covers the original and the ports here; the file has no header)
+cases: cases/sample.md is the repository's track-changes/sample.md, verbatim (sample.args sets trackChanges: all, as its Makefile's draft tests do); docx.md, docx-reject.md and docx-accept.md go through docx (`.via`), written by pandoc and read back with `--track-changes` (`.args`), as a Word document's tracked changes reach a filter; the others are written for the ports
+run: lua track-changes.lua
+formats: html html5 latex context docx odt markdown
