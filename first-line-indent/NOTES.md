@@ -17,7 +17,13 @@ and of `header-includes` "whatever shape it has".
   `set-metadata-variable: false`, no `header-includes` either (cases
   `indent-false`, `no-variable`). The trap of `GAPS.md` 4, on the
   metadata this time: the ports decide first (`indent` set or not), and
-  change after. For upstream: return `meta` whenever it changed.
+  change after. For upstream: return `meta` whenever it changed. What
+  fails while the original builds what it then drops fails all the same:
+  `header-includes` as blocks, or a `size` of `5%`, fail with
+  `set-metadata-variable: false` too (`error-no-variable-blocks`,
+  `-size`). The ports first returned early there and did not fail; a
+  document made of the fifth batch's cases (`mix-3`) found it, and they
+  now build `header-includes` before deciding whether to keep it.
 - **`header-includes`, as the original builds it**: the new block first,
   then what was there (a list's items, any other value alone, nothing if
   missing or false), all made blocks: `pandoc.MetaBlocks{...}` converts

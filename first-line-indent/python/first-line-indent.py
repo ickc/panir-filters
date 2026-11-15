@@ -144,24 +144,24 @@ def read(meta: Meta, ctx: Context) -> None:
             options.size = stringify(size)
 
     # The original changes the metadata, then returns it only if it set
-    # `indent`: otherwise (Lua's `return nil`) nothing it changed counts.
-    if not options.set_metadata_variable or meta.get("indent") == MetaBool(False):
-        return
-    meta["indent"] = True
+    # `indent`: otherwise (Lua's `return nil`) nothing it changed counts,
+    # but what fails as it changes it (header-includes) fails all the same.
+    changes = options.set_metadata_variable and meta.get("indent") != MetaBool(False)
     fmt = ctx.format or ""
+    header = None
     if not options.set_header_includes:
-        return
-    if "htm" in fmt:  # (Lua's pattern `html*`: `htm`, then any `l`s)
+        pass
+    elif "htm" in fmt:  # (Lua's pattern `html*`: `htm`, then any `l`s)
         header = RawBlock("html", CSS.replace("SIZE", lua_replacement(options.size, "SIZE")))
     elif "latex" in fmt and options.size != "1em":
         header = RawBlock("tex", f"\\setlength{{\\parindent}}{{{options.size}}}")
-    else:
-        return
     # before what is there: a list's items, or one value
     existing = meta.get("header-includes")
-    meta["header-includes"] = MetaBlocks(
-        header, *map(as_block, items(existing) if existing else [])
-    )
+    includes = header and MetaBlocks(header, *map(as_block, items(existing) if existing else []))
+    if changes:
+        meta["indent"] = True
+        if includes:
+            meta["header-includes"] = includes
 
 
 def markup(kind: str, para: Para, fmt: str) -> list[Block]:

@@ -154,35 +154,39 @@ impl Configure {
         }
 
         // The original changes the metadata, then returns it only if it set
-        // `indent`: otherwise (Lua's `return nil`) nothing it changed counts.
-        if !options.set_metadata_variable || is_false(meta.get("indent")) {
-            return Ok(());
-        }
-        meta.insert("indent".into(), true.into());
-        if !options.set_header_includes {
-            return Ok(());
-        }
+        // `indent`: otherwise (Lua's `return nil`) nothing it changed counts,
+        // but what fails as it changes it (header-includes) fails all the same.
+        let changes = options.set_metadata_variable && !is_false(meta.get("indent"));
         // (Lua's pattern `html*`: `htm`, then any `l`s)
-        let header = if format.contains("htm") {
-            Block::raw(
-                "html",
-                CSS.replace("SIZE", &lua_replacement(&options.size, "SIZE")?),
-            )
+        let header = if !options.set_header_includes {
+            None
+        } else if format.contains("htm") {
+            let size = lua_replacement(&options.size, "SIZE")?;
+            Some(Block::raw("html", CSS.replace("SIZE", &size)))
         } else if format.contains("latex") && options.size != "1em" {
-            Block::raw(
+            let size = &options.size;
+            Some(Block::raw(
                 "tex",
-                format!("\\setlength{{\\parindent}}{{{}}}", options.size),
-            )
+                format!("\\setlength{{\\parindent}}{{{size}}}"),
+            ))
         } else {
-            return Ok(());
+            None
         };
         // before what is there: a list's items, or one value
-        let existing = given(meta.get("header-includes"));
-        let mut blocks = vec![header];
-        for value in items(existing) {
-            blocks.push(as_block(value)?);
+        let mut includes = None;
+        if let Some(header) = header {
+            let mut blocks = vec![header];
+            for value in items(given(meta.get("header-includes"))) {
+                blocks.push(as_block(value)?);
+            }
+            includes = Some(blocks);
         }
-        meta.insert("header-includes".into(), blocks.into());
+        if changes {
+            meta.insert("indent".into(), true.into());
+            if let Some(blocks) = includes {
+                meta.insert("header-includes".into(), blocks.into());
+            }
+        }
         Ok(())
     }
 }
