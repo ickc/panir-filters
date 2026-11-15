@@ -1,0 +1,11 @@
+[package]
+name = "first-line-indent"
+description = "First-line indents, removed after quotes, lists and the like: a pandoc filter (a port of pandoc/lua-filters' first-line-indent)"
+license = "MIT"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true
