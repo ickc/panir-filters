@@ -37,9 +37,15 @@ One folder per filter:
   with `NAME.args` as that reader's options, `--track-changes=all`: input
   only that reader makes, with nothing but markdown kept; with `NAME.env`,
   `KEY=VALUE` lines, the original and the ports run that case with those
-  environment variables), and `expected.jsonl`, what the
+  environment variables; with `NAME.opts`, a JSON object of pandoc's
+  defaults-file keys, the conversion's options, the writer's among them,
+  which a JSON filter is not given: the original runs with them, the
+  Python, TypeScript and Julia ports in process, as a host does, with
+  them in `ctx.conversion.options`, the Rust ports without), and
+  `expected.jsonl`, what the
   original made of each under pandoc 3.14, one line per document and
-  format (`{"name", "format", "input", "output"}`, `"env"` if any, or
+  format (`{"name", "format", "input", "output"}`, `"env"` and
+  `"options"` if any, or
   `"error": true` where the original fails); committed, so the tests need
   neither pandoc nor the
   original's runtime;
@@ -58,8 +64,11 @@ checkers (`package.json`, `tsconfig.json`, `pyrightconfig.json`), one
 Julia project (`Project.toml`); `tojson.lua`, which writes what an
 original Lua filter made; `oracle-requirements.txt`, what the Python
 originals need; `julia-cases.jl`, which runs the Julia ports' cases in one
-process; `fetch-docs.sh`, pandoc's test documents for the differential
-runs, and `assemble.py`, documents made of the cases for them.
+process; `host/`, which runs a Python or TypeScript port in process, as a
+host running filter scripts does (for a case's options, and for
+`CHECK_UNIQUE=1`); `fetch-docs.sh`, pandoc's test documents for the
+differential runs, and `assemble.py`, documents made of the cases for
+them.
 
 ## Running
 
@@ -103,7 +112,9 @@ documentation in RST, a novel as EPUB...), and, as real documents rarely
 hold a filter's syntax, `python3 assemble.py` (eight documents made of
 every filter's cases, shuffled, at several depths, each with metadata of
 its own: the cases' fields, some missing, some in another shape, in
-`.cache/assembled`); none are kept here.
+`.cache/assembled`; with `--lang DOC...`, each document also with an
+`auto-lang` map of every script, and of every one but Latin, for
+auto-lang); none are kept here.
 
 CI (`.github/workflows/ci.yml`) runs `run.py test` for the four languages
 on Linux, with `tsc`, pyright, rustfmt and clippy, panir's main checked
