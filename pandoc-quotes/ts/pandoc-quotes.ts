@@ -96,10 +96,10 @@ const QUOT_MARKS_BY_LANG: { readonly [lang: string]: Marks } = {
 class QuotesError extends Error {}
 
 /** Four marks: text of four characters, or a list of four. */
-function quotationMarks(value: MetaValue, field: string): Marks {
+function quotationMarks(value: MetaValue | undefined, field: string): Marks {
   let marks: Marks;
-  if (value.t === "MetaInlines") marks = [...stringify(value)];
-  else if (value.t === "MetaList") marks = value.content.map((x) => stringify(x));
+  if (value?.t === "MetaInlines") marks = [...stringify(value)];
+  else if (value?.t === "MetaList") marks = value.content.map((x) => stringify(x));
   else throw new QuotesError(`${field}: neither a string nor a list`);
   if (marks.length !== 4) throw new QuotesError(`${field}: not four quotation marks`);
   return marks;

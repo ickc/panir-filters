@@ -68,13 +68,6 @@ function lua_replacement(text, whole)
     end)
 end
 
-# A metadata value where a block goes, as Lua converts it: text a `Plain` of
-# it, a map (a table) an empty `Plain`; blocks, a list or a boolean fail.
-as_block(v::MetaInlines) = Plain(v.content)
-as_block(v::MetaString) = Plain(v.text)
-as_block(::MetaMap) = Plain()
-as_block(v) = error("first-line-indent: $(nameof(typeof(v))) in header-includes, where a block goes")
-
 function configure(meta::Panir.Meta, ctx)
     user = get(meta, "first-line-indent", nothing)
     user == MetaBool(true) && error("first-line-indent: a configuration of true")  # (Lua indexes a boolean)
@@ -104,7 +97,7 @@ function configure(meta::Panir.Meta, ctx)
     end
     # before what is there: a list's items, or one value
     existing = get(meta, "header-includes", nothing)
-    includes = header === nothing ? nothing : MetaBlocks(Block[header; as_block.(truthy(existing) ? items(existing) : [])])
+    includes = header === nothing ? nothing : MetaBlocks(Block[header; blocks_of(MetaList(truthy(existing) ? items(existing) : []))])
     changes || return nothing
     meta["indent"] = true
     includes === nothing || (meta["header-includes"] = includes)

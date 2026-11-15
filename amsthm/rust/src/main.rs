@@ -24,7 +24,7 @@ use std::fmt::Display;
 
 use panir::{
     Attr, Block, CitationMode, Cite, Conversion, Ctx, Div, Filter, Inline, Link, Math, MathType,
-    Meta, MetaValue, Order, Pandoc, Span, Target, items, stringify,
+    Meta, MetaValue, Order, Pandoc, Span, Target, inlines_of, items, stringify, to_roman_numeral,
 };
 
 /// LaTeX's sectioning units, by depth: parent_counter's values.
@@ -148,32 +148,6 @@ fn note_inlines(info: &str) -> Vec<Inline> {
         ));
     }
     panir::inlines(info)
-}
-
-/// pandoc.utils.to_roman_numeral.
-fn to_roman(mut n: i64) -> String {
-    let mut out = String::new();
-    for (value, letters) in [
-        (1000, "M"),
-        (900, "CM"),
-        (500, "D"),
-        (400, "CD"),
-        (100, "C"),
-        (90, "XC"),
-        (50, "L"),
-        (40, "XL"),
-        (10, "X"),
-        (9, "IX"),
-        (5, "V"),
-        (4, "IV"),
-        (1, "I"),
-    ] {
-        while n >= value {
-            out += letters;
-            n -= value;
-        }
-    }
-    out
 }
 
 // ---------------------------------------------------------------------------
@@ -617,27 +591,6 @@ fn numbered_depth(meta: &Meta, writer: &Writer, top: &str) -> f64 {
     secnumdepth - depth_of(top).unwrap_or(0) as f64 + 2.0
 }
 
-/// A metadata value as inlines, as Lua's `pandoc.Inlines` converts it: text
-/// as its words, a list of strings a Str each, a map (a table with no items)
-/// none; anything else fails.
-fn meta_inlines(value: &MetaValue) -> Result<Vec<Inline>, String> {
-    match value {
-        MetaValue::MetaInlines(xs) => Ok(xs.clone()),
-        MetaValue::MetaString(text) => Ok(panir::inlines(text)),
-        MetaValue::MetaList(xs) if xs.iter().all(|v| matches!(v, MetaValue::MetaString(_))) => {
-            Ok(xs
-                .iter()
-                .map(|v| Inline::Str(stringify(v).into()))
-                .collect())
-        }
-        MetaValue::MetaMap(_) => Ok(vec![]),
-        other => Err(format!(
-            "amsthm: qed_symbol is {}, not inlines",
-            other.tag()
-        )),
-    }
-}
-
 /// The text of the math, raw TeX and words in a value.
 #[derive(Default)]
 struct Texts(Vec<String>);
@@ -801,7 +754,7 @@ fn read_options(meta: &Meta, writer: &Writer) -> Result<Options, String> {
     let mut qed_symbol = "\\Box".to_string();
     if let Some(v) = opt.get("qed_symbol") {
         let mut texts = Texts::default();
-        panir::apply(&mut meta_inlines(v)?, &mut texts, None).map_err(|e| e.to_string())?;
+        panir::apply(&mut inlines_of(v)?, &mut texts, None).map_err(|e| e.to_string())?;
         if !texts.0.is_empty() {
             qed_symbol = texts.0.join(" ");
         }
@@ -952,7 +905,7 @@ impl Options {
                     let n = self.header_counters.get(&level).copied().unwrap_or(0);
                     // \thepart is a Roman numeral, and empty before the first part
                     match (Some(level) == self.part_level, n > 0) {
-                        (true, true) => to_roman(n),
+                        (true, true) => to_roman_numeral(n),
                         (true, false) => String::new(),
                         (false, _) => n.to_string(),
                     }

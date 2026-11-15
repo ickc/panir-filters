@@ -19,7 +19,7 @@ import { runFilter } from "panir/node";
 
 // A named object, as the original's Lua table: a Map while it is worked on
 // (its keys are the document's: any string, `__proto__` too).
-type Named = Map<string, MetaValue>;
+type Named = Map<string, MetaValue | undefined>;
 
 /** Lua's %s, which its `tonumber` skips too. */
 const trim = (s: string) => s.replace(/^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$/g, "");
@@ -62,9 +62,9 @@ function named(obj: MetaValue): Named {
       if (entries.length === 1) {
         const [[key, value]] = entries;
         let out: Named;
-        if (value.t === "MetaString" || value.t === "MetaInlines") {
-          out = new Map<string, MetaValue>([["name", value]]);
-        } else if (value.t === "MetaMap") {
+        if (value?.t === "MetaString" || value?.t === "MetaInlines") {
+          out = new Map([["name", value]]);
+        } else if (value?.t === "MetaMap") {
           out = new Map(Object.entries(value.content));
           if (!truthy(out.get("name"))) out.set("name", MetaInlines([Str(key)]));
         } else {

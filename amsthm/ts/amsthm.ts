@@ -21,8 +21,8 @@
 // Cheung; BSD-3-Clause, see ../LICENSE).
 
 import {
-  applyFilter, copy, Div, Emph, getAttribute, given, inlines, items, LineBreak, Link, Math as MathNode, MetaBlocks, MetaList,
-  Para, Plain, RawBlock, RawInline, SmallCaps, Space, Span, Str, stringify, Strong,
+  applyFilter, copy, Div, Emph, getAttribute, given, inlines, inlinesOf, items, LineBreak, Link, Math as MathNode, MetaBlocks,
+  MetaList, Para, Plain, RawBlock, RawInline, SmallCaps, Space, Span, Str, stringify, Strong, toRomanNumeral,
   type Block, type Cite, type Filter, type Header, type Inline, type Meta, type MetaValue,
 } from "panir";
 import { runFilter } from "panir/node";
@@ -69,18 +69,6 @@ const PLAIN_NOTE = new RegExp(`^${TOKEN}(?: ${TOKEN})*$`, "u");
 function noteInlines(info: string): Inline[] {
   if (!PLAIN_NOTE.test(info)) warn(`the note ${JSON.stringify(info)} has markup, which needs pandoc's markdown reader: kept as text`);
   return inlines(info);
-}
-
-/** pandoc.utils.to_roman_numeral. */
-function toRoman(n: number): string {
-  let out = "";
-  for (const [value, letters] of [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]] as const) {
-    while (n >= value) {
-      out += letters;
-      n -= value;
-    }
-  }
-  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -249,7 +237,7 @@ interface Options {
 
 /** A map's entries, as Lua's `pairs`: a list's are its indices, which no name
  * matches; text or a boolean fails, as in Lua. */
-function luaPairs(value: MetaValue, what: string): [string, MetaValue][] {
+function luaPairs(value: MetaValue, what: string): [string, MetaValue | undefined][] {
   if (value.t === "MetaMap") return Object.entries(value.content);
   if (value.t === "MetaList" || value.t === "MetaInlines" || value.t === "MetaBlocks") return [];
   return fail(`${what} is ${value.t}, not a map`);
@@ -314,21 +302,10 @@ function numberedDepth(meta: Meta, writer: Writer, top: string): number {
   return ((text !== undefined ? luaNumber(text) : undefined) ?? 5) - PARENT_COUNTERS.get(top)! + 2;
 }
 
-/** A metadata value as inlines, as Lua's `pandoc.Inlines` converts it: text
- * as its words, a list of strings a Str each, a map (a table with no items)
- * none; anything else fails. */
-function metaInlines(value: MetaValue): Inline[] {
-  if (value.t === "MetaInlines") return value.content;
-  if (value.t === "MetaString") return inlines(value.text);
-  if (value.t === "MetaList" && value.content.every((v) => v.t === "MetaString")) return value.content.map((v) => Str(stringify(v)));
-  if (value.t === "MetaMap") return [];
-  return fail(`qed_symbol is ${value.t}, not inlines`);
-}
-
 function readOptions(meta: Meta, writer: Writer): Options {
   const config = meta.amsthm;
   // (an empty `amsthm:` is text, not a map: it defines nothing)
-  const opt: Record<string, MetaValue> = config?.t === "MetaMap" ? config.content : {};
+  const opt: Meta = config?.t === "MetaMap" ? config.content : {};
 
   const nameToText = new Map(opt.name_to_text !== undefined ? luaPairs(opt.name_to_text, "name_to_text").map(([k, v]) => [k, stringify(v)]) : []);
   // one unit for every environment, or a map of them by name
@@ -397,7 +374,7 @@ function readOptions(meta: Meta, writer: Writer): Options {
   if (opt.qed_symbol !== undefined) {
     const parts: string[] = [];
     const collect = (x: { text: string }) => void parts.push(x.text);
-    applyFilter(metaInlines(opt.qed_symbol), { Math: collect, RawInline: collect, Str: collect });
+    applyFilter(inlinesOf(opt.qed_symbol), { Math: collect, RawInline: collect, Str: collect });
     if (parts.length > 0) qedSymbol = parts.join(" ");
   }
 
@@ -501,7 +478,7 @@ function header(o: Options, theorem: Theorem, identifier: string, info: string |
     for (let level = c.first; level <= c.depth; level++) {
       const n = o.headerCounters.get(level)!;
       // \thepart is a Roman numeral, and empty before the first part
-      parts.push(level === o.partLevel ? (n > 0 ? toRoman(n) : "") : String(n));
+      parts.push(level === o.partLevel ? (n > 0 ? toRomanNumeral(n) : "") : String(n));
     }
     number = [...parts, String(count)].join(".");
     if (identifier) {

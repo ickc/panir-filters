@@ -53,6 +53,13 @@ closed 34 of them in four pull requests (#14 to #17), 3 in part, as it
 declined the rest; 6 are open. 18 of the 21 filters hit at least one;
 caps, deflists and gitlab_markdown hit none.
 
+Since this was written, panir#18 and libpandoc-python#6 closed five of
+those six (a metadata value as inlines or blocks, Rust's list functions
+declining, a script of several files run in process, Lua's `pairs`,
+`to_roman_numeral`); the writer's options are closed in part: a
+conversion carries them, but nothing sets them for a JSON filter yet.
+The tables below say "open" as of the round's end.
+
 | theme | gaps | filters touched | what changed |
 |---|---|---|---|
 | attributes | 1, 2 | 6 | by key in every language (`attributes["k"]`, `getAttribute`, `attr.get`); `Attr::new` in Rust |
