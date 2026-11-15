@@ -158,9 +158,10 @@ class Ran:
         self.code, self.out, self.err, self.seconds, self.rss_kb = code, out, err, seconds, rss_kb
 
 
-def run(cmd: list[str], data: bytes, cwd: Path | None = None, environ: dict | None = None) -> Ran:
+def run(cmd: list[str], data: bytes, cwd: Path | None = None, environ: dict | None = None, runs: int = 1) -> Ran:
     """Run a command on `data`, with its time and peak memory (its own,
-    from wait4)."""
+    from wait4); stopped after `$TIMEOUT` seconds a run (`runs` of them:
+    julia-cases.jl runs every case)."""
     start = time.perf_counter()
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE, cwd=cwd, env=environ)
@@ -171,7 +172,7 @@ def run(cmd: list[str], data: bytes, cwd: Path | None = None, environ: dict | No
     for r in readers:
         r.start()
     # a filter that never ends (one walking its own output, say) is stopped
-    timer = threading.Timer(float(env("TIMEOUT", "300")), p.kill)
+    timer = threading.Timer(float(env("TIMEOUT", "300")) * runs, p.kill)
     timer.start()
     try:
         p.stdin.write(data)
@@ -337,7 +338,7 @@ def julia_in_one(jobs: list[tuple[list[str], dict]]) -> list[Ran]:
                     f"{json.dumps(case['input'], ensure_ascii=False)}\n"
                     for scripts, case in jobs)
     driver = [env("JULIA", "julia"), f"--project={ROOT}", "--startup-file=no", str(ROOT / "julia-cases.jl")]
-    ran = run(driver, lines.encode(), environ=port_env())
+    ran = run(driver, lines.encode(), environ=port_env(), runs=len(jobs))
     results = ran.out.decode().splitlines()
     if ran.code != 0 or len(results) != len(jobs):
         sys.exit(f"julia-cases.jl failed (exit {ran.code}): {ran.err.decode(errors='replace')[-2000:]}")
