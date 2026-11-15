@@ -91,7 +91,7 @@ it), under which its own tests pass again. For upstream: those two lines.
   filter sets. `[...stringify(v)]` splits into characters (code points).
   `truthy` is a `boolean`, not a type guard: after `if (truthy(marks))`
   `marks` is still `MetaValue | undefined`, so `marks!` (the port's own
-  `given` was `v is MetaValue`; `GAPS.md` G-TSGUARD).
+  `given` was `v is MetaValue`; `GAPS.md` 26).
 - **Rust**: `Configure` (with `meta`) keeps the marks in its struct;
   `main` applies `InsertMarks` only if there are some. `marks.try_into()`
   makes the four-element array or the "not four" error in one line; the
@@ -99,7 +99,7 @@ it), under which its own tests pass again. For upstream: those two lines.
   panir#16 `meta` returns `Option<()>`: `Err(e) => return ctx.fail(e)`.
   `truthy` takes an `Option<&MetaValue>`, as `meta.get` gives; a value in
   hand is `truthy(Some(m))` (`.filter(|m| truthy(Some(m)))`; `GAPS.md`
-  G-RSOPT).
+  27).
 - **Julia**: methods by kind for the marks; `findfirst(f, dict)` tests the
   values, not the keys (the first try failed on that): a comprehension over
   the pairs instead.

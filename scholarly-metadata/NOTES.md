@@ -113,7 +113,7 @@ after.
   `collect()`ed to a `MetaList`). `items` borrows (a slice of the
   document's values): `as_list` reads `meta.get("author")` and copies the
   items (`to_vec()`) where it took them out with `remove` before; a
-  `MetaValue::into_items` taking the value would move them (`GAPS.md` G-INTO).
+  `MetaValue::into_items` taking the value would move them (`GAPS.md` 28).
   Text's `Borrow<str>` makes `map.get("name")` and `map["id"]` work.
 - **Julia**: a method per kind (`named(::MetaInlines)`,
   `named(::Union{MetaString, MetaBool})`, `named(::MetaMap)`,

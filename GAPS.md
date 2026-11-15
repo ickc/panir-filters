@@ -5,8 +5,8 @@ What porting real filters found missing or awkward in
 How many of round 1's 21 filters (`SURVEY.md`) would hit each, counted
 from their sources, ranks them, then how much it hurts; they are numbered
 in the order found. Gaps 1 to 25 are closed (20 and 25 in part, as
-panir declined the rest); none is open. Each filter's `NOTES.md` has the
-details.
+panir declined the rest). Open, by rank: 30, 31, 34, 27, 26, 29, 28, 35,
+32, 33. Each filter's `NOTES.md` has the details.
 
 A gap stays here once closed, marked so, with what closed it: the list is
 also the history of what the ports found. Gaps 1 to 10 were found with
@@ -23,7 +23,11 @@ plain metadata values cost in panir's typed ones (below, "Metadata, by
 language"), and what each "Coming from Lua" says or doesn't; closed by
 [ickc/panir#16](https://github.com/ickc/panir/pull/16), which those five
 ports now use (`run.py test`, `CHECK_UNIQUE=1` and the differential runs
-the same).
+the same). 26 to 28 were found bringing them onto it, 29 to 35 with the
+fourth batch (`pagebreak`, `track-changes`, `first-line-indent`,
+`count-para`), which reads nested options and the environment, writes
+`header-includes`, and is two programs of several filters: what it found
+of panir#16's API in use is in "The API of panir#16, used", after 25.
 
 | # | gap | languages | round 1 filters hitting it | status |
 |---|---|---|---|---|
@@ -52,6 +56,16 @@ the same).
 | 23 | Rust has no metadata from plain values | Rust | 3: cito, scholarly-metadata, first-line-indent | closed, panir#16 |
 | 24 | Rust: `ctx.fail` and `ctx.apply` from a function returning `()` (`meta`, `pandoc`, list functions) | Rust | 6: scholarly-metadata, author-info-blocks, pandoc-quotes, abstract-section, pagebreak, track-changes | closed, panir#16 |
 | 25 | Rust's `Link` and `Target` are built field by field | Rust | 2: author-info-blocks, count-para | closed, panir#16: `Target::new`; no `Default` (declined) |
+| 26 | TypeScript's `truthy` is not a type guard: the value needs `!` after it | TypeScript | 2 seen: pandoc-quotes, pagebreak (of the 9 that test Lua's truth) | open (low) |
+| 27 | Rust's `truthy` takes an `Option`: a value in hand is `truthy(Some(v))` | Rust | 3: pandoc-quotes, first-line-indent, count-para | open (low) |
+| 28 | Rust's `items` borrows: a value taken out of the metadata is copied to be one or a list | Rust | 2: scholarly-metadata, author-info-blocks | open (low) |
+| 29 | Rust's `lookup` starts from a `Meta`, not from a value | Rust | 3: abstract-section, pagebreak, amsthm | open (low) |
+| 30 | Rust has no constructor for raw blocks and inlines | Rust | 10: comments, theorem, inlinenotes, french-spaces, author-info-blocks, pagebreak, track-changes, first-line-indent, count-para, amsthm | open |
+| 31 | Rust: a `Result` into `ctx.fail` is a four-line `match` | Rust | 7: list-table, scholarly-metadata, author-info-blocks, pandoc-quotes, abstract-section, track-changes, first-line-indent | open |
+| 32 | TypeScript's `toPlain` returns `unknown`: a cast to give it to a constructor | TypeScript | 1: first-line-indent | open (low) |
+| 33 | a metadata value as blocks, as Lua converts it where a block goes: Rust and Julia by hand | Rust, Julia (Python, TypeScript but for a map) | 1: first-line-indent | open (low) |
+| 34 | "Coming from Lua" misses what this batch's originals did: the `Meta` function's `return nil`, `.t` since pandoc 2.17, `PANDOC_READER_OPTIONS`, `gsub`'s replacement `%`, strings as bytes | all (documentation) | 4: first-line-indent, track-changes, count-para, pandoc-quotes | open |
+| 35 | a node returned by two calls is in two places; "what a function returns are values" reads otherwise | Python, TypeScript, Julia (documentation) | 2: pagebreak, (first-line-indent, had its port kept the original's one node) | open (low) |
 
 Not panir's, but met: Julia has no full Unicode case mapping (`caps`); an
 error that shows the offending blocks as markdown needs pandoc's writer,
@@ -484,7 +498,7 @@ Julia (`RESULTS.md`), all
 sixteen `given`s and the four `items`-like helpers; scholarly-metadata in
 Julia is 71 lines. Rust's cost is now the aliasing alone. What the fourth
 batch, which reads options and writes `header-includes`, found of this API
-in use will be in the section after this one.
+in use: "The API of panir#16, used", after gap 25.
 
 ## The API of panir#14 and #15, used here
 
@@ -789,3 +803,278 @@ or `Target::new(url)`; perhaps `Link::new(content, url)`, as `Attr::new`
 (gap 2). Low.
 
 How common: 2 of 21 (author-info-blocks, count-para).
+
+## The API of panir#16, used (the fourth batch)
+
+The fourth batch was chosen to test it: three of its four filters write
+`header-includes`, two are lists of filters (`first-line-indent`: two,
+`count-para`: four), and all read their options from the metadata.
+
+- **Lua's truth**: right in practice, in every language. Python's
+  `bool()` is the best of the four: the Lua lines port as written
+  (`if lookup(config, "break-on", "form-feed"):`, pagebreak's `config.x
+  and stringify(config.x) or os.getenv(...)` as `stringify(v) if v else
+  os.environ.get(...)`), and Lua's other test, `x ~= nil`, stays `is not
+  None`, as distinct as in Lua. TypeScript's `truthy` needs a `!` on the
+  value after it (26: a `given(v)`, the value or `undefined`, would be
+  Lua's `v and ...` and, with `??`, Lua's `v or d`); Rust's needs
+  `Some(...)` around a value in hand (27). No port of this batch wrote a
+  helper for it; the third batch's sixteen are gone.
+- **`lookup`**: read every nested option in one call (pagebreak's
+  `break-on`, first-line-indent's six options), from the metadata or from
+  a value taken out of it, in Python, TypeScript and Julia. Where Lua
+  fails on `true` on the way, `lookup` returns nothing, as documented:
+  pagebreak, first-line-indent and abstract-section each test for `true`
+  themselves, one line; right, as a filter may well not want Lua's
+  failure. Rust's starts from a `Meta` only (29).
+- **`items`**: fit one of the three filters writing `header-includes`
+  exactly (first-line-indent: a list's items or the value alone), after
+  Lua's `if x then` (`items(x) if x else []`: `items` keeps `false` as a
+  value, as Lua's `ensure_list` would; right). track-changes means it but
+  can't use it (its test for a list is pandoc 2's, so the original nests a
+  list in a list), and count-para appends in place and fails on anything
+  but a list. So "`header-includes` whatever shape" was, in practice,
+  three shapes of bug; `items` is what a correct filter would use. Rust's
+  borrows (28).
+- **Plain values**: Python's `to_python` with the `MetaBlocks`
+  constructor reproduced Lua's conversion of metadata where blocks go
+  (text a `Plain`, blocks, lists and booleans an error) in one
+  expression; TypeScript's `toPlain` too, with a cast (32); Rust and
+  Julia have no plain values, so a small function by kind (33). Setting
+  `indent` converts `True`/`true` in Python, Rust (`.into()`) and Julia;
+  TypeScript's metadata fields don't convert (`MetaBool(true)`), as its
+  README says. Rust's `From` covered every metadata value these ports
+  made but a raw block, `Block::from(RawBlock { .. }).into()`, two
+  conversions (30).
+- **A list of filters**: Python's `main([...])`, TypeScript's and
+  Julia's `run_filter([...])` read as the originals, the state between
+  them module-level as Lua's upvalues; nothing surprising. Rust's
+  `apply` after `apply`, as its README shows, was the clearest of the
+  five in count-para: each filter borrows what the ones before made
+  (`&settings.0`, `&numbering.numbers`). `unique/check.py` and
+  `julia-cases.jl` needed nothing more (the hand-off carries the list).
+- **Rust's `Option<()>` functions**: `ctx.apply(doc, &mut f)` as the last
+  expression of `pandoc` (pagebreak), `ctx.apply(...)?` in `pandoc` and
+  `inline`, `return ctx.fail(...)` anywhere, and `self.numbers.get(name)?`
+  ending an `inline` early (count-para) all read well. What remains is
+  the helper returning a `Result`, matched into `ctx.fail` (31).
+- **`Target::new`**: used (count-para's link). `Attr::new`: used for a
+  span. `equal`/`==` on nodes: first-line-indent compares the first
+  inline with `\indent ` as Lua's `utils.equals`, in every language.
+- **The metadata part of "Coming from Lua"** answered the questions of
+  truth, nested options (and that Lua would fail on `true`), one or a
+  list, and copies. It did not answer what these originals also did (34):
+  first-line-indent's `Meta` function returning `nil` (so its changes to
+  the metadata are lost): the README's trap speaks of "a function gets a
+  copy of its element", and the metadata is not an element there;
+  track-changes' `meta['header-includes'].t` (nil since pandoc 2.17: the
+  README's table gives `pandoc.utils.type`, but not that `.t` is gone,
+  which pandoc-quotes and track-changes test) and its
+  `PANDOC_READER_OPTIONS.trackChanges` (pandoc 2's name; no README maps
+  `PANDOC_READER_OPTIONS` to `ctx.conversion`'s reader options, which are
+  pandoc's JSON, `"track-changes": "all-changes"`); first-line-indent's
+  `gsub` with a replacement from the document (`%` is special there: the
+  patterns line speaks of patterns only); count-para's `len` and `sub`,
+  which count bytes.
+- **Copies** (`CHECK_UNIQUE=1`): one needed, pagebreak's page break,
+  made once and returned for every marker as the original does; the
+  check found it when the copy was left out (35). The others make every
+  node anew.
+
+## 26. TypeScript's `truthy` is not a type guard
+
+Found bringing pandoc-quotes onto panir#16; again with pagebreak.
+
+**The original**: `if meta['quot-marks'] then ... meta['quot-marks']`,
+`config['html-class'] and stringify(config['html-class']) or ...`: Lua's
+truth, then the value.
+
+**panir**: `truthy(v): boolean`, deliberately not `v is MetaValue` (its
+false branch would say `undefined`, wrongly: `MetaBool(false)` is false
+too). So after `if (truthy(meta.x))` the value is still `MetaValue |
+undefined`: `stringify(meta.x!)` (pagebreak), `quotationMarks(marks!)`
+(pandoc-quotes). The ports' own `given` was a type guard, wrong in the
+same way but convenient.
+
+**Proposed**: also `given(v): MetaValue | undefined`, the value if
+`truthy`, else `undefined`: `const c = given(meta.x); if (c)
+stringify(c)` narrows, and `given(meta.x) ?? d` is Lua's `meta.x or d`
+exactly. Low.
+
+How common: 2 seen of the 9 filters that test Lua's truth.
+
+## 27. Rust's `truthy` takes an `Option`
+
+Found bringing pandoc-quotes onto panir#16; again with first-line-indent
+and count-para.
+
+**panir**: `truthy(value: Option<&MetaValue>)`, as `meta.get("x")` gives;
+a value in hand (an `if let Some(v)`, a `filter` closure) is
+`truthy(Some(v))`: `meta.get("x").filter(|v| truthy(Some(v)))`,
+`if let Some(v) = meta.get(k) { truthy(Some(v)) }`.
+
+**Proposed**: `truthy(value: impl Into<Option<&MetaValue>>)` (a
+`&MetaValue` converts), or a method `MetaValue::truthy(&self)` beside it.
+Not breaking. Low.
+
+How common: 3 (pandoc-quotes, first-line-indent, count-para).
+
+## 28. Rust's `items` borrows
+
+Found bringing scholarly-metadata and author-info-blocks onto panir#16.
+
+**The original**: `ensure_list(meta.author)`, then the authors are
+changed and written back.
+
+**panir**: `items(Option<&MetaValue>) -> &[MetaValue]`, borrowed from the
+document. A port that took the value out (`meta.remove("author")`) to
+change and move its items now reads it borrowed and copies them
+(`items(meta.get("author")).to_vec()`, `map.clone()` per author), or
+writes its own `match` to keep them.
+
+**Proposed**: also `MetaValue::into_items(self) -> Vec<MetaValue>` (a
+list's items, else the value alone), and `Option<MetaValue>` the same by
+a function, so that `items_of(meta.remove("author"))` moves. Low: a copy
+of a few authors costs nothing measurable.
+
+How common: 2 (scholarly-metadata, author-info-blocks).
+
+## 29. Rust's `lookup` starts from a `Meta`
+
+Found with pagebreak (and abstract-section, brought onto panir#16).
+
+**The original**: `local config = doc.meta.pagebreak or {}`, then
+`config['break-on']['form-feed']`, the configuration then removed.
+
+**panir**: Python, TypeScript and Julia take the metadata, a `MetaMap`
+or nothing: `lookup(config, "break-on", "form-feed")` on the value taken
+out. Rust's `lookup(meta: &Meta, path)` takes a map only, so the ports
+read `lookup(&doc.meta, &["pagebreak", "break-on", ...])` before
+removing `pagebreak`, and a `MetaValue` in hand would need a `match` to
+its `MetaMap`.
+
+**Proposed**: a `lookup` generic over what it starts from (a trait for
+`Meta`, `MetaValue` and `Option<&MetaValue>`), as the other languages'.
+Low.
+
+How common: 3 (abstract-section, pagebreak; amsthm reads its own).
+
+## 30. Rust has no constructor for raw blocks and inlines
+
+Found with pagebreak; the four ports of this batch all wrote a helper.
+
+**The original**: `pandoc.RawBlock('html', s)`, `pandoc.RawInline('tex',
+s)`: the most common node a filter makes.
+
+**panir**: Python, TypeScript and Julia: `RawBlock(format, text)`. Rust:
+`RawBlock { format: "html".into(), text: s.into() }.into()`, four lines
+under rustfmt; as metadata, `Block::from(RawBlock { .. }).into()`. Each
+port has a `raw(format, text)` helper, eight so far.
+
+**Proposed**: `Block::raw(format, text)` and `Inline::raw(format, text)`
+taking `impl Into<Text>`, returning the variant (as `Attr::new` and
+`Target::new` did for theirs); perhaps `RawBlock::new` too.
+
+How common: 10 of 21 (comments, theorem, inlinenotes, french-spaces,
+author-info-blocks, pagebreak, track-changes, first-line-indent,
+count-para, amsthm).
+
+## 31. Rust: a `Result` into `ctx.fail` is a four-line `match`
+
+Found with first-line-indent; seven ports have it.
+
+**The original**: fails anywhere in its helpers (`error`, or Lua
+failing).
+
+**panir**: a Rust port's helpers return `Result<T, String>` (with `?`
+inside), and the filter function turns it into the walk's failure:
+`match self.configure(meta) { Ok(()) => Some(()), Err(e) => ctx.fail(e)
+}`, or `let x = match ... { Ok(x) => x, Err(e) => return ctx.fail(e) };`.
+
+**Proposed**: `Ctx::ok<T, E: Into<Box<dyn Error + Send + Sync>>>(&mut
+self, r: Result<T, E>) -> Option<T>`, recording the error as `fail`
+does: `ctx.ok(self.configure(meta))`, `let x = ctx.ok(helper())?;`.
+
+How common: 7 (list-table, scholarly-metadata, author-info-blocks,
+pandoc-quotes, abstract-section, track-changes, first-line-indent).
+
+## 32. TypeScript's `toPlain` returns `unknown`
+
+Found with first-line-indent.
+
+**panir**: `toPlain(v): unknown`; the port gives what it returns to
+`MetaBlocks([...])`, which converts plain values as Lua does, and needs
+`as Blocks` for the type checker.
+
+**Proposed**: a `Plain` type (`string | boolean | Inline[] | Block[] |
+Plain[] | { [k: string]: Plain }`) as `toPlain`'s result, and the
+constructors' init types accepting it where it converts. Low.
+
+How common: 1 (first-line-indent).
+
+## 33. A metadata value as blocks, as Lua converts it
+
+Found with first-line-indent.
+
+**The original**: `pandoc.MetaBlocks{block, meta['header-includes']}`:
+Lua converts each value where a block goes (text a `Plain`, a string a
+`Plain` of its words, a table without items an empty `Plain`; blocks, a
+list, a boolean fail).
+
+**panir**: Python and TypeScript do it with their plain values and
+constructors, but for a map (an error there); Rust and Julia have no plain
+values: a function per kind (6 and 4 lines).
+
+**Proposed**: nothing for now (one filter of 21, and a quirk of Lua's
+conversion); if more need it, a `blocks_of(value)` in each language.
+
+How common: 1 (first-line-indent).
+
+## 34. "Coming from Lua" misses what this batch's originals did
+
+Found with first-line-indent, track-changes and count-para.
+
+**panir**: each README's "Coming from Lua", with its metadata part,
+answered truth, nested options, one or a list, copies. Not:
+
+- the `return nil` trap holds for the `Meta` function too: its changes to
+  the metadata count only if it returns it (first-line-indent's do not
+  when `indent` isn't set). The README says "a function gets a copy of
+  its element";
+- a metadata value's `.t`, which pandoc 2 had, is `nil` since pandoc
+  2.17, so an original testing it takes the other branch (pandoc-quotes
+  fails, track-changes nests `header-includes`);
+- `PANDOC_READER_OPTIONS` is `ctx.conversion`'s reader options, as
+  pandoc's JSON (`"track-changes": "all-changes"`), not Lua's field names
+  (`track_changes`), and pandoc 2's (`trackChanges`, `AllChanges`) are
+  gone;
+- in `gsub`'s replacement `%` is special (`%1`, `%%`, an error
+  otherwise), so a replacement from the document can fail
+  (first-line-indent's `size: 5%`);
+- `#s`, `s:len()`, `s:sub(i, j)` count bytes (count-para's enclosure).
+
+**Proposed**: a bullet each in "Coming from Lua" (the first two in its
+metadata part).
+
+How common: 4 (first-line-indent, track-changes, count-para,
+pandoc-quotes).
+
+## 35. A node returned by two calls is in two places
+
+Found with pagebreak.
+
+**The original**: makes one page-break element and returns it for every
+marker: in Lua, each return is a copy.
+
+**panir**: Python's, TypeScript's and Julia's READMEs say "As in Lua,
+what a function returns are values: `[el, el]` puts two nodes in the
+document, the second a copy". A port returning its one node from each
+call puts one node in many places (`CHECK_UNIQUE=1` finds it). The next
+sentence ("Elsewhere a node belongs in one place") covers it, read
+closely.
+
+**Proposed**: say it: "within one return; a node returned by two calls
+is in two places: return a copy". Low.
+
+How common: 2 (pagebreak; first-line-indent's original keeps its raw
+nodes in a table the same way, though its ports make them anew).
