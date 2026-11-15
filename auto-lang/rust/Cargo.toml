@@ -1,0 +1,11 @@
+[package]
+name = "auto-lang"
+description = "Spans with lang (and dir) around runs of a mapped Unicode script: a pandoc filter (a port of ickc/font's auto-lang.lua)"
+license = "BSD-3-Clause"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true

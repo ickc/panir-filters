@@ -10,12 +10,25 @@ was, an entry of a map missing; the keys sorted (as pandoc writes them). Not the
 `known.tsv` names: each would make every document differ for a reason
 already known. Deterministic: the same cases make the same documents.
 
-    python3 assemble.py [N]     writes .cache/assembled/mix-0.json ... mix-{N-1}.json (N = 8)
+    python3 assemble.py [N] [--lang DOC...] [--amsthm DOC...]
+                                writes .cache/assembled/mix-0.json ... mix-{N-1}.json (N = 8)
     python3 run.py diff --docs .cache/assembled/*.json
+
+With `--lang DOC...` (pandoc JSON documents), also each document with an
+`auto-lang` map of its own, twice: every Unicode script mapped
+(`lang-all-NAME.json`), and every one but Latin (`lang-some-NAME.json`, so
+that Latin text is another script's), each script to its name in lower
+case: the real documents' text, in whatever scripts it has, for auto-lang,
+which a document without the map leaves alone. With `--amsthm DOC...`,
+each document with an `amsthm` map declaring every class of a div in it
+an environment of the plain style, numbered within sections
+(`amsthm-NAME.json`): a textbook's theorems, definitions and exercises,
+read from LaTeX as divs, for amsthm.
 """
 
 import json
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -103,14 +116,70 @@ def mix(docs: list[dict], seed: int) -> dict:
     return {"pandoc-api-version": docs[0]["pandoc-api-version"], "meta": dict(sorted(meta.items())), "blocks": blocks}
 
 
+def scripts() -> list[str]:
+    """The names of every script in auto-lang's table (the original's)."""
+    table = (ROOT / "auto-lang" / "upstream" / "script-ranges.lua").read_text(encoding="utf-8")
+    return re.findall(r"(\w+) = true", re.search(r"^  names = \{(.*)\},$", table, re.M)[1])
+
+
+def with_languages(doc: dict, names: list[str]) -> dict:
+    """The document with `auto-lang` mapping each script of `names` to its
+    name in lower case."""
+    languages = {name: {"t": "MetaString", "c": name.lower()} for name in names}
+    return {**doc, "meta": dict(sorted({**doc["meta"], "auto-lang": {"t": "MetaMap", "c": languages}}.items()))}
+
+
+def div_classes(value: object) -> set[str]:
+    """The classes of every div in a document's JSON."""
+    if isinstance(value, dict):
+        own = set(value["c"][0][1]) if value.get("t") == "Div" else set()
+        return own.union(*map(div_classes, value.values()))
+    if isinstance(value, list):
+        return set().union(*map(div_classes, value))
+    return set()
+
+
+def with_environments(doc: dict) -> dict:
+    """The document with `amsthm` declaring its divs' classes, numbered
+    within sections."""
+    names = [{"t": "MetaInlines", "c": [{"t": "Str", "c": c}]} for c in sorted(div_classes(doc["blocks"]))]
+    config = {"plain": {"t": "MetaList", "c": names}, "parent_counter": {"t": "MetaInlines", "c": [{"t": "Str", "c": "section"}]}}
+    return {**doc, "meta": dict(sorted({**doc["meta"], "amsthm": {"t": "MetaMap", "c": config}}.items()))}
+
+
+def options(args: list[str], name: str) -> list[str]:
+    """The paths after `--name`, up to the next option."""
+    if f"--{name}" not in args:
+        return []
+    rest = args[args.index(f"--{name}") + 1 :]
+    return rest[: next((i for i, a in enumerate(rest) if a.startswith("--")), len(rest))]
+
+
 def main() -> None:
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 8
+    args = sys.argv[1:]
+    real, theorems = options(args, "lang"), options(args, "amsthm")
+    args = args[: next((i for i, a in enumerate(args) if a.startswith("--")), len(args))]
+    n = int(args[0]) if args else 8
     out = ROOT / ".cache" / "assembled"
     out.mkdir(parents=True, exist_ok=True)
     docs = inputs()
     for seed in range(n):
         (out / f"mix-{seed}.json").write_text(json.dumps(mix(docs, seed), ensure_ascii=False))
     print(f"{n} documents from {len(docs)} cases in {out.relative_to(ROOT)}")
+    names = scripts()
+    for path in map(Path, real):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        name = path.parent.name if path.name == "doc.json" else path.stem
+        for kind, mapped in (("all", names), ("some", [s for s in names if s != "Latin"])):
+            (out / f"lang-{kind}-{name}.json").write_text(json.dumps(with_languages(doc, mapped), ensure_ascii=False))
+    if real:
+        print(f"{2 * len(real)} documents with an auto-lang map, of {len(real)}, in {out.relative_to(ROOT)}")
+    for path in map(Path, theorems):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        name = path.parent.name if path.name == "doc.json" else path.stem
+        (out / f"amsthm-{name}.json").write_text(json.dumps(with_environments(doc), ensure_ascii=False))
+    if theorems:
+        print(f"{len(theorems)} documents with an amsthm map in {out.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

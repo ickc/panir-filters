@@ -13,8 +13,8 @@
 use std::collections::BTreeMap;
 
 use panir::{
-    Attr, Block, Ctx, Filter, Inline, Link, Meta, MetaValue, Pandoc, RawBlock, RawInline, Span,
-    Target, stringify, truthy,
+    Attr, Block, Ctx, Filter, Inline, Link, Meta, MetaValue, Pandoc, Span, Target, stringify,
+    truthy,
 };
 
 // (as the original's, its spaces at the ends of lines too)
@@ -37,22 +37,6 @@ const LATEX: [&str; 4] = [
     r"\reversemarginpar",
     r"\newcommand{\paragraphnumber}[1]{\marginnote{\color{lightgray}\tiny{#1}}[0pt]}",
 ];
-
-fn raw_inline(text: String) -> Inline {
-    RawInline {
-        format: "tex".into(),
-        text: text.into(),
-    }
-    .into()
-}
-
-fn meta_blocks(format: &str, text: &str) -> MetaValue {
-    Block::from(RawBlock {
-        format: format.into(),
-        text: text.into(),
-    })
-    .into()
-}
 
 /// The text's `i`th byte, as Lua's `sub` takes it and pandoc reads it back:
 /// an ASCII character, else U+FFFD (or nothing past the end).
@@ -79,10 +63,10 @@ impl Filter for Formatting {
         let format = ctx.format().unwrap_or_default();
         let mut added = vec![];
         if format.contains("html") {
-            added.push(meta_blocks("html", CSS));
+            added.push(Block::raw("html", CSS).into());
         }
         if format.contains("latex") {
-            added.extend(LATEX.map(|tex| meta_blocks("tex", tex)));
+            added.extend(LATEX.map(|tex| Block::raw("tex", tex).into()));
         }
         // The original appends to what is there as to a Lua table: a list
         // grows, a map's entries are lost (the table becomes a list of the
@@ -138,7 +122,7 @@ impl Filter for ReadSettings {
         let s = &mut self.0;
         // (Lua's truth: set and not false)
         if let Some(v) = meta.get("resetAtChapter") {
-            s.reset_at_chapter = truthy(Some(v));
+            s.reset_at_chapter = truthy(v);
         }
         if let Some(v) = meta.get("enclosing") {
             s.enclosing = stringify(v);
@@ -153,7 +137,7 @@ impl Filter for ReadSettings {
             }
         }
         if let Some(v) = meta.get("addPageNr") {
-            s.add_page_nr = truthy(Some(v));
+            s.add_page_nr = truthy(v);
         }
         Some(())
     }
@@ -223,7 +207,7 @@ impl Filter for Numbering<'_> {
                 if let Some(name) = &name {
                     tex = format!("\\hypertarget{{{name}}}{{\n{tex}\\label{{{name}}}}}");
                 }
-                content.insert(1, raw_inline(tex));
+                content.insert(1, Inline::raw("tex", tex));
             } else {
                 let span = Span {
                     attr: Attr::new(&number, &["paragraph-number"], &[]),
@@ -256,7 +240,7 @@ impl Filter for References<'_> {
             if s.add_page_nr {
                 tex += &format!(" on page~\\pageref{{{name}}}");
             }
-            return Some(vec![raw_inline(tex)]);
+            return Some(vec![Inline::raw("tex", tex)]);
         }
         let link = Link {
             attr: Attr::default(),

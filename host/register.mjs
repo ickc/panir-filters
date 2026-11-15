@@ -1,6 +1,6 @@
-// Run a TypeScript port, then panir's checkUnique on what it made (run.py
-// with CHECK_UNIQUE=1): `node --import ./unique/check.mjs PORT.ts FORMAT`.
-// The port's "panir/node" is this folder's node.mjs instead.
+// Run a TypeScript port in process, as a host running filter scripts does,
+// for run.py: `node --import ./host/register.mjs PORT.ts FORMAT`. The port's
+// "panir/node" is this folder's node.mjs instead.
 import { register } from "node:module";
 
 register("data:text/javascript," + encodeURIComponent(`

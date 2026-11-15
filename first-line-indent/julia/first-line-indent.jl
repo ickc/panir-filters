@@ -91,21 +91,23 @@ function configure(meta::Panir.Meta, ctx)
     end
 
     # The original changes the metadata, then returns it only if it set
-    # `indent`: otherwise (Lua's `return nil`) nothing it changed counts.
-    (!options.set_metadata_variable || get(meta, "indent", nothing) == MetaBool(false)) && return nothing
-    meta["indent"] = true
+    # `indent`: otherwise (Lua's `return nil`) nothing it changed counts,
+    # but what fails as it changes it (header-includes) fails all the same.
+    changes = options.set_metadata_variable && get(meta, "indent", nothing) != MetaBool(false)
     format = something(ctx.format, "")
-    options.set_header_includes || return nothing
-    header = if occursin("htm", format)  # (Lua's pattern `html*`: `htm`, then any `l`s)
+    header = if !options.set_header_includes
+        nothing
+    elseif occursin("htm", format)  # (Lua's pattern `html*`: `htm`, then any `l`s)
         RawBlock("html", replace(CSS, "SIZE" => lua_replacement(options.size, "SIZE")))
     elseif occursin("latex", format) && options.size != "1em"
         RawBlock("tex", "\\setlength{\\parindent}{$(options.size)}")
-    else
-        return nothing
     end
     # before what is there: a list's items, or one value
     existing = get(meta, "header-includes", nothing)
-    meta["header-includes"] = MetaBlocks(Block[header; as_block.(truthy(existing) ? items(existing) : [])])
+    includes = header === nothing ? nothing : MetaBlocks(Block[header; as_block.(truthy(existing) ? items(existing) : [])])
+    changes || return nothing
+    meta["indent"] = true
+    includes === nothing || (meta["header-includes"] = includes)
     nothing
 end
 

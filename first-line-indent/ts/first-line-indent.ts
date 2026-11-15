@@ -12,7 +12,7 @@
 // Dutant; MIT, see ../LICENSE).
 
 import {
-  equal, items, lookup, MetaBlocks, MetaBool, Plain, RawBlock, RawInline, stringify, toPlain, truthy,
+  equal, given, items, lookup, MetaBlocks, MetaBool, Plain, RawBlock, RawInline, stringify, toPlain, truthy,
   type Block, type Blocks, type Filter, type MetaValue, type Para,
 } from "panir";
 import { runFilter } from "panir/node";
@@ -92,19 +92,20 @@ const configure: Filter = {
     }
 
     // The original changes the metadata, then returns it only if it set
-    // `indent`: otherwise (Lua's `return nil`) nothing it changed counts.
-    if (!options.setMetadataVariable || equal(meta.indent, MetaBool(false))) return;
-    meta.indent = MetaBool(true);
+    // `indent`: otherwise (Lua's `return nil`) nothing it changed counts,
+    // but what fails as it changes it (header-includes) fails all the same.
+    const changes = options.setMetadataVariable && !equal(meta.indent, MetaBool(false));
     const format = ctx.format ?? "";
-    if (!options.setHeaderIncludes) return;
-    let header: Block;
+    let header: Block | undefined;
     // (Lua's pattern `html*`: `htm`, then any `l`s)
-    if (format.includes("htm")) header = RawBlock("html", CSS.replaceAll("SIZE", luaReplacement(options.size, "SIZE")));
+    if (!options.setHeaderIncludes) header = undefined;
+    else if (format.includes("htm")) header = RawBlock("html", CSS.replaceAll("SIZE", luaReplacement(options.size, "SIZE")));
     else if (format.includes("latex") && options.size !== "1em") header = RawBlock("tex", `\\setlength{\\parindent}{${options.size}}`);
-    else return;
     // before what is there: a list's items, or one value
-    const existing = meta["header-includes"];
-    meta["header-includes"] = MetaBlocks([header, ...(truthy(existing) ? items(existing) : []).map(asBlock)] as Blocks);
+    const includes = header && MetaBlocks([header, ...items(given(meta["header-includes"])).map(asBlock)] as Blocks);
+    if (!changes) return;
+    meta.indent = MetaBool(true);
+    if (includes) meta["header-includes"] = includes;
   },
 };
 

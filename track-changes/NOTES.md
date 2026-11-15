@@ -89,10 +89,12 @@ value), and the walk is of `doc.blocks`.
   throws where Lua fails on `nil`.
 - **Rust**: `ctx.apply(&mut span.content, &mut Pilcrows(...))?` from an
   `inline` function; the authors a `BTreeMap`, so in order. The raw
-  inlines and blocks are struct literals (a `raw` helper, gap 30), and a
-  raw block as metadata is `Block::from(RawBlock { .. }).into()`: two
-  conversions, as `RawBlock` is not a `Block`. `author()` returns a
-  `Result`, and its callers `match` it into `ctx.fail` (gap 31).
+  inlines and blocks are `Inline::raw` and `Block::raw` (panir#17), a raw
+  block as metadata `MetaValue::from(Block::raw(..))`; before, struct
+  literals in a `raw` helper, and `Block::from(RawBlock { .. }).into()`,
+  two conversions (gap 30). `author()` returns a `Result`, which its
+  callers give the walk with `ctx.ok(self.author(span))?` (panir#17; a
+  `match` into `ctx.fail` before, gap 31).
 - **Julia**: a Julia `"""` string drops a newline right after the
   quotes, so the preamble (which starts with one) begins with two; the
   comment's filter is an anonymous function on `Str`.

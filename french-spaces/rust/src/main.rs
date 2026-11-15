@@ -6,7 +6,7 @@
 //! A port of chdemko/pandoc-latex-french-spaces (Copyright (c) 2018-2024,
 //! Christophe Demko; BSD-3-Clause, see ../LICENSE).
 
-use panir::{Ctx, Filter, Inline, RawInline};
+use panir::{Ctx, Filter, Inline};
 
 const THIN: &str = "\\thinspace{}";
 
@@ -41,11 +41,7 @@ impl Filter for FrenchSpaces {
             } else {
                 continue;
             };
-            xs[i] = RawInline {
-                format: "tex".into(),
-                text: space.into(),
-            }
-            .into();
+            xs[i] = Inline::raw("tex", space);
         }
         Some(())
     }

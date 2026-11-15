@@ -122,6 +122,18 @@ decides; the reader's option still makes its input (docx read with
 `--track-changes=all`), which its cases go through (`NAME.via`).
 pagebreak's `env` is two environment variables (`NAME.env`).
 
+The fifth batch, the owner's two, kept them as chosen. auto-lang's table
+is the original's own (`script-ranges.lua`, Unicode 15.0.0, generated
+upstream), made into each language's by `auto-lang/tables.py`, as no
+language's own Unicode facility gives the same answer (Node.js's is
+Unicode 18; Python, Julia and Rust's `std` have no Script property).
+amsthm turned out to need two things the survey did not list: the
+writer's options (`env`: `PANDOC_WRITER_OPTIONS`, -N and the top-level
+division, which its own tests use and a JSON filter is not given), and,
+for its notes, `pandoc.read` (round 3): the ports read a note of plain
+text as pandoc would, and keep any other as text (`amsthm/NOTES.md`). Its
+features add `env` and `raw`; `cite` is its cross-references.
+
 How the features are covered (each at least twice where possible):
 
 | feature | filters |
@@ -137,7 +149,7 @@ How the features are covered (each at least twice where possible):
 | `header-includes` | track-changes, first-line-indent, count-para, amsthm |
 | `table` | list-table |
 | `format` | theorem, inlinenotes, french-spaces, pagebreak, author-info-blocks, track-changes, first-line-indent, count-para, amsthm |
-| `raw` | comments, theorem, inlinenotes, pagebreak, track-changes, count-para |
+| `raw` | comments, theorem, inlinenotes, pagebreak, track-changes, count-para, amsthm |
 | `attr` | metavars, list-table, track-changes, count-para, auto-lang |
 | `subwalk` | deemph, pagebreak, abstract-section, cito, track-changes, amsthm |
 | `query` | inlinenotes, amsthm |
@@ -151,7 +163,7 @@ How the features are covered (each at least twice where possible):
 | `note` | inlinenotes |
 | `span-div` | theorem, track-changes, amsthm, auto-lang |
 | `equal` | first-line-indent |
-| `env` | pagebreak, track-changes |
+| `env` | pagebreak, track-changes, amsthm (the writer's options) |
 | `error` | list-table |
 | `unicode` | caps, auto-lang |
 

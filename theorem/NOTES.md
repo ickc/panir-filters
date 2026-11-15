@@ -35,10 +35,12 @@ formats (`markdown` among the cases') are left alone.
 - **The counter**: Python `itertools.count` (no `global`), TypeScript a
   module `let`, Rust a field of the filter's struct, Julia a `const Ref`.
 - **Rust**: `div.attr.has_class("theorem")` (panir#14) where the others
-  test the classes' list; a `raw(format, text)` helper, as building a
-  `RawBlock` is four lines in rustfmt; `div.content.splice(0..0, ...)` to
-  prepend; `blocks.append(&mut div.content)` moves the content into the
-  spliced list. The longest port (49 lines), from rustfmt's layout.
+  test the classes' list; `Block::raw(format, text)` (panir#17; a
+  `raw` helper of the port's before, as a `RawBlock` was four lines in
+  rustfmt: `GAPS.md` 30); `div.content.splice(0..0, ...)` to prepend;
+  `blocks.append(&mut div.content)` moves the content into the spliced
+  list. The longest port (42 lines; 49 before panir#17), from rustfmt's
+  layout.
 - **Python**: `div.content[:0] = [...]` prepends, checked.
 
 Differential runs (pandoc's test documents; eight real documents, one of

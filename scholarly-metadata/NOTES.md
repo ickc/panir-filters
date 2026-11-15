@@ -108,12 +108,13 @@ after.
   or one of the author's own (`Ref`), the identifiers are taken before the
   merge moves the new ones, and merging the second of two same-named
   top-level institutes into the first clones it. Since panir#16: `meta`
-  returns `Option<()>`, so `Err(e) => ctx.fail(e)`; `truthy(map.get("id"))`
-  for Lua's `if`; plain values convert (`text.into()`, a `Vec` of maps
-  `collect()`ed to a `MetaList`). `items` borrows (a slice of the
-  document's values): `as_list` reads `meta.get("author")` and copies the
-  items (`to_vec()`) where it took them out with `remove` before; a
-  `MetaValue::into_items` taking the value would move them (`GAPS.md` 28).
+  returns `Option<()>`; `truthy(map.get("id"))` for Lua's `if`; plain
+  values convert (`text.into()`, a `Vec` of maps `collect()`ed to a
+  `MetaList`). Since panir#17: `ctx.ok(canonicalize(meta))` (a `match`
+  into `ctx.fail` before, `GAPS.md` 31), and `as_list` takes the value out
+  (`meta.remove("author")`, an author's `remove("institute")`) and moves
+  its items with `into_items`, where `items` borrowed and the port copied
+  them (`to_vec()`, `GAPS.md` 28).
   Text's `Borrow<str>` makes `map.get("name")` and `map["id"]` work.
 - **Julia**: a method per kind (`named(::MetaInlines)`,
   `named(::Union{MetaString, MetaBool})`, `named(::MetaMap)`,

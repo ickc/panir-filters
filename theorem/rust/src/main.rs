@@ -4,15 +4,7 @@
 //! A port of pandocfilters' examples/theorem.py (Copyright (c) 2013, John
 //! MacFarlane; BSD-3-Clause, see ../LICENSE).
 
-use panir::{Block, Ctx, Filter, Order, RawBlock, Text};
-
-fn raw(format: &str, text: impl Into<Text>) -> Block {
-    RawBlock {
-        format: format.into(),
-        text: text.into(),
-    }
-    .into()
-}
+use panir::{Block, Ctx, Filter, Order};
 
 #[derive(Default)]
 struct Theorems {
@@ -38,19 +30,19 @@ impl Filter for Theorems {
                 };
                 // what is spliced in is not filtered itself: a theorem
                 // directly in this one stays a div, as in the original
-                let mut blocks = vec![raw("latex", format!("\\begin{{theorem}}{label}"))];
+                let mut blocks = vec![Block::raw("latex", format!("\\begin{{theorem}}{label}"))];
                 blocks.append(&mut div.content);
-                blocks.push(raw("latex", "\\end{theorem}"));
+                blocks.push(Block::raw("latex", "\\end{theorem}"));
                 Some(blocks)
             }
             Some("html" | "html5") => {
                 self.count += 1;
                 let head = [
-                    raw("html", format!("<dt>Theorem {}</dt>", self.count)),
-                    raw("html", "<dd>"),
+                    Block::raw("html", format!("<dt>Theorem {}</dt>", self.count)),
+                    Block::raw("html", "<dd>"),
                 ];
                 div.content.splice(0..0, head);
-                div.content.push(raw("html", "</dd>\n</dl>"));
+                div.content.push(Block::raw("html", "</dd>\n</dl>"));
                 None
             }
             _ => None,

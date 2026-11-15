@@ -10,10 +10,7 @@
 //! A port of pandoc/lua-filters' first-line-indent (Copyright (c) 2021
 //! Julien Dutant; MIT, see ../LICENSE).
 
-use panir::{
-    Block, Ctx, Filter, Inline, Meta, MetaValue, Pandoc, RawBlock, RawInline, items, lookup,
-    stringify, truthy,
-};
+use panir::{Block, Ctx, Filter, Inline, Meta, MetaValue, Pandoc, given, items, lookup, stringify};
 
 const CSS: &str = "  <style>
     p {
@@ -75,19 +72,7 @@ fn command(kind: Kind) -> Inline {
         Kind::Indent => "\\indent ",
         Kind::NoIndent => "\\noindent ",
     };
-    RawInline {
-        format: "tex".into(),
-        text: text.into(),
-    }
-    .into()
-}
-
-fn raw(format: &str, text: String) -> Block {
-    RawBlock {
-        format: format.into(),
-        text: text.into(),
-    }
-    .into()
+    Inline::raw("tex", text)
 }
 
 /// Block types: text is one, a list's items each one; else none.
@@ -169,45 +154,46 @@ impl Configure {
         }
 
         // The original changes the metadata, then returns it only if it set
-        // `indent`: otherwise (Lua's `return nil`) nothing it changed counts.
-        if !options.set_metadata_variable || is_false(meta.get("indent")) {
-            return Ok(());
-        }
-        meta.insert("indent".into(), true.into());
-        if !options.set_header_includes {
-            return Ok(());
-        }
+        // `indent`: otherwise (Lua's `return nil`) nothing it changed counts,
+        // but what fails as it changes it (header-includes) fails all the same.
+        let changes = options.set_metadata_variable && !is_false(meta.get("indent"));
         // (Lua's pattern `html*`: `htm`, then any `l`s)
-        let header = if format.contains("htm") {
-            raw(
-                "html",
-                CSS.replace("SIZE", &lua_replacement(&options.size, "SIZE")?),
-            )
+        let header = if !options.set_header_includes {
+            None
+        } else if format.contains("htm") {
+            let size = lua_replacement(&options.size, "SIZE")?;
+            Some(Block::raw("html", CSS.replace("SIZE", &size)))
         } else if format.contains("latex") && options.size != "1em" {
-            raw(
+            let size = &options.size;
+            Some(Block::raw(
                 "tex",
-                format!("\\setlength{{\\parindent}}{{{}}}", options.size),
-            )
+                format!("\\setlength{{\\parindent}}{{{size}}}"),
+            ))
         } else {
-            return Ok(());
+            None
         };
         // before what is there: a list's items, or one value
-        let existing = meta.get("header-includes").filter(|v| truthy(Some(v)));
-        let mut blocks = vec![header];
-        for value in items(existing) {
-            blocks.push(as_block(value)?);
+        let mut includes = None;
+        if let Some(header) = header {
+            let mut blocks = vec![header];
+            for value in items(given(meta.get("header-includes"))) {
+                blocks.push(as_block(value)?);
+            }
+            includes = Some(blocks);
         }
-        meta.insert("header-includes".into(), blocks.into());
+        if changes {
+            meta.insert("indent".into(), true.into());
+            if let Some(blocks) = includes {
+                meta.insert("header-includes".into(), blocks.into());
+            }
+        }
         Ok(())
     }
 }
 
 impl Filter for Configure {
     fn meta(&mut self, meta: &mut Meta, ctx: &mut Ctx) -> Option<()> {
-        match self.configure(meta, ctx.format().unwrap_or_default()) {
-            Ok(()) => Some(()),
-            Err(e) => ctx.fail(e),
-        }
+        ctx.ok(self.configure(meta, ctx.format().unwrap_or_default()))
     }
 }
 
@@ -230,7 +216,7 @@ fn markup(kind: Kind, mut content: Vec<Inline>, format: &str) -> Vec<Block> {
             Kind::Indent => "<div class=\"first-line-indent-after\"></div>",
             Kind::NoIndent => "<div class=\"no-first-line-indent-after\"></div>",
         };
-        return vec![raw("html", div.into()), Block::Para(content)];
+        return vec![Block::raw("html", div), Block::Para(content)];
     }
     vec![Block::Para(content)]
 }

@@ -1,0 +1,81 @@
+# language	case or document	why (NOTES.md)
+python	example-proofs	round 3, needs pandoc's reader: the note "Another proof of @Sqrt2" holds a citation, read by the original with pandoc.read, kept as text by the ports (NOTES.md)
+python	model-source	round 3, needs pandoc's reader: notes with markup (**This** is *markdown*., a \ref, a citation, *little*), read by the original with pandoc.read, kept as text by the ports (NOTES.md); model-source-plain is it with plain notes
+python	model-source-n	round 3, needs pandoc's reader: notes with markup, as model-source (NOTES.md)
+python	model-source-chapter	round 3, needs pandoc's reader: notes with markup, as model-source (NOTES.md)
+python	natbib	round 3, needs pandoc's reader: notes with a citation, math, brackets, an image, read by the original with pandoc.read, kept as text by the ports (NOTES.md); natbib-plain is it with plain notes
+python	notes-markup	round 3, needs pandoc's reader: notes with an apostrophe, emphasis, math, an abbreviation (NOTES.md)
+python	proof-note	round 3, needs pandoc's reader: the note "Proof of @Euler, see [@euler]" (NOTES.md); and the empty list item of proof-note-plain
+python	named-ref (html)	pandoc's Lua: reading a list's content (the original tests the first block's) makes its empty item ("A.", an ordered list) [Plain []] (NOTES.md); named-ref-text is it with text
+python	named-ref (markdown)	pandoc's Lua: reading a list's content makes its empty item [Plain []], as named-ref (html) (NOTES.md)
+python	proof-note-plain (html)	pandoc's Lua: reading a list's content makes its empty item ("A.") [Plain []], as named-ref (NOTES.md)
+python	proof-note-plain (markdown)	pandoc's Lua: reading a list's content makes its empty item [Plain []], as named-ref (NOTES.md)
+ts	example-proofs	round 3, needs pandoc's reader: the note "Another proof of @Sqrt2" holds a citation, read by the original with pandoc.read, kept as text by the ports (NOTES.md)
+ts	model-source	round 3, needs pandoc's reader: notes with markup (**This** is *markdown*., a \ref, a citation, *little*), read by the original with pandoc.read, kept as text by the ports (NOTES.md); model-source-plain is it with plain notes
+ts	model-source-n	round 3, needs pandoc's reader: notes with markup, as model-source (NOTES.md)
+ts	model-source-chapter	round 3, needs pandoc's reader: notes with markup, as model-source (NOTES.md)
+ts	natbib	round 3, needs pandoc's reader: notes with a citation, math, brackets, an image, read by the original with pandoc.read, kept as text by the ports (NOTES.md); natbib-plain is it with plain notes
+ts	notes-markup	round 3, needs pandoc's reader: notes with an apostrophe, emphasis, math, an abbreviation (NOTES.md)
+ts	proof-note	round 3, needs pandoc's reader: the note "Proof of @Euler, see [@euler]" (NOTES.md); and the empty list item of proof-note-plain
+ts	named-ref (html)	pandoc's Lua: reading a list's content (the original tests the first block's) makes its empty item ("A.", an ordered list) [Plain []] (NOTES.md); named-ref-text is it with text
+ts	named-ref (markdown)	pandoc's Lua: reading a list's content makes its empty item [Plain []], as named-ref (html) (NOTES.md)
+ts	proof-note-plain (html)	pandoc's Lua: reading a list's content makes its empty item ("A.") [Plain []], as named-ref (NOTES.md)
+ts	proof-note-plain (markdown)	pandoc's Lua: reading a list's content makes its empty item [Plain []], as named-ref (NOTES.md)
+rust	example-proofs	round 3, needs pandoc's reader: the note "Another proof of @Sqrt2" holds a citation, read by the original with pandoc.read, kept as text by the ports (NOTES.md)
+rust	model-source	round 3, needs pandoc's reader: notes with markup (**This** is *markdown*., a \ref, a citation, *little*), read by the original with pandoc.read, kept as text by the ports (NOTES.md); model-source-plain is it with plain notes
+rust	model-source-n	round 3, needs pandoc's reader: notes with markup, as model-source (NOTES.md)
+rust	model-source-chapter	round 3, needs pandoc's reader: notes with markup, as model-source (NOTES.md)
+rust	natbib	round 3, needs pandoc's reader: notes with a citation, math, brackets, an image, read by the original with pandoc.read, kept as text by the ports (NOTES.md); natbib-plain is it with plain notes
+rust	notes-markup	round 3, needs pandoc's reader: notes with an apostrophe, emphasis, math, an abbreviation (NOTES.md)
+rust	proof-note	round 3, needs pandoc's reader: the note "Proof of @Euler, see [@euler]" (NOTES.md); and the empty list item of proof-note-plain
+rust	named-ref (html)	pandoc's Lua: reading a list's content (the original tests the first block's) makes its empty item ("A.", an ordered list) [Plain []] (NOTES.md); named-ref-text is it with text
+rust	named-ref (markdown)	pandoc's Lua: reading a list's content makes its empty item [Plain []], as named-ref (html) (NOTES.md)
+rust	proof-note-plain (html)	pandoc's Lua: reading a list's content makes its empty item ("A.") [Plain []], as named-ref (NOTES.md)
+rust	proof-note-plain (markdown)	pandoc's Lua: reading a list's content makes its empty item [Plain []], as named-ref (NOTES.md)
+julia	example-proofs	round 3, needs pandoc's reader: the note "Another proof of @Sqrt2" holds a citation, read by the original with pandoc.read, kept as text by the ports (NOTES.md)
+julia	model-source	round 3, needs pandoc's reader: notes with markup (**This** is *markdown*., a \ref, a citation, *little*), read by the original with pandoc.read, kept as text by the ports (NOTES.md); model-source-plain is it with plain notes
+julia	model-source-n	round 3, needs pandoc's reader: notes with markup, as model-source (NOTES.md)
+julia	model-source-chapter	round 3, needs pandoc's reader: notes with markup, as model-source (NOTES.md)
+julia	natbib	round 3, needs pandoc's reader: notes with a citation, math, brackets, an image, read by the original with pandoc.read, kept as text by the ports (NOTES.md); natbib-plain is it with plain notes
+julia	notes-markup	round 3, needs pandoc's reader: notes with an apostrophe, emphasis, math, an abbreviation (NOTES.md)
+julia	proof-note	round 3, needs pandoc's reader: the note "Proof of @Euler, see [@euler]" (NOTES.md); and the empty list item of proof-note-plain
+julia	named-ref (html)	pandoc's Lua: reading a list's content (the original tests the first block's) makes its empty item ("A.", an ordered list) [Plain []] (NOTES.md); named-ref-text is it with text
+julia	named-ref (markdown)	pandoc's Lua: reading a list's content makes its empty item [Plain []], as named-ref (html) (NOTES.md)
+julia	proof-note-plain (html)	pandoc's Lua: reading a list's content makes its empty item ("A.") [Plain []], as named-ref (NOTES.md)
+julia	proof-note-plain (markdown)	pandoc's Lua: reading a list's content makes its empty item [Plain []], as named-ref (NOTES.md)
+rust	counter-depth (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	counter-depth (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	counter-depth-false (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	counter-depth-false (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	counter-depth-text (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	counter-depth-text (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	documentclass-n (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	documentclass-n (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	example-numbering (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	example-numbering (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	model-source-plain (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	model-source-plain (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	number-offset (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	number-offset (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	parent-counter-map (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	parent-counter-map (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	part-chapter (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	part-chapter (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	part-part (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	part-part (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	parts (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	parts (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	scalar-meta-n (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	scalar-meta-n (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	secnumdepth (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	secnumdepth (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	secnumdepth-false (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	secnumdepth-false (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	secnumdepth-variable (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	secnumdepth-variable (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	section-numbering-n (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	section-numbering-n (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	section-numbering-secnumdepth (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	section-numbering-secnumdepth (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	unnumbered (html)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)
+rust	unnumbered (markdown)	a JSON filter is not given the writer's options (here -N and others), which the Rust port reads from the conversion where a host gives them; the cargo test runs it so, and it is the same (NOTES.md)

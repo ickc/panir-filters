@@ -53,18 +53,19 @@ this; it doesn't: a value returned by two calls is in two places
 
 | what | Lua | Python | TypeScript | Rust | Julia |
 |---|---|---|---|---|---|
-| the configuration's tests (`(meta.pagebreak or {})['break-on']['form-feed']`, failing on `true`) | 4 | `lookup(config, "break-on", "form-feed")`, and a test for `true` | the same | `lookup(&doc.meta, &["pagebreak", "break-on", "form-feed"])`: read before removing (gap 29) | `lookup`, as Python |
-| a text option, else the environment (Lua's `a and b or c`) | 2 | `stringify(v) if v else os.environ.get(...)` | `truthy(v) ? stringify(v!) : process.env[...]` (gap 26) | `truthy(meta.get(k))`, `std::env::var` | `truthy(v) ? stringify(v) : get(ENV, ...)` |
+| the configuration's tests (`(meta.pagebreak or {})['break-on']['form-feed']`, failing on `true`) | 4 | `lookup(config, "break-on", "form-feed")`, and a test for `true` | the same | `lookup(&config, &["break-on", "form-feed"])` of the configuration removed, as Python (since panir#17; before, read from `&doc.meta` before removing it: gap 29) | `lookup`, as Python |
+| a text option, else the environment (Lua's `a and b or c`) | 2 | `stringify(v) if v else os.environ.get(...)` | `truthy(v) ? stringify(v) : process.env[...]` (a needless `!` before: gap 26) | `given(meta.get(k)).map(stringify).or_else(...)`, `std::env::var` (panir#17) | `truthy(v) ? stringify(v) : get(ENV, ...)` |
 | the second filter, with functions only in some cases | a table with `nil`s | functions registered under an `if` | a `Filter` object filled in | one `block` method, flags in the struct | two methods of one inner function |
 | walking the document from the `Pandoc` function | `doc:walk{...}` | `doc.walk(breaks)` | `applyFilter(doc, breaks)` | `ctx.apply(doc, &mut breaks)`, the function's last expression | `walk!(breaks, doc)` |
-| a raw block | `pandoc.RawBlock(f, t)` | `RawBlock(f, t)` | `RawBlock(f, t)` | a struct literal, four lines: a `raw` helper (gap 30) | `RawBlock(f, t)` |
+| a raw block | `pandoc.RawBlock(f, t)` | `RawBlock(f, t)` | `RawBlock(f, t)` | `Block::raw(f, t)` (panir#17; a helper before, gap 30) | `RawBlock(f, t)` |
 
 - **#16's API, in use**: Lua's truth carried the options in every
   language (`if lookup(config, "break-on", "form-feed"):` in Python is the
   Lua line); `lookup` read the nested option in one call, from the
   configuration once removed from the metadata (Python, TypeScript,
-  Julia); Rust's `lookup` starts from a `Meta` only, so the port reads
-  `&doc.meta` first, then removes `pagebreak` (gap 29). `lookup` returns
+  Julia; Rust since panir#17, which closed gap 29: before, Rust's
+  `lookup` started from a `Meta` only, so the port read `&doc.meta`
+  first, then removed `pagebreak`). `lookup` returns
   nothing where Lua fails on `true`, as documented: each port tests for
   `true` itself (one line). Rust's `pandoc` returning `Option<()>` lets
   `ctx.apply(doc, ...)` be its result, and `return ctx.fail(...)` work
@@ -72,11 +73,13 @@ this; it doesn't: a value returned by two calls is in two places
 - **Python**: `re.fullmatch` for Lua's `^...$` (Python's `$` also
   matches before a final newline); the paragraph check a `match` on
   `[Str(text)]`.
-- **TypeScript**: `truthy` is not a type guard, so `stringify(meta[key]!)`
-  after it (gap 26). `ctx.format ?? ""` for Lua's `FORMAT`.
+- **TypeScript**: `truthy` is not a type guard, so the port had
+  `stringify(meta[key]!)` after it (gap 26); `stringify` takes any value,
+  so the `!` was never needed, and is gone. (`given` would do too.) `ctx.format ?? ""` for Lua's `FORMAT`.
 - **Rust**: no regular expressions needed: `strip_prefix` and four
-  suffixes are the pattern `^\\newpage%{?%}?$`. A raw block is a
-  four-line struct literal, so a `raw(format, text)` helper (gap 30).
+  suffixes are the pattern `^\\newpage%{?%}?$`. A raw block is
+  `Block::raw(format, text)` (panir#17; a four-line struct literal, so a
+  helper, before: gap 30).
   `"\u{c}"` for Lua's `'\f'`.
 - **Julia**: the second filter is one inner function with a method for
   `RawBlock` and one for `Para` (closures may have several methods);

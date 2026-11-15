@@ -60,13 +60,15 @@ input.
 - **The name of a block's constructor** for messages: `.t` in TypeScript,
   `type(b).__name__` in Python, `nameof(typeof(b))` in Julia, `x.tag()` in
   Rust (it took it from `Debug`'s output before panir#14).
-- **Rust**: the logic returns a `Result`, and the `Filter` method turns an
-  error into `ctx.fail(e)`, which stops the walk with the node's path
-  (before panir#14 it printed and exited the process). Taking a table
+- **Rust**: the logic returns a `Result`, and the `Filter` method gives
+  it to the walk, `let table = ctx.ok(list_table(x))?;` (panir#17; a
+  `match` into `ctx.fail(e)` before, `GAPS.md` 31), which stops the walk
+  with the node's path (before panir#14 it printed and exited the
+  process). Taking a table
   apart (`let Table { attr, caption, bodies, .. } = *table`) and the
   one-element checks (`<[Block; 1]>::try_from(item)`) are pleasant; the
-  port is still the longest of the four (239 lines to 218 with the new
-  API) because rustfmt spreads it out. `attr.remove` returns a `Text`, so
+  port is still the longest of the four (239 lines to 218 with
+  panir#14's API, 216 with panir#17's) because rustfmt spreads it out. `attr.remove` returns a `Text`, so
   the helper reading a span's number takes `Option<Text>`.
 - **TypeScript**: the types follow narrowing well (`list.t !==
   "BulletList"`), except that a `shift()` loses what `content[0]?.t ===

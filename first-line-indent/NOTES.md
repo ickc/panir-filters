@@ -17,7 +17,13 @@ and of `header-includes` "whatever shape it has".
   `set-metadata-variable: false`, no `header-includes` either (cases
   `indent-false`, `no-variable`). The trap of `GAPS.md` 4, on the
   metadata this time: the ports decide first (`indent` set or not), and
-  change after. For upstream: return `meta` whenever it changed.
+  change after. For upstream: return `meta` whenever it changed. What
+  fails while the original builds what it then drops fails all the same:
+  `header-includes` as blocks, or a `size` of `5%`, fail with
+  `set-metadata-variable: false` too (`error-no-variable-blocks`,
+  `-size`). The ports first returned early there and did not fail; a
+  document made of the fifth batch's cases (`mix-3`) found it, and they
+  now build `header-includes` before deciding whether to keep it.
 - **`header-includes`, as the original builds it**: the new block first,
   then what was there (a list's items, any other value alone, nothing if
   missing or false), all made blocks: `pandoc.MetaBlocks{...}` converts
@@ -58,7 +64,7 @@ and of `header-includes` "whatever shape it has".
 |---|---|---|---|---|---|
 | two filters, sharing the options | `return {metadata_filter, body_filter}`, a module table | `main([configure, body])`, a dataclass instance | `runFilter([configure, body])`, a module object | `apply` after `apply`, the options moved from the first to the second | `run_filter([configure, body])`, a `const` mutable struct |
 | an option, only `false` turning it off (`== false`) | 3 lines each | `lookup(user, k) == MetaBool(False)` | `equal(lookup(user, k), MetaBool(false))` | `matches!(lookup(meta, &[.., k]), Some(MetaValue::MetaBool(false)))` | `lookup(user, k) == MetaBool(false)` |
-| `header-includes`: what is there, as blocks after the new one | 12 | `MetaBlocks(header, *map(as_block, items(x) if x else []))`, `as_block` one line (`to_python`) | the same, `toPlain`, and a cast (gap 32) | a loop over `items`, `as_block` a 6-line `match` (gap 33) | `as_block` four one-line methods |
+| `header-includes`: what is there, as blocks after the new one | 12 | `MetaBlocks(header, *map(as_block, items(x) if x else []))`, `as_block` one line (`to_python`) | the same, `items(given(x))`, `toPlain`, and a cast (gap 32, closed in part: the cast stays) | a loop over `items(given(x))`, `as_block` a 6-line `match` (gap 33, left) | `as_block` four one-line methods |
 | `\indent` at the start (`utils.equals`) | `utils.equals(a, b)` | `==` | `equal` | `==` | `==` |
 | Lua's `gsub` replacement | built in (the bug) | 8 (`re.sub` with a function) | 6 | 16 | 7 |
 
@@ -71,8 +77,10 @@ and of `header-includes` "whatever shape it has".
   TypeScript: `to_python(v)` and `toPlain(v)` give what Lua would put in
   the list, and the `MetaBlocks` constructor converts it as Lua does,
   failing where Lua fails (a map, which Lua takes as an empty list, is the
-  one difference: one line). TypeScript's `toPlain` returns `unknown`,
-  so the array needs `as Blocks` (gap 32). Rust and Julia have no plain
+  one difference: one line). TypeScript's `toPlain` returned `unknown`,
+  so the array needed `as Blocks` (gap 32); since panir#17 it returns a
+  `PlainValue`, which for any metadata value is the union of what Lua
+  converts and what it fails on: the cast stays, saying "as Lua would". Rust and Julia have no plain
   values: a small function by kind. Python's `meta["indent"] = True`,
   Julia's `meta["indent"] = true` and Rust's `true.into()` convert;
   TypeScript's `meta.indent = MetaBool(true)` (the metadata's fields
@@ -86,9 +94,12 @@ and of `header-includes` "whatever shape it has".
 - **TypeScript**: `(["indent", "noindent"] as const).find(...)` keeps
   the kind's type.
 - **Rust**: `block.tag()` against the option's names; `Configure::meta`
-  turns the `Result` of its work into `ctx.fail` with a `match` (gap
-  31); the raw nodes are struct literals (gap 30); `truthy(Some(v))` in
-  a `filter` (gap 27).
+  gives the `Result` of its work to the walk, `ctx.ok(self.configure(..))`;
+  the raw nodes are `Block::raw` and `Inline::raw`; what is in
+  `header-includes` is `items(given(meta.get(..)))`: all panir#17's
+  (before, a `match` into `ctx.fail`, struct literals, and
+  `.filter(|v| truthy(Some(v)))`: gaps 31, 30, 27). TypeScript reads it
+  the same, `items(given(meta["header-includes"]))`.
 - **Julia**: `Base.@kwdef mutable struct Options`; `replace(text, r"%.?"s
   => f)` gives `f` the matched text, not a match (the first try indexed
   it).

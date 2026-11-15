@@ -22,7 +22,7 @@ const NEWPAGE = /^\\(?:newpage|pagebreak)\{?\}?$/;
  * field: the original reads `html-class`, not `pagebreak.html-class` as its
  * README says.) */
 const option = (meta: Meta, key: string, variable: string): string | undefined =>
-  truthy(meta[key]) ? stringify(meta[key]!) : process.env[variable];
+  truthy(meta[key]) ? stringify(meta[key]) : process.env[variable];
 
 /** A page break in the format. */
 function pagebreak(format: string, meta: Meta): Block {

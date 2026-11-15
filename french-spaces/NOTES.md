@@ -32,7 +32,9 @@ The filter needs a space's neighbours, panflute's `elem.prev` and
   function holds its node `&mut`), so the port is an `inlines` function,
   a loop over each list of inlines looking at `xs[i - 1]` and `xs[i + 1]`
   (returning `Option<()>` since panir#16: `return None` when the format
-  isn't LaTeX, `Some(())` at the end, the same to the walk).
+  isn't LaTeX, `Some(())` at the end, the same to the walk); the space
+  is `Inline::raw("tex", space)` since panir#17 (a struct literal of
+  four lines before, `GAPS.md` 30).
   As short as the others in substance, and the README's design held up;
   `first-line-indent` (the previous block) will want the same with
   `blocks`.

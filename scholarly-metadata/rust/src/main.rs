@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use panir::{Ctx, Filter, Inline, Meta, MetaValue, Text, items, stringify, truthy};
+use panir::{Ctx, Filter, Inline, Meta, MetaValue, Text, into_items, stringify, truthy};
 
 /// A named object, as the original's Lua table.
 type Named = BTreeMap<Text, MetaValue>;
@@ -39,15 +39,15 @@ fn text_of(text: &str) -> MetaValue {
 
 /// A list as the original takes one: a list's items, text with commas split
 /// there (each a string), anything else alone (nothing if missing).
-fn as_list(value: Option<&MetaValue>) -> Vec<MetaValue> {
-    if let Some(v @ MetaValue::MetaInlines(_)) = value {
+fn as_list(value: Option<MetaValue>) -> Vec<MetaValue> {
+    if let Some(v @ MetaValue::MetaInlines(_)) = &value {
         let text = stringify(v);
         let names: Vec<&str> = text.split(',').map(|s| s.trim_matches(LUA_SPACE)).collect();
         if names.len() >= 2 {
             return names.into_iter().map(MetaValue::from).collect();
         }
     }
-    items(value).to_vec()
+    into_items(value)
 }
 
 /// An author or institute as a map with a name and an identifier.
@@ -155,17 +155,17 @@ fn fill(to: &mut Named, from: Named) {
 }
 
 fn canonicalize(meta: &mut Meta) -> Result<(), String> {
-    let mut institutes: Vec<Named> = as_list(meta.get("institute"))
+    let mut institutes: Vec<Named> = as_list(meta.remove("institute"))
         .into_iter()
         .map(named)
         .collect::<Result<_, _>>()?;
-    let mut authors: Vec<Named> = as_list(meta.get("author"))
+    let mut authors: Vec<Named> = as_list(meta.remove("author"))
         .into_iter()
         .map(named)
         .collect::<Result<_, _>>()?;
     let theirs: Vec<Vec<Ref>> = authors
         .iter_mut()
-        .map(|a| resolve(as_list(a.get("institute")), &institutes))
+        .map(|a| resolve(as_list(a.remove("institute")), &institutes))
         .collect::<Result<_, _>>()?;
     let ids: Vec<Vec<String>> = theirs
         .iter()
@@ -207,10 +207,7 @@ struct ScholarlyMetadata;
 
 impl Filter for ScholarlyMetadata {
     fn meta(&mut self, meta: &mut Meta, ctx: &mut Ctx) -> Option<()> {
-        match canonicalize(meta) {
-            Ok(()) => Some(()),
-            Err(e) => ctx.fail(e),
-        }
+        ctx.ok(canonicalize(meta))
     }
 }
 

@@ -11,15 +11,15 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use panir::{Block, Ctx, Filter, Meta, MetaValue, Pandoc, lookup, stringify, truthy};
+use panir::{Block, Ctx, Filter, MetaValue, Pandoc, lookup, stringify, truthy};
 
-/// `abstract-section.section-identifiers`, as the original reads it.
-fn section_identifiers(meta: &Meta) -> Result<BTreeSet<String>, String> {
+/// `section-identifiers` of the configuration, as the original reads it.
+fn section_identifiers(config: Option<&MetaValue>) -> Result<BTreeSet<String>, String> {
     // (a string, a list... has no field in Lua; true fails)
-    if let Some(MetaValue::MetaBool(true)) = meta.get("abstract-section") {
+    if let Some(MetaValue::MetaBool(true)) = config {
         return Err("abstract-section: the configuration is true, not a map".into());
     }
-    let identifiers = lookup(meta, &["abstract-section", "section-identifiers"]);
+    let identifiers = lookup(&config, &["section-identifiers"]);
     Ok(match identifiers {
         // (each inline of text too)
         Some(MetaValue::MetaList(xs)) if !xs.is_empty() => xs.iter().map(stringify).collect(),
@@ -75,11 +75,8 @@ struct AbstractSection;
 
 impl Filter for AbstractSection {
     fn pandoc(&mut self, doc: &mut Pandoc, ctx: &mut Ctx) -> Option<()> {
-        let identifiers = match section_identifiers(&doc.meta) {
-            Ok(identifiers) => identifiers,
-            Err(e) => return ctx.fail(e),
-        };
-        doc.meta.remove("abstract-section");
+        let config = doc.meta.remove("abstract-section");
+        let identifiers = ctx.ok(section_identifiers(config.as_ref()))?;
         let mut sections = Sections {
             identifiers: &identifiers,
             collected: BTreeMap::new(),

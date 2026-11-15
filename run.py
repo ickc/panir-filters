@@ -20,7 +20,15 @@ A case may set environment variables (`NAME.env`, `KEY=VALUE` lines, kept
 in `expected.jsonl` as `"env"`): the original and the ports run with them.
 Its document may be read through another format (`NAME.via`, a format's
 name: pandoc writes the markdown in it, then reads that, with `NAME.args`,
-as track-changes' cases go through docx with `--track-changes=all`).
+as track-changes' cases go through docx with `--track-changes=all`). It may
+set the conversion's options (`NAME.opts`, a JSON object of pandoc's
+defaults-file keys, kept in `expected.jsonl` as `"options"`): the writer's
+options, which pandoc gives a Lua filter (`PANDOC_WRITER_OPTIONS`) but not a
+JSON filter, and panir's conversion has where its host knows them. The
+original runs with them (`pandoc -d NAME.opts`); the Python, TypeScript and
+Julia ports are then run in process, as a host does (`host/`), with them in
+`ctx.conversion.options`; the Rust ports, which run as JSON filters only,
+without them.
 
 `test` needs only the ports' toolchains; it runs the Julia ports' cases
 in one Julia process (`julia-cases.jl`), the others a process per case.
@@ -79,26 +87,28 @@ def chain(folder: Path) -> list[Path]:
     return [*chain(ROOT / after), folder] if after else [folder]
 
 
-def ports(folder: Path, lang: str) -> list[list[str]] | None:
+def ports(folder: Path, lang: str, options: bool = False) -> list[list[str]] | None:
     """The commands running a filter's port in a language, after the ports
-    of the filters it runs after; None if one has no port there."""
-    cmds = [port(f, lang) for f in chain(folder)]
+    of the filters it runs after; None if one has no port there. With
+    `options` (a case's), in process where a language can be."""
+    cmds = [port(f, lang, options) for f in chain(folder)]
     return None if None in cmds else cmds  # type: ignore[return-value]
 
 
-def port(folder: Path, lang: str) -> list[str] | None:
+def port(folder: Path, lang: str, options: bool = False) -> list[str] | None:
     """The command running a filter's port in a language, if it has one."""
     name = folder.name
-    # CHECK_UNIQUE=1: panir's check that no node is in two places, on what
-    # each port made (Rust's ownership needs none)
-    check = env("CHECK_UNIQUE") == "1"
+    # in process, as a host does (host/): for a case's writer options, and,
+    # with CHECK_UNIQUE=1, panir's check that no node is in two places, on
+    # what each port made (Rust's ownership needs none)
+    hosted = options or env("CHECK_UNIQUE") == "1"
     if lang == "python":
         script = folder / "python" / f"{name}.py"
-        wrap = [str(ROOT / "unique" / "check.py")] if check else []
+        wrap = [str(ROOT / "host" / "python.py")] if hosted else []
         return [env("PYTHON", "python3"), *wrap, str(script)] if script.exists() else None
     if lang == "ts":
         script = folder / "ts" / f"{name}.ts"
-        wrap = ["--import", str(ROOT / "unique" / "check.mjs")] if check else []
+        wrap = ["--import", str(ROOT / "host" / "register.mjs")] if hosted else []
         return [env("NODE", "node"), *wrap, str(script)] if script.exists() else None
     if lang == "rust":
         if not (folder / "rust" / "Cargo.toml").exists():
@@ -148,9 +158,10 @@ class Ran:
         self.code, self.out, self.err, self.seconds, self.rss_kb = code, out, err, seconds, rss_kb
 
 
-def run(cmd: list[str], data: bytes, cwd: Path | None = None, environ: dict | None = None) -> Ran:
+def run(cmd: list[str], data: bytes, cwd: Path | None = None, environ: dict | None = None, runs: int = 1) -> Ran:
     """Run a command on `data`, with its time and peak memory (its own,
-    from wait4)."""
+    from wait4); stopped after `$TIMEOUT` seconds a run (`runs` of them:
+    julia-cases.jl runs every case)."""
     start = time.perf_counter()
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE, cwd=cwd, env=environ)
@@ -161,7 +172,7 @@ def run(cmd: list[str], data: bytes, cwd: Path | None = None, environ: dict | No
     for r in readers:
         r.start()
     # a filter that never ends (one walking its own output, say) is stopped
-    timer = threading.Timer(float(env("TIMEOUT", "300")), p.kill)
+    timer = threading.Timer(float(env("TIMEOUT", "300")) * runs, p.kill)
     timer.start()
     try:
         p.stdin.write(data)
@@ -177,7 +188,8 @@ def run(cmd: list[str], data: bytes, cwd: Path | None = None, environ: dict | No
     return Ran(p.returncode, out[0], err[0], seconds, usage.ru_maxrss)
 
 
-def run_original(folder: Path, data: bytes, fmt: str, as_read: bool = True, environ: dict | None = None) -> Ran:
+def run_original(folder: Path, data: bytes, fmt: str, as_read: bool = True, environ: dict | None = None,
+                 defaults: Path | None = None) -> Ran:
     """The original's output; with `as_read`, as pandoc reads it (a Lua
     filter's always is): JSON that pandoc reads as the same AST is the same
     output (pandocfilters writes `{"t": "DisplayMath", "c": []}`, pandoc
@@ -186,7 +198,10 @@ def run_original(folder: Path, data: bytes, fmt: str, as_read: bool = True, envi
     cmd = original(folder)
     environ = {**os.environ, **(environ or {})}
     if origin(folder)["run"].startswith("lua"):
-        return run(cmd + [fmt], data, environ=environ)
+        options = ["-d", str(defaults)] if defaults else []  # (the conversion's options)
+        return run(cmd[:-1] + options + [cmd[-1], fmt], data, environ=environ)
+    if defaults:
+        raise ValueError(f"{folder.name}: options are for Lua originals")
     ran = run(cmd + [fmt], data, cwd=folder / "upstream", environ=environ)
     if not as_read or ran.code != 0:
         return ran
@@ -259,7 +274,8 @@ def build(langs: list[str]) -> None:
 def check(cmds: list[list[str]] | Ran, case: dict, label: str) -> str | None:
     """None if the port (its commands, or what it made) makes what the
     original made, else what differs."""
-    ran = cmds if isinstance(cmds, Ran) else run_port(cmds, json.dumps(case["input"]).encode(), case["format"], case.get("env"))
+    environ = {**case.get("env", {}), **({"PANIR_FILTERS_OPTIONS": json.dumps(case["options"])} if "options" in case else {})}
+    ran = cmds if isinstance(cmds, Ran) else run_port(cmds, json.dumps(case["input"]).encode(), case["format"], environ)
     if case.get("error"):
         return None if ran.code != 0 else f"{label}: the original failed, the port didn't"
     if ran.code != 0:
@@ -318,10 +334,11 @@ def julia_in_one(jobs: list[tuple[list[str], dict]]) -> list[Ran]:
     scripts in turn), all in one Julia process (julia-cases.jl): a process
     per case would compile Panir's walk each time."""
     lines = "".join(f"{chr(0x1f).join(scripts)}\t{case['format']}\t{chr(0x1f).join(f'{k}={v}' for k, v in case.get('env', {}).items())}\t"
+                    f"{json.dumps(case['options']) if 'options' in case else ''}\t"
                     f"{json.dumps(case['input'], ensure_ascii=False)}\n"
                     for scripts, case in jobs)
     driver = [env("JULIA", "julia"), f"--project={ROOT}", "--startup-file=no", str(ROOT / "julia-cases.jl")]
-    ran = run(driver, lines.encode(), environ=port_env())
+    ran = run(driver, lines.encode(), environ=port_env(), runs=len(jobs))
     results = ran.out.decode().splitlines()
     if ran.code != 0 or len(results) != len(jobs):
         sys.exit(f"julia-cases.jl failed (exit {ran.code}): {ran.err.decode(errors='replace')[-2000:]}")
@@ -343,9 +360,10 @@ def cmd_test(args: argparse.Namespace) -> int:
     for folder in filters(args.filters):
         cases = [json.loads(line) for line in (folder / "cases" / "expected.jsonl").read_text().splitlines()]
         for lang in langs:
-            cmds = ports(folder, lang)
-            if cmds is not None:
-                runs.extend((folder, lang, case, cmds) for case in cases)
+            for case in cases:
+                cmds = ports(folder, lang, "options" in case)
+                if cmds is not None:
+                    runs.append((folder, lang, case, cmds))
     julia = [i for i, (_, lang, _, _) in enumerate(runs) if lang == "julia"]
     if julia:
         made = julia_in_one([([cmd[-1] for cmd in runs[i][3]], runs[i][2]) for i in julia])
@@ -436,9 +454,11 @@ def cmd_expect(args: argparse.Namespace) -> int:
         for md in sorted(p for found in sources for p in found):
             data = document(md)
             environ = case_env(md)
+            defaults = md.with_suffix(".opts")
+            options = {"options": json.loads(defaults.read_text())} if defaults.exists() else {}
             for fmt in formats(folder):
-                ran = run_original(folder, data, fmt, environ=environ)
-                case = {"name": md.stem, "format": fmt, **({"env": environ} if environ else {}), "input": json.loads(data)}
+                ran = run_original(folder, data, fmt, environ=environ, defaults=defaults if options else None)
+                case = {"name": md.stem, "format": fmt, **({"env": environ} if environ else {}), **options, "input": json.loads(data)}
                 if ran.code != 0:
                     case["error"] = True
                     print(f"{folder.name} {md.stem} ({fmt}): the original fails (expected so)")
