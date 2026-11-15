@@ -12,20 +12,12 @@
 // Albert Krewinkel; ISC; the repository's MIT licence, see ../LICENSE).
 
 import {
-  copy, LineBreak, Link, MetaInlines, MetaList, Para, RawInline, Space, Str, stringify, Superscript,
+  copy, items, LineBreak, Link, MetaInlines, MetaList, Para, RawInline, Space, Str, stringify, Superscript, truthy,
   type Block, type Inline, type MetaValue,
 } from "panir";
 import { runFilter } from "panir/node";
 
 type Map = { readonly [key: string]: MetaValue };
-
-/** Whether Lua counts the value: anything but missing or false. */
-const given = (v: MetaValue | undefined) => v !== undefined && !(v.t === "MetaBool" && !v.value);
-
-function items(value: MetaValue | undefined): MetaValue[] {
-  if (value?.t !== "MetaList") throw new Error(`author-info-blocks: expected a list, got ${value?.t}`);
-  return value.content;
-}
 
 /** `author` or `institute`, as scholarly-metadata leaves them. */
 const maps = (value: MetaValue | undefined): Map[] =>
@@ -45,7 +37,7 @@ function intercalate(lists: Inline[][], sep: () => Inline[]): Inline[] {
   return lists.flatMap((xs, i) => (i ? [...sep(), ...xs] : xs));
 }
 
-const corresponding = (author: Map) => given(author.correspondence) && given(author.email);
+const corresponding = (author: Map) => truthy(author.correspondence) && truthy(author.email);
 
 await runFilter({
   Pandoc: (doc, ctx) => {
@@ -56,18 +48,18 @@ await runFilter({
     };
     /** The author's name, with its marks as a superscript. */
     const authorLine = (author: Map): Inline[] => {
-      const marks = given(author.equal_contributor) ? [mark("equal_contributor")] : [];
+      const marks = truthy(author.equal_contributor) ? [mark("equal_contributor")] : [];
       marks.push(...items(author.institute).map((i) => [Str(stringify(i))]));
       if (corresponding(author)) marks.push(mark("corresponding_author"));
       return [...inlines(author.name), Superscript(intercalate(marks, () => [Str(",")]))];
     };
 
     const authors = maps(doc.meta.author);
-    const institutes = doc.meta.institute === undefined ? [] : maps(doc.meta.institute);
+    const institutes = maps(doc.meta.institute);
     delete doc.meta.institute;
 
     const body: Block[] = [];
-    if (authors.some((a) => given(a.equal_contributor))) {
+    if (authors.some((a) => truthy(a.equal_contributor))) {
       body.push(Para([Superscript(mark("equal_contributor")), Space(), Str("These authors contributed equally to this work.")]));
     }
     const lines = institutes.map((inst, i) => [Superscript([Str(String(i + 1))]), Space(), ...inlines(inst.name)]);

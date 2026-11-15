@@ -96,33 +96,28 @@ struct QuotesError <: Exception
 end
 Base.showerror(io::IO, e::QuotesError) = print(io, "pandoc-quotes: ", e.msg)
 
-"Whether Lua counts the value: anything but missing or false."
-given(::Nothing) = false
-given(v::MetaBool) = v.value
-given(::MetaValue) = true
-
 "Four marks: text of four characters, or a list of four."
 quotation_marks(v::MetaInlines, field) = four(string.(collect(stringify(v))), field)
 quotation_marks(v::MetaList, field) = four(map(stringify, v.content), field)
 quotation_marks(::MetaValue, field) = throw(QuotesError("$field: neither a string nor a list"))
 four(marks, field) = length(marks) == 4 ? Tuple(marks) : throw(QuotesError("$field: not four quotation marks"))
 
-function configure(meta)
+function quot_marks(meta)
     by_lang = copy(QUOT_MARKS_BY_LANG)
     custom = get(meta, "quot-marks-by-lang", nothing)
     if custom isa MetaMap
         for (lang, marks) in custom.content
             by_lang[lang] = quotation_marks(marks, "metadata field \"quot-marks-by-lang\": lang \"$lang\"")
         end
-    elseif given(custom)
+    elseif truthy(custom)
         throw(QuotesError("metadata field \"quot-marks-by-lang\": not a map"))
     end
     marks = get(meta, "quot-marks", nothing)
-    given(marks) && return quotation_marks(marks, "metadata field \"quot-marks\"")
-    i = findfirst(k -> given(get(meta, k, nothing)), ["quot-lang", "lang"])
-    i === nothing && return nothing
+    truthy(marks) && return quotation_marks(marks, "metadata field \"quot-marks\"")
+    field = truthy(get(meta, "quot-lang", nothing)) ? meta["quot-lang"] : get(meta, "lang", nothing)
+    truthy(field) || return nothing
     # the language and region, the language, a region of the language
-    lang = stringify(meta[["quot-lang", "lang"][i]])
+    lang = stringify(field)
     haskey(by_lang, lang) && return by_lang[lang]
     m = match(r"^[A-Za-z]+", lang)  # Lua's %a
     m === nothing && throw(QuotesError("$lang: unknown language."))
@@ -135,15 +130,12 @@ function configure(meta)
     isempty(regions) ? throw(QuotesError("$language: unknown language.")) : first(regions)
 end
 
-function pandoc_quotes(doc::Pandoc)
-    marks = configure(doc.meta)
-    marks === nothing && return nothing
-    function insert_marks(quoted::Quoted)
-        left, right = quoted.quote_type == DoubleQuote ? marks[1:2] : marks[3:4]
-        [Str(left); quoted.content; Str(right)]
-    end
-    walk!(insert_marks, doc)  # after the metadata is read: every quotation, inner ones first
-    nothing
+const marks = Ref{Any}(nothing)
+configure(meta::Panir.Meta) = (marks[] = quot_marks(meta); nothing)
+function insert_marks(quoted::Quoted)
+    marks[] === nothing && return nothing
+    left, right = quoted.quote_type == DoubleQuote ? marks[][1:2] : marks[][3:4]
+    [Str(left); quoted.content; Str(right)]
 end
 
-run_filter(pandoc_quotes)
+run_filter([configure, insert_marks])  # the metadata, then every quotation, inner ones first

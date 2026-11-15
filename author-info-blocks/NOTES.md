@@ -55,11 +55,17 @@ Here the README's "Lua's elements are values" is the whole story, and
 
 | what | Lua | Python | TypeScript | Rust | Julia |
 |---|---|---|---|---|---|
-| a field, missing or false | built in | `given`, 2 lines | 1 | 3 | 3 (methods) |
-| `author`/`institute` as scholarly-metadata leaves them (a list of maps) | read as tables | `items` and `maps`, 11 lines | 9 | 24 | 3 |
+| a field, missing or false | built in | `given`, 2 lines → none (a value's truth is Lua's) | 1 → `truthy` | 3 → `truthy` | 3 (methods) → `truthy` |
+| `author`/`institute` as scholarly-metadata leaves them (a list of maps) | read as tables | `items` and `maps`, 11 lines → `maps` on panir's `items`, 8 | 9 → 5 | 24 → 12 | 3 → 1 |
 | a name or email that must be inlines | (fails by itself) | 4 | 4 | 9 | 2 |
 | writing `author` back | `pandoc.MetaInlines(...)` | `MetaInlines(*line)` | `MetaInlines(line)` | `MetaValue::MetaInlines(line)` | `MetaInlines(line)` |
 
+- **Since panir#16** every port reads `author` and `institute` with
+  panir's `items`, which takes one value as a list of it and a missing one
+  as none, where the ports' own failed on anything but a list (as the
+  original, whose `ipairs` fails on a missing `institute`): after
+  scholarly-metadata both are always lists, so no document tells them
+  apart.
 - **Python**: closest to the original; `doc.blocks = [*body, *doc.blocks]`
   (assigning a field copies the list); `ctx.format` is `str | None` for
   pyright, so `"latex" in (ctx.format or "")`. `ruff format` makes it the
@@ -70,10 +76,12 @@ Here the README's "Lua's elements are values" is the whole story, and
 - **Rust**: the authors are taken out of the metadata (`remove`), so the
   names could move; they are cloned for both uses, being borrowed while
   the author line is made. `x.tag()` names the kind in the messages.
-  `Link` and `Target` have no defaults or constructor (`Link { attr:
-  Attr::default(), content, target: Target { url, title: "".into() } }`,
-  where Lua writes `pandoc.Link(content, url)`; `GAPS.md` 25). `ctx.fail`
-  from `pandoc` needs `ctx.fail::<()>(e)` (`GAPS.md` 24).
+  Before panir#16, `Link` and `Target` had no defaults or constructor
+  (`GAPS.md` 25): now `Target::new(&url, "")` (no `Default`: a title is
+  given), in a `Link { attr: Attr::default(), content, target }`; and
+  `ctx.fail` from `pandoc` needed `ctx.fail::<()>(e)` (`GAPS.md` 24): now
+  `Err(e) => ctx.fail(e)`. panir's `items` borrows, so `maps` clones each
+  author's map (`map.clone()`), where `remove` moved them before.
 - **Julia**: an array literal takes its element type from what is in it:
   `[mark(...)]` was a `Vector{Vector{RawInline}}`, and appending a `Str`
   to it failed; `Inline[...]` where a list mixes kinds.

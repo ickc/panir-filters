@@ -13,17 +13,9 @@
 
 using Panir
 
-"Whether Lua counts the value: anything but missing or false."
-given(::Nothing) = false
-given(v::MetaBool) = v.value
-given(::MetaValue) = true
-
-given(author, key) = given(get(author, key, nothing))
-corresponding(author) = given(author, "correspondence") && given(author, "email")
+corresponding(author) = truthy(get(author, "correspondence", nothing)) && truthy(get(author, "email", nothing))
 
 # `author` and `institute`, as scholarly-metadata leaves them
-items(v::MetaList) = v.content
-items(v) = error("author-info-blocks: expected a list, got $(typeof(v))")
 maps(v) = [x isa MetaMap ? x.content : error("author-info-blocks: expected a map, got $(typeof(x))") for x in items(v)]
 
 "A name or an email: inlines (the original fails on anything else)."
@@ -48,18 +40,17 @@ function info_blocks(doc::Pandoc, ctx)
     end
     "The author's name, with its marks as a superscript."
     function author_line(author)
-        marks = given(author, "equal_contributor") ? [mark(:equal_contributor)] : Vector{Inline}[]
+        marks = truthy(get(author, "equal_contributor", nothing)) ? [mark(:equal_contributor)] : Vector{Inline}[]
         append!(marks, [Inline[Str(stringify(i))] for i in items(author["institute"])])
         corresponding(author) && push!(marks, mark(:corresponding_author))
         [inlines(author["name"]); Superscript(intercalate(marks, () -> [Str(",")]))]
     end
 
     authors = maps(get(doc.meta, "author", nothing))
-    institute = pop!(doc.meta, "institute", nothing)
-    institutes = institute === nothing ? [] : maps(institute)
+    institutes = maps(pop!(doc.meta, "institute", nothing))
 
     body = Block[]
-    if any(a -> given(a, "equal_contributor"), authors)
+    if any(a -> truthy(get(a, "equal_contributor", nothing)), authors)
         push!(body, Para(Superscript(mark(:equal_contributor)), Space(), Str("These authors contributed equally to this work.")))
     end
     lines = [[Superscript(Str(string(i))); Space(); inlines(inst["name"])] for (i, inst) in enumerate(institutes)]

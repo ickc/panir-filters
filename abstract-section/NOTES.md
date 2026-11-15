@@ -46,13 +46,16 @@ lists of blocks with a second filter, then writes the metadata.
 
 | what | Lua | Python | TypeScript | Rust | Julia |
 |---|---|---|---|---|---|
-| the configuration: a nested option (`(meta['abstract-section'] or {})['section-identifiers']`), then a list, inlines or blocks of identifiers, a string or a boolean | 8 | 16 | 17 | 19 | 8 |
-| a field, missing or false | built in | `given`, 2 lines | 1 | 1 (a `matches!` in place) | 3 |
+| the configuration: a nested option (`(meta['abstract-section'] or {})['section-identifiers']`), then a list, inlines or blocks of identifiers, a string or a boolean | 8 | 16 → 13 | 17 → 16 | 19 → 17 | 8 |
+| a field, missing or false | built in | `given`, 2 lines → `not doc.meta.get(key)`, as Lua | 1 → `truthy` | 1 (a `matches!` in place) → `truthy` | 3 → `truthy` |
 | the walk of the body's lists, from the `Pandoc` function | `doc.blocks:walk{Blocks = f}` | `doc.blocks.walk(sections)` | `applyFilter(doc.blocks, { Blocks })` | `ctx.apply(&mut doc.blocks, &mut sections)` | `walk!(sections, doc.blocks)` |
 
-No language reads a nested option in one step, or "one value or a list
-of them" in one call (`GAPS.md` 21, 22); Lua does both with its plain
-values.
+Before panir#16 no language read a nested option in one step (`GAPS.md`
+21); now `lookup` does, and the configuration is one test (`true` fails,
+as in Lua) and a `lookup`. `items` (`GAPS.md` 22) is no help here: the
+original takes a list, inlines or blocks alike with `ipairs`, and a
+non-empty string as no identifiers, not one; the `match` on the kinds
+stays in every language.
 
 - **Python**: one `match` with three constructors in one arm
   (`MetaList(items) | MetaInlines(items) | MetaBlocks(items) if items`) is
@@ -64,13 +67,16 @@ values.
 - **Rust**: the list function of a `Sections` struct (state in its
   fields, `std::mem::take(xs)` then `*xs = body`); a `match` on `(&block,
   &section)` reads as the original's branches. Three arms for the three
-  constructors (their items are different types). From `pandoc`, which
-  returns `()`, `ctx.apply(...)?` is not possible: `if ctx.apply(...).
-  is_none() { return; }`, and `ctx.fail::<()>(e); return;` (`GAPS.md`
-  24).
-- **Julia**: the configuration by dispatch (`configured(::MetaMap)`,
-  `identifiers(::Union{MetaList, MetaInlines, MetaBlocks})`): the
-  shortest; the list method a closure over the counter.
+  constructors (their items are different types). Before panir#16,
+  `pandoc` returned `()`, so `if ctx.apply(...).is_none() { return; }`
+  and `ctx.fail::<()>(e); return;` (`GAPS.md` 24); now `ctx.apply(...)?`
+  and `Err(e) => return ctx.fail(e)`. `lookup(&doc.meta,
+  &["abstract-section", "section-identifiers"])` takes the metadata, not
+  a value: the configuration is read from `doc.meta`, then removed.
+- **Julia**: the identifiers by dispatch (`identifiers(::Union{MetaList,
+  MetaInlines, MetaBlocks})`), the configuration a `lookup` (it was three
+  methods of `configured`): the shortest; the list method a closure over
+  the counter.
 
 Differential runs: the same AST in every language. No real document has
 an abstract section; the made documents hold the cases' (and their

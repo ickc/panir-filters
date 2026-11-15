@@ -10,17 +10,13 @@
 // A port of pandoc-ext/abstract-section (Copyright © 2017-2023 Albert
 // Krewinkel; MIT, see ../LICENSE).
 
-import { applyFilter, MetaBlocks, stringify, type Block, type MetaValue } from "panir";
+import { applyFilter, lookup, MetaBlocks, stringify, truthy, type Block, type MetaValue } from "panir";
 import { runFilter } from "panir/node";
-
-/** Whether Lua counts the value: anything but missing or false. */
-const given = (v: MetaValue | undefined) => v !== undefined && !(v.t === "MetaBool" && !v.value);
 
 /** `abstract-section.section-identifiers`, as the original reads it. */
 function sectionIdentifiers(config: MetaValue | undefined): Set<string> {
   if (config?.t === "MetaBool" && config.value) throw new Error("abstract-section: the configuration is true, not a map");
-  // (a string, a list... has no field in Lua)
-  const ids = config?.t === "MetaMap" ? config.content["section-identifiers"] : undefined;
+  const ids = lookup(config, "section-identifiers"); // (a string, a list... has no field in Lua)
   switch (ids?.t) {
     case "MetaList":
     case "MetaInlines":
@@ -68,7 +64,7 @@ await runFilter({
       },
     });
     for (const [key, blocks] of collected) {
-      if (blocks.length > 0 && !given(doc.meta[key])) doc.meta[key] = MetaBlocks(blocks);
+      if (blocks.length > 0 && !truthy(doc.meta[key])) doc.meta[key] = MetaBlocks(blocks);
     }
   },
 });

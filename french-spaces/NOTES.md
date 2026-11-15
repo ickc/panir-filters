@@ -30,7 +30,9 @@ The filter needs a space's neighbours, panflute's `elem.prev` and
   === "Str"` narrows to read `.text`.
 - **Rust**: a function's context has no siblings (as the README says: the
   function holds its node `&mut`), so the port is an `inlines` function,
-  a loop over each list of inlines looking at `xs[i - 1]` and `xs[i + 1]`.
+  a loop over each list of inlines looking at `xs[i - 1]` and `xs[i + 1]`
+  (returning `Option<()>` since panir#16: `return None` when the format
+  isn't LaTeX, `Some(())` at the end, the same to the walk).
   As short as the others in substance, and the README's design held up;
   `first-line-indent` (the previous block) will want the same with
   `blocks`.

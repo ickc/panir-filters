@@ -14,15 +14,12 @@
 // Albert Krewinkel, Robert Winkler; ISC; the repository's MIT licence, see
 // ../LICENSE).
 
-import { copy, MetaInlines, MetaList, MetaString, Str, stringify, type MetaValue } from "panir";
+import { copy, items, MetaInlines, MetaList, MetaString, Str, stringify, truthy, type MetaValue } from "panir";
 import { runFilter } from "panir/node";
 
 // A named object, as the original's Lua table: a Map while it is worked on
 // (its keys are the document's: any string, `__proto__` too).
 type Named = Map<string, MetaValue>;
-
-/** Whether Lua counts the value: anything but missing or false. */
-const given = (v: MetaValue | undefined): v is MetaValue => v !== undefined && !(v.t === "MetaBool" && !v.value);
 
 /** Lua's %s, which its `tonumber` skips too. */
 const trim = (s: string) => s.replace(/^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$/g, "");
@@ -35,13 +32,11 @@ function number(text: string): number | undefined {
 /** A list as the original takes one: a list's items, text with commas split
  * there (each a string), anything else alone (nothing if missing). */
 function asList(value: MetaValue | undefined): MetaValue[] {
-  if (value === undefined) return [];
-  if (value.t === "MetaList") return [...value.content];
-  if (value.t === "MetaInlines") {
+  if (value?.t === "MetaInlines") {
     const names = stringify(value).split(",").map(trim);
     if (names.length >= 2) return names.map((name) => MetaString(name));
   }
-  return [value];
+  return items(value);
 }
 
 const nameAndId = (name: MetaValue, id: string): Named => new Map([["name", name], ["id", MetaString(id)]]);
@@ -61,7 +56,7 @@ function named(obj: MetaValue): Named {
       if (obj.content.name !== undefined) {
         const out = new Map(entries);
         const id = out.get("id");
-        out.set("id", MetaString(stringify(given(id) ? id : out.get("name"))));
+        out.set("id", MetaString(stringify(truthy(id) ? id : out.get("name"))));
         return out;
       }
       if (entries.length === 1) {
@@ -71,12 +66,12 @@ function named(obj: MetaValue): Named {
           out = new Map<string, MetaValue>([["name", value]]);
         } else if (value.t === "MetaMap") {
           out = new Map(Object.entries(value.content));
-          if (!given(out.get("name"))) out.set("name", MetaInlines([Str(key)]));
+          if (!truthy(out.get("name"))) out.set("name", MetaInlines([Str(key)]));
         } else {
           throw new Error(`scholarly-metadata: ${key}: neither a name nor a map`);
         }
         const id = out.get("id");
-        out.set("id", MetaString(given(id) ? stringify(id) : key));
+        out.set("id", MetaString(truthy(id) ? stringify(id) : key));
         return out;
       }
     }
@@ -106,7 +101,7 @@ function merge(institutes: Named[], inst: Named): void {
     return;
   }
   // a copy: inst may stay too (a second top-level one, referred to by number)
-  for (const [key, value] of inst) if (!given(same.get(key))) same.set(key, copy(value));
+  for (const [key, value] of inst) if (!truthy(same.get(key))) same.set(key, copy(value));
 }
 
 await runFilter({

@@ -70,27 +70,31 @@ empty `MetaList`).
 ## By language: what the metadata costs
 
 Lines of each function, its signature included, non-blank, comments
-out (`RESULTS.md` counts the files); "Lua" is the original's.
+out (`RESULTS.md` counts the files); "Lua" is the original's. Where
+panir#16 (Lua's truth, `items`, plain values) changed a port, before →
+after.
 
 | what | Lua | Python | TypeScript | Rust | Julia |
 |---|---|---|---|---|---|
-| a field, missing or false (`if x then`, `x or y`) | built in | `given`, 2 lines | 1 | 3 | 3 (methods) |
-| a list, whatever the shape (`ensure_list`, with the comma split) | 22 | 11 | 9 | 18 | 7 |
+| a field, missing or false (`if x then`, `x or y`) | built in | `given`, 2 lines → none (`if out.get("id")`, `x or y`, as Lua) | 1 → `truthy` | 3 → `truthy` | 3 (methods) → `truthy` |
+| a list, whatever the shape (`ensure_list`, with the comma split) | 22 | 11 → 6 (`items` after the split) | 9 → 7 | 18 → 10 | 7 → 4 |
 | a named object, by the value's kind (`to_named_object`) | 25 | 28 | 37 | 55 | 28 |
 | institutes in two lists at once | tables are references | dicts are | `Map`s are | an `enum Ref { Known(usize), New(Named) }`, a pass for the identifiers first, a `match` in the merge: 19 lines | `Dict`s are |
-| writing the maps back | `meta.author = authors` | `MetaList(*map(MetaMap, authors))` | `MetaList(authors.map(Object.fromEntries))` | `MetaList(… .map(MetaValue::MetaMap))` | `meta["author"] = authors` |
+| writing the maps back | `meta.author = authors` | `MetaList(*map(MetaMap, authors))` → `meta["author"] = authors` | `MetaList(authors.map(Object.fromEntries))` | `MetaList(… .map(MetaValue::MetaMap))` → `authors.into_iter().collect()` | `meta["author"] = authors` |
 | a name from a key (`MetaInlines{Str(k)}`) | 1 | 1 | 1 | 1 (`text_of`) | 1 |
 | text (`stringify`, `tostring`) | 1 call | 1 | 1 | 1 | 1 |
 
 - **Python**: `match` on the constructors reads well (`case MetaMap(entries)
   if "name" in entries:`, `case MetaString() | MetaBool():`); the named
   objects are plain `dict[str, MetaValue]`, `MetaMap`'s own content type,
-  written back with `MetaMap`. `Meta` (the alias `dict[str, MetaValue]`)
-  types the `on_meta` function. `from_python` makes a `MetaList` of a list
-  and a `MetaMap` of a dict but refuses inlines (`[Str("x")]`): a name is
-  `MetaInlines(Str(key))` by hand (`GAPS.md` 19). `bool(MetaBool(False))`
-  is `True`: a port of `if meta.x then` as `if meta.get("x"):` is wrong for
-  `x: false`, silently; `given` is a `TypeGuard` (`GAPS.md` 18).
+  written back by setting the field (a list of dicts converts). `Meta`
+  (the alias `dict[str, MetaValue]`) types the `on_meta` function. Before
+  panir#16, `from_python` refused inlines and `bool(MetaBool(False))` was
+  `True`, so a `given` helper (a `TypeGuard`); now a metadata value's truth
+  is Lua's, and `out.get("id") or out["name"]` is the Lua line as written.
+  A name made from a key stays `MetaInlines(Str(key))`: it goes into the
+  port's own `dict[str, MetaValue]`, which converts nothing (only the
+  metadata's fields do).
 - **TypeScript**: the named objects are `Map<string, MetaValue>`, not plain
   objects: their keys are the document's (`__proto__` is one), and
   panir's maps are prototype-less for that reason, a filter's own objects
@@ -103,9 +107,14 @@ out (`RESULTS.md` counts the files); "Lua" is the original's.
   cost: a resolved institute is either an index into the top-level list
   or one of the author's own (`Ref`), the identifiers are taken before the
   merge moves the new ones, and merging the second of two same-named
-  top-level institutes into the first clones it. `ctx.fail` from `meta`
-  (which returns `()`) needs `ctx.fail::<()>(e);` (`GAPS.md` 24). Text's
-  `Borrow<str>` makes `map.get("name")` and `map["id"]` work.
+  top-level institutes into the first clones it. Since panir#16: `meta`
+  returns `Option<()>`, so `Err(e) => ctx.fail(e)`; `truthy(map.get("id"))`
+  for Lua's `if`; plain values convert (`text.into()`, a `Vec` of maps
+  `collect()`ed to a `MetaList`). `items` borrows (a slice of the
+  document's values): `as_list` reads `meta.get("author")` and copies the
+  items (`to_vec()`) where it took them out with `remove` before; a
+  `MetaValue::into_items` taking the value would move them (`GAPS.md` G-INTO).
+  Text's `Borrow<str>` makes `map.get("name")` and `map["id"]` work.
 - **Julia**: a method per kind (`named(::MetaInlines)`,
   `named(::Union{MetaString, MetaBool})`, `named(::MetaMap)`,
   `attributes(_, ::MetaMap)`): the shortest port. Named objects are

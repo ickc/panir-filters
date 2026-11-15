@@ -14,7 +14,6 @@ Albert Krewinkel; ISC; the repository's MIT licence, see ../LICENSE).
 
 import copy
 from collections.abc import Callable, Sequence
-from typing import TypeGuard
 
 from panir import (
     Context,
@@ -22,9 +21,7 @@ from panir import (
     Inline,
     LineBreak,
     Link,
-    MetaBool,
     MetaInlines,
-    MetaList,
     MetaMap,
     MetaValue,
     Pandoc,
@@ -33,23 +30,13 @@ from panir import (
     Space,
     Str,
     Superscript,
+    items,
     stringify,
 )
 
 Map = dict[str, MetaValue]
 
 f = Filter()
-
-
-def given(value: MetaValue | None) -> TypeGuard[MetaValue]:
-    """Whether Lua counts the value: anything but missing or false."""
-    return value is not None and value != MetaBool(False)
-
-
-def items(value: MetaValue | None) -> list[MetaValue]:
-    if not isinstance(value, MetaList):
-        raise ValueError(f"author-info-blocks: expected a list, got {type(value).__name__}")
-    return value.content
 
 
 def maps(value: MetaValue | None) -> list[Map]:
@@ -79,7 +66,7 @@ def intercalate(lists: Sequence[Sequence[Inline]], sep: Callable[[], list[Inline
 
 
 def corresponding(author: Map) -> bool:
-    return given(author.get("correspondence")) and given(author.get("email"))
+    return bool(author.get("correspondence") and author.get("email"))
 
 
 @f.on(Pandoc)
@@ -92,18 +79,17 @@ def info_blocks(doc: Pandoc, ctx: Context) -> None:
 
     def author_line(author: Map) -> list[Inline]:
         """The author's name, with its marks as a superscript."""
-        marks = [mark("equal_contributor")] if given(author.get("equal_contributor")) else []
+        marks = [mark("equal_contributor")] if author.get("equal_contributor") else []
         marks += [[Str(stringify(i))] for i in items(author.get("institute"))]
         if corresponding(author):
             marks.append(mark("corresponding_author"))
         return [*inlines(author["name"]), Superscript(*intercalate(marks, lambda: [Str(",")]))]
 
     authors = maps(doc.meta.get("author"))
-    institute = doc.meta.pop("institute", None)
-    institutes = maps(institute) if institute is not None else []
+    institutes = maps(doc.meta.pop("institute", None))
 
     body = []
-    if any(given(a.get("equal_contributor")) for a in authors):
+    if any(a.get("equal_contributor") for a in authors):
         body.append(
             Para(
                 Superscript(*mark("equal_contributor")),
@@ -145,7 +131,7 @@ def info_blocks(doc: Pandoc, ctx: Context) -> None:
 
     names = [author_line(a) for a in authors]
     if "latex" in (ctx.format or ""):  # (the marks above ask for "latex" exactly)
-        doc.meta["author"] = MetaList(*(MetaInlines(*name) for name in names))
+        doc.meta["author"] = [MetaInlines(*name) for name in names]
         return
     if not names:
         raise ValueError("author-info-blocks: no authors")  # (the original fails too)

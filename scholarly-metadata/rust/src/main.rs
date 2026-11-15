@@ -15,18 +15,13 @@
 
 use std::collections::BTreeMap;
 
-use panir::{Ctx, Filter, Inline, Meta, MetaValue, Text, stringify};
+use panir::{Ctx, Filter, Inline, Meta, MetaValue, Text, items, stringify, truthy};
 
 /// A named object, as the original's Lua table.
 type Named = BTreeMap<Text, MetaValue>;
 
 /// Lua's %s (and its `tonumber`'s).
 const LUA_SPACE: &[char] = &[' ', '\t', '\n', '\x0b', '\x0c', '\r'];
-
-/// Whether Lua counts the value: anything but false (and missing).
-fn given(v: &MetaValue) -> bool {
-    !matches!(v, MetaValue::MetaBool(false))
-}
 
 /// A number as Lua's `tonumber` reads a string (decimal only).
 fn number(text: &str) -> Option<f64> {
@@ -39,28 +34,20 @@ fn number(text: &str) -> Option<f64> {
 }
 
 fn text_of(text: &str) -> MetaValue {
-    MetaValue::MetaInlines(vec![Inline::Str(text.into())])
+    Inline::Str(text.into()).into()
 }
 
 /// A list as the original takes one: a list's items, text with commas split
 /// there (each a string), anything else alone (nothing if missing).
-fn as_list(value: Option<MetaValue>) -> Vec<MetaValue> {
-    match value {
-        None => vec![],
-        Some(MetaValue::MetaList(items)) => items,
-        Some(v @ MetaValue::MetaInlines(_)) => {
-            let text = stringify(&v);
-            let names: Vec<&str> = text.split(',').map(|s| s.trim_matches(LUA_SPACE)).collect();
-            if names.len() < 2 {
-                return vec![v];
-            }
-            names
-                .into_iter()
-                .map(|n| MetaValue::MetaString(n.into()))
-                .collect()
+fn as_list(value: Option<&MetaValue>) -> Vec<MetaValue> {
+    if let Some(v @ MetaValue::MetaInlines(_)) = value {
+        let text = stringify(v);
+        let names: Vec<&str> = text.split(',').map(|s| s.trim_matches(LUA_SPACE)).collect();
+        if names.len() >= 2 {
+            return names.into_iter().map(MetaValue::from).collect();
         }
-        Some(v) => vec![v],
     }
+    items(value).to_vec()
 }
 
 /// An author or institute as a map with a name and an identifier.
@@ -70,22 +57,24 @@ fn named(obj: MetaValue) -> Result<Named, String> {
             let id = stringify(&obj);
             Ok(Named::from([
                 ("name".into(), obj),
-                ("id".into(), MetaValue::MetaString(id.into())),
+                ("id".into(), id.into()),
             ]))
         }
         MetaValue::MetaString(_) | MetaValue::MetaBool(_) => {
             let text = stringify(&obj); // (Lua's tostring)
             Ok(Named::from([
                 ("name".into(), text_of(&text)),
-                ("id".into(), MetaValue::MetaString(text.into())),
+                ("id".into(), text.into()),
             ]))
         }
         MetaValue::MetaMap(mut entries) if entries.contains_key("name") => {
-            let id = match entries.get("id") {
-                Some(id) if given(id) => stringify(id),
-                _ => stringify(&entries["name"]),
+            let field = if truthy(entries.get("id")) {
+                "id"
+            } else {
+                "name"
             };
-            entries.insert("id".into(), MetaValue::MetaString(id.into()));
+            let id = stringify(&entries[field]);
+            entries.insert("id".into(), id.into());
             Ok(entries)
         }
         MetaValue::MetaMap(entries) if entries.len() == 1 => {
@@ -95,7 +84,7 @@ fn named(obj: MetaValue) -> Result<Named, String> {
                     Named::from([("name".into(), value)])
                 }
                 MetaValue::MetaMap(mut more) => {
-                    if !more.get("name").is_some_and(given) {
+                    if !truthy(more.get("name")) {
                         more.insert("name".into(), text_of(&key));
                     }
                     more
@@ -106,9 +95,10 @@ fn named(obj: MetaValue) -> Result<Named, String> {
                     ));
                 }
             };
-            let id = match out.get("id") {
-                Some(id) if given(id) => stringify(id).into(),
-                _ => key,
+            let id = if truthy(out.get("id")) {
+                stringify(&out["id"]).into()
+            } else {
+                key
             };
             out.insert("id".into(), MetaValue::MetaString(id));
             Ok(out)
@@ -158,24 +148,24 @@ fn resolve(refs: Vec<MetaValue>, institutes: &[Named]) -> Result<Vec<Ref>, Strin
 /// What `from` has that `to` lacks (or has false), into `to`.
 fn fill(to: &mut Named, from: Named) {
     for (key, value) in from {
-        if !to.get(&key).is_some_and(given) {
+        if !truthy(to.get(&key)) {
             to.insert(key, value);
         }
     }
 }
 
 fn canonicalize(meta: &mut Meta) -> Result<(), String> {
-    let mut institutes: Vec<Named> = as_list(meta.remove("institute"))
+    let mut institutes: Vec<Named> = as_list(meta.get("institute"))
         .into_iter()
         .map(named)
         .collect::<Result<_, _>>()?;
-    let mut authors: Vec<Named> = as_list(meta.remove("author"))
+    let mut authors: Vec<Named> = as_list(meta.get("author"))
         .into_iter()
         .map(named)
         .collect::<Result<_, _>>()?;
     let theirs: Vec<Vec<Ref>> = authors
         .iter_mut()
-        .map(|a| resolve(as_list(a.remove("institute")), &institutes))
+        .map(|a| resolve(as_list(a.get("institute")), &institutes))
         .collect::<Result<_, _>>()?;
     let ids: Vec<Vec<String>> = theirs
         .iter()
@@ -205,29 +195,21 @@ fn canonicalize(meta: &mut Meta) -> Result<(), String> {
         numbers.entry(ident(inst)).or_insert(i + 1);
     }
     for (author, ids) in authors.iter_mut().zip(ids) {
-        let numbered = ids
-            .iter()
-            .map(|id| MetaValue::MetaString(numbers[id].to_string().into()))
-            .collect();
-        author.insert("institute".into(), MetaValue::MetaList(numbered));
+        let numbered = ids.iter().map(|id| numbers[id].to_string()).collect();
+        author.insert("institute".into(), numbered);
     }
-    meta.insert(
-        "author".into(),
-        MetaValue::MetaList(authors.into_iter().map(MetaValue::MetaMap).collect()),
-    );
-    meta.insert(
-        "institute".into(),
-        MetaValue::MetaList(institutes.into_iter().map(MetaValue::MetaMap).collect()),
-    );
+    meta.insert("author".into(), authors.into_iter().collect());
+    meta.insert("institute".into(), institutes.into_iter().collect());
     Ok(())
 }
 
 struct ScholarlyMetadata;
 
 impl Filter for ScholarlyMetadata {
-    fn meta(&mut self, meta: &mut Meta, ctx: &mut Ctx) {
-        if let Err(e) = canonicalize(meta) {
-            ctx.fail::<()>(e);
+    fn meta(&mut self, meta: &mut Meta, ctx: &mut Ctx) -> Option<()> {
+        match canonicalize(meta) {
+            Ok(()) => Some(()),
+            Err(e) => ctx.fail(e),
         }
     }
 }
