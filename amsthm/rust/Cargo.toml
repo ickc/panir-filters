@@ -1,0 +1,15 @@
+[package]
+name = "amsthm"
+description = "amsthm's theorem and proof environments for any output format: a pandoc filter (a port of ickc/pandoc-amsthm)"
+license = "BSD-3-Clause"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true
+
+[dev-dependencies]
+# (the cases, read by the test of the cases with options)
+serde_json = "1"

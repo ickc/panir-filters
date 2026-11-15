@@ -50,6 +50,8 @@ jobs:
         run: |
           npm run check  # tsc and pyright
           cargo fmt --check
-          cargo clippy --release -- -D warnings
+          cargo clippy --release --all-targets -- -D warnings
+          cargo test --release  # (amsthm's cases with the writer's options, in process)
+          python3 auto-lang/tables.py --check  # (its tables as made from the original's)
       - name: The cases
         run: python3 run.py test

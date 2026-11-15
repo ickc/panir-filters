@@ -19,6 +19,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "amsthm"
+version = "0.1.0"
+dependencies = [
+ "panir",
+ "serde_json",
+]
+
+[[package]]
 name = "author-info-blocks"
 version = "0.1.0"
 dependencies = [
