@@ -16,7 +16,9 @@ the trivial filter needs nothing panir lacks. What it does show:
   unchanged), and Julia's standard library has no full mapping. So the
   Julia port differs on those letters: case `unicode`, and two real
   documents (the pandoc changelog's "Voß", Python's documentation's
-  `'straße'.lower()`), listed in `known.tsv`. Making it the same would mean
+  `'straße'.lower()`), and, since the fifth batch, the eight documents
+  made of the cases, whose auto-lang Greek has `φῶς` (`ῶ` is `Ω͂`, two
+  characters, in full), listed in `known.tsv`. Making it the same would mean
   carrying Unicode's SpecialCasing table in the port; not panir's job, and
   not done. (The Unicode versions differ too, Python 17, Node.js 18, Rust
   17: no letter of the documents tried is affected.)
