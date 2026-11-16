@@ -8,7 +8,12 @@ the ports are the means.
 
 Round 1 (filters that need only the AST) is chosen in
 [`SURVEY.md`](SURVEY.md) and listed, with each port's status, in
-[`filters.tsv`](filters.tsv). Ported so far: `caps`, `metavars`,
+[`filters.tsv`](filters.tsv). Rounds 2 and 3 (filters that read files and
+call pandoc: `include-files`, `include-code-files`, `multibib`, and
+amsthm's notes) test the hosts that run filters inside a pandoc
+conversion (libpandoc's bindings): what they lack is
+[`HOSTS.md`](HOSTS.md), and the round in a page
+[`ROUND2.md`](ROUND2.md). Ported so far: `caps`, `metavars`,
 `list-table`, then `deemph`, `comments`, `deflists`, `theorem`,
 `inlinenotes`, `gitlab_markdown`, `french-spaces`, then the metadata
 cluster, `scholarly-metadata`, `author-info-blocks`, `pandoc-quotes`,
@@ -28,7 +33,10 @@ One folder per filter:
   run for, and, as `after: OTHER`, a filter of this repository it always
   runs after: author-info-blocks after scholarly-metadata; the originals
   then run one after the other, in one pandoc if both are Lua, and each
-  language's ports likewise);
+  language's ports likewise; as `cwd: cases/files`, the directory the
+  original, the ports and the hosts run in, where the files its cases
+  name are; as `needs: pandoc`, that its ports call pandoc, so only
+  `run.py host` runs them);
 - `cases/`: input documents (`*.md`, read by pandoc's markdown reader, with
   the reader's options in `NAME.args` beside one, if any: `-M lang=en-GB`,
   which makes a `MetaString` as a command line does, or `-f
@@ -55,9 +63,10 @@ One folder per filter:
 - `NOTES.md`: what was awkward or missing, per language, and every place
   a port differs from its original;
 - `known.tsv`, if any: the differences `NOTES.md` explains (`language`,
-  case or document, perhaps with the one format it differs in, as `name
-  (markdown)`, why); they don't fail a run, and one that stops differing
-  does.
+  perhaps with the one mode it differs in, as `rust@pandocrs-wasm` or
+  `python@standalone`; case or document, perhaps with the one format it
+  differs in, as `name (markdown)`; why); they don't fail a run, and one
+  that stops differing does.
 
 At the top: `run.py`, the runner; one Cargo workspace for the Rust ports
 (`Cargo.toml`), one Node.js package for the TypeScript ones and the type
@@ -67,7 +76,8 @@ original Lua filter made; `oracle-requirements.txt`, what the Python
 originals need; `julia-cases.jl`, which runs the Julia ports' cases in one
 process; `host/`, which runs a Python or TypeScript port in process, as a
 host running filter scripts does (for a case's options, and for
-`CHECK_UNIQUE=1`); `fetch-docs.sh`, pandoc's test documents for the
+`CHECK_UNIQUE=1`), and the drivers of `run.py host`
+(`libpandoc_api.py`, `libpandoc-node.mjs`, `capture.lua`); `fetch-docs.sh`, pandoc's test documents for the
 differential runs, and `assemble.py`, documents made of the cases for
 them.
 
@@ -104,6 +114,21 @@ Python originals, a Python with `oracle-requirements.txt`
     python3 run.py diff caps --docs .cache/pandoc-tests/* some/doc.json   # documents it wasn't written for
     python3 run.py expect caps           # regenerate cases/expected.jsonl
     python3 run.py time caps --doc doc.json   # time and peak memory, original and ports
+
+Inside libpandoc's hosts, built from their checkouts as their READMEs
+say (`HOSTS.md` lists the commits), named by `$PANDOCPY`, `$HOST_PYTHON`
+(a Python with libpandoc), `$PANDOCRS`, `$PANDOCJL` (a command line:
+`julia -J IMAGE --project=DIR -m LibPandoc`), `$LIBPANDOC_NODE` (libpandoc's
+`wasm/node.mjs`) and `$LIBPANDOC_WASM`; a mode whose host isn't named is
+skipped:
+
+    python3 run.py host                  # every port in each of its hosts, on the cases
+    python3 run.py host include-files --host pandocpy,pandocrs-wasm
+    python3 run.py host --sandbox        # the filters that read files, in each directory sandbox
+
+The Rust ports are built for wasm32-wasip1 too (`cargo build --target
+wasm32-wasip1`); those that call pandoc depend on libpandoc-rs's guest
+side, for wasm only, so the native build needs no libpandoc.
 
 `diff` takes pandoc JSON documents (`.json`) or markdown (anything else,
 read by pandoc with `--sandbox`). The ones used so far: `./fetch-docs.sh`

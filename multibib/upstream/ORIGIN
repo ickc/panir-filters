@@ -1,0 +1,10 @@
+url: https://github.com/pandoc-ext/multibib/blob/73c654870a6847ffe16c4a05a35b27aa25263ed4/_extensions/multibib/multibib.lua
+repository: https://github.com/pandoc-ext/multibib
+commit: 73c654870a6847ffe16c4a05a35b27aa25263ed4
+path: _extensions/multibib/multibib.lua
+licence: MIT, Copyright © 2018-2024 Albert Krewinkel and contributors (../LICENSE, the repository's, verbatim; the file's header is ISC text, © 2018-2024 Albert Krewinkel); it covers the original, its test files and the ports here
+cases: cases/sample.md is the repository's test/input.md, verbatim, and cases/files/test/ holds its two bibliographies, verbatim (its expected.txt, plain text, is not used: the expected AST is the original's under pandoc 3.14); the others are written for the ports, extra.bib among them
+run: lua multibib.lua
+formats: html docx
+cwd: cases/files
+needs: pandoc

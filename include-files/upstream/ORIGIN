@@ -1,0 +1,10 @@
+url: https://github.com/pandoc-ext/include-files/blob/0d2280517d1d73544739593e549ef7567ce968b5/include-files.lua
+repository: https://github.com/pandoc-ext/include-files
+commit: 0d2280517d1d73544739593e549ef7567ce968b5
+path: include-files.lua
+licence: MIT, Copyright (c) 2023 Pandoc Extensions (../LICENSE, the repository's, verbatim; the file's header: © 2019–2021 Albert Krewinkel, MIT); it covers the original, its sample files and the ports here
+cases: cases/sample.md is the repository's sample.md, verbatim, and cases/files/ holds the files it includes, verbatim (file-a.md, file-b.md, file-c.md, file-d.org, file-f.md, subdir/file-g.md); sample-auto is it again with -M include-auto, as the repository's Makefile runs it (its expected.native is not used: the expected AST is the original's under pandoc 3.14); the others are written for the ports, their files in cases/files/ and one outside it, cases/outside/canary.md (reached through .., and through the symbolic link files/link-out.md)
+run: lua include-files.lua
+formats: html
+cwd: cases/files
+needs: pandoc

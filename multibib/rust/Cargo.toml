@@ -1,0 +1,18 @@
+[package]
+name = "multibib"
+description = "Several bibliographies, one a topic: a pandoc filter (a port of pandoc-ext/multibib)"
+license = "MIT"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+panir.workspace = true
+serde_json.workspace = true
+
+# pandoc's citeproc is the host's: built for wasm, libpandoc's calls go to
+# the program running the filter (pandocrs, pandocpy, pandocjl,
+# libpandoc.wasm)
+[target.'cfg(target_family = "wasm")'.dependencies]
+libpandoc.workspace = true

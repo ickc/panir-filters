@@ -84,3 +84,12 @@ this; it doesn't: a value returned by two calls is in two places
 - **Julia**: the second filter is one inner function with a method for
   `RawBlock` and one for `Para` (closures may have several methods);
   `get(ENV, ...)`.
+
+## In the hosts
+
+The same in every host (`run.py host`) but the wasm ones: a wasm filter
+is given only the variables pandoc gives filters, not the process's, so
+the Rust port built for wasm ignores `PANDOC_PAGEBREAK_HTML_CLASS` and
+`PANDOC_PAGEBREAK_ODT_STYLE` in pandocrs, pandocpy, pandocjl and Node
+(cases `env` and `env-meta`, `known.tsv`); inside a directory sandbox the
+Lua original likewise sees only `SOURCE_DATE_EPOCH` (`HOSTS.md`, H8).

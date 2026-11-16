@@ -13,3 +13,8 @@ panir.workspace = true
 [dev-dependencies]
 # (the cases, read by the test of the cases with options)
 serde_json = "1"
+
+# pandoc's reader for the notes, the host's: built for wasm, libpandoc's
+# calls go to the program running the filter
+[target.'cfg(target_family = "wasm")'.dependencies]
+libpandoc.workspace = true

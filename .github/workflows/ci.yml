@@ -32,6 +32,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: panir-filters
@@ -51,6 +52,7 @@ jobs:
           npm run check  # tsc and pyright
           cargo fmt --check
           cargo clippy --release --all-targets -- -D warnings
+          cargo clippy --release --target wasm32-wasip1 -- -D warnings  # (the ports built as wasm filters, calling the host's pandoc)
           cargo test --release  # (amsthm's cases with the writer's options, in process)
           python3 auto-lang/tables.py --check  # (its tables as made from the original's)
       - name: The cases

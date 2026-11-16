@@ -116,6 +116,8 @@ in Rust; amsthm numbering the textbook's 738 environments in HTML, 1.4,
 
 ## What round 1 could not test
 
+(Rounds 2 and 3 have since: `ROUND2.md`, `HOSTS.md`.)
+
 - **Reading files** (round 2): include-files, include-code-files,
   pantable; auto-lang's table is compiled in, where the original `dofile`s
   it, so `PANDOC_SCRIPT_FILE` and paths beside a filter went untested.

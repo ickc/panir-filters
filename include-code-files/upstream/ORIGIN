@@ -1,0 +1,9 @@
+url: https://github.com/pandoc/lua-filters/blob/818f901a56cff8629dbd3d3d2d719320279ef6d1/include-code-files/include-code-files.lua
+repository: https://github.com/pandoc/lua-filters
+commit: 818f901a56cff8629dbd3d3d2d719320279ef6d1
+path: include-code-files/include-code-files.lua
+licence: MIT, Copyright (c) 2017-2021 pandoc Lua filters contributors (../LICENSE, the repository's, verbatim; the file's header: © 2020 Bruno BEAUFILS, MIT); it covers the original and the ports here
+cases: cases/sample.md is the repository's include-code-files/sample.md, verbatim, and the file it includes, the filter itself, is in cases/files/ (include-code-files.lua, verbatim; its expected.native is not used: the expected AST is the original's under pandoc 3.14); the others are written for the ports, their files in cases/files/src/ and one outside, cases/outside/secret.txt (reached through .., and through the symbolic link files/src/link-out.txt)
+run: lua include-code-files.lua
+formats: html
+cwd: cases/files

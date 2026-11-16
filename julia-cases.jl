@@ -6,11 +6,11 @@
 # (`Panir.handoff`, as a host running filter scripts does) instead of
 # reading stdin.
 #
-# Reads lines `scripts<TAB>format<TAB>environment<TAB>options<TAB>document`
+# Reads lines `scripts<TAB>format<TAB>environment<TAB>options<TAB>directory<TAB>document`
 # (the scripts of a chain, run in turn, separated by the unit separator,
 # \x1f; the case's environment variables, `KEY=VALUE` separated by \x1f, set
-# while it runs; its conversion's options, as JSON, or nothing; the document
-# as pandoc's JSON, on one line); writes a line per case,
+# while it runs; its conversion's options, as JSON, or nothing; the
+# directory it runs in; the document as pandoc's JSON, on one line); writes a line per case,
 # `output<TAB>document` or `error<TAB>message` (the message's newlines as
 # \n).
 
@@ -44,11 +44,13 @@ function run_case(scripts, format, options, json)
 end
 
 for line in eachline(stdin)
-    scripts, format, environment, options, json = split(line, '\t'; limit = 5)
+    scripts, format, environment, options, directory, json = split(line, '\t'; limit = 6)
     variables = [String(k) => String(v) for (k, v) in split.(split(environment, '\x1f'; keepempty = false), '='; limit = 2)]
     result = try
         "output\t" * withenv(variables...) do
-            run_case(String.(split(scripts, '\x1f')), String(format), String(options), String(json))
+            cd(String(directory)) do
+                run_case(String.(split(scripts, '\x1f')), String(format), String(options), String(json))
+            end
         end
     catch e
         "error\t" * replace(sprint(showerror, e), "\n" => "\\n")
