@@ -34,7 +34,9 @@ which the nineteen ports now use (twelve Rust ports and three TypeScript
 ones changed; `run.py test` and `CHECK_UNIQUE=1` the same). 36 to 40 were
 found with the fifth batch, the owner's two filters (`auto-lang`,
 `amsthm`), the last of round 1: what they found of panir#17's API in use
-is in "The API of panir#17, used", after 35.
+is in "The API of panir#17, used", after 35. Rounds 2 and 3 (filters
+that read files and call pandoc) found 41 to 44, at the end; what they
+found in the hosts is `HOSTS.md`.
 
 | # | gap | languages | round 1 filters hitting it | status |
 |---|---|---|---|---|
@@ -1306,6 +1308,17 @@ round 4) needs them.
 
 How common: 1 of 21 (amsthm).
 
+**Since** (round 2): libpandoc 1.10 sets `$PANDOC_WRITER_OPTIONS` for
+every filter it runs, and a conversion's `writer_options` in process
+(panir#18 reads it), with Lua's values under pandoc's JSON keys; amsthm's
+ports read `options` where a host knows them, else `writer_options`, and
+are the same in every host and as a JSON filter run by libpandoc (the
+Rust port's 36 known rows gone; `run.py test` gives every port
+`$PANDOC_WRITER_OPTIONS` as libpandoc sets it). Left open: (a) upstream
+(plain pandoc still gives a JSON filter none); (b) each README's "Coming
+from Lua" still says "which nothing sets yet (proposed to pandoc and
+libpandoc)": libpandoc does.
+
 ## 39. Lua's `pairs` over metadata
 
 Found with auto-lang and amsthm.
@@ -1342,3 +1355,100 @@ turns up in later rounds (`to_roman_numeral`, `normalize_date`,
 `citeproc`'s helpers are pandoc's), a small module of them. Low.
 
 How common: 1 of 21 (amsthm).
+
+## Round 2 and 3: what the filters that read files and call pandoc found in panir
+
+Round 2's and 3's filters (include-files, include-code-files, multibib,
+and amsthm's notes) were mostly about the hosts: those gaps are in
+`HOSTS.md`. What they found in panir itself:
+
+| # | gap | languages | filters hitting it (of 24) | status |
+|---|---|---|---|---|
+| 41 | pandoc.path's functions (`normalize`, `join`, `directory`, `is_relative`, `filename`), whose `normalize` no language's own path functions match | all | 1: include-files (every port has the five, 25 lines) | open |
+| 42 | Lua's `tonumber` (and the integer `string.sub` takes) | all | 4: amsthm, list-table, include-files, include-code-files (each port has `lua_number`) | open |
+| 43 | a fragment's walk from a filter function doesn't know the conversion unless given it, where Lua's `PANDOC_READER_OPTIONS` and `FORMAT` are globals | Python, TypeScript, Julia (Rust's `ctx.apply` passes it) | 1: include-files (a nested include read with the document's reader options) | open |
+| 44 | Python's `MetaList([...])` and `Pandoc(meta, blocks)` take their items as arguments: a list passed is one item (a list in a list), silently | Python | 1: multibib | open (documentation) |
+
+## 41. pandoc.path's functions
+
+Found with include-files.
+
+**The original**: `path.normalize(path.join({include_path, link.target}))`,
+`path.directory(line)`, `path.is_relative`, `path.filename`: pandoc's,
+Haskell's `System.FilePath` on POSIX. `normalize` drops `.` and doubled
+slashes but keeps `..` (`nest/two/../up.md`); `join` gives the second
+when it is absolute; `directory("file.md")` is `.`.
+
+**panir**: nothing; each language's own path functions differ:
+`os.path.normpath`, `node:path`'s `normalize` and Julia's `normpath`
+resolve `..`, Rust's `Path::components` drops a trailing slash. Each port
+has the five functions, about 25 lines, checked by the cases (links and
+images of every shape, `nested`).
+
+**Proposed**: `panir.path` (`pandoc.path`'s functions, as pandoc has
+them, POSIX and Windows), in each language, beside `stringify`; or a
+"Coming from Lua" bullet with the five lines that matter. Low until more
+filters that rewrite paths come (pandoc-ext's include-files, diagram's
+outputs, a typst or LaTeX includer).
+
+How common: 1 of 24.
+
+## 42. Lua's `tonumber`
+
+Found with list-table and amsthm (round 1), again with include-files and
+include-code-files.
+
+**The original**: `tonumber(attr)` (`shift-heading-level-by`,
+`startLine`, `counter_depth`): blanks around, hexadecimal, exponents;
+`nil` for anything else, which the filter then treats as no value or
+fails on. `string.sub(s, "4")` converts its argument the same way and
+wants an integer value (`2.0` passes, `1.5` fails).
+
+**panir**: nothing: amsthm, include-files and include-code-files each
+have the same `lua_number` in every language (list-table a decimal-only
+one), 8 lines each.
+
+**Proposed**: `lua_number` (or `tonumber`) beside `to_roman_numeral`, as
+a helper for ports, the same in the four languages. Low.
+
+How common: 4 of 24.
+
+## 43. A fragment's walk doesn't know the conversion
+
+Found with include-files.
+
+**The original**: an included file's own includes are read inside a walk
+started from the filter function (`pandoc.walk_block(pandoc.Div(...),
+{...})`), whose functions read `PANDOC_READER_OPTIONS`, a global.
+
+**panir**: `contents.walk(f)` (Python), `applyFilter(contents, f)`
+(TypeScript) and `walk!(f, contents)` (Julia) start a walk whose
+`ctx.conversion` knows nothing but what it is given; the port passes
+`conversion=ctx.conversion` (Python), `format = ctx.conversion` (Julia).
+Rust's `ctx.apply(x, f)` passes the conversion itself. Easy to forget:
+the nested include then reads with no reader options and no error.
+
+**Proposed**: a walk started from a filter function inherits the running
+walk's conversion (Python and Julia: a context variable set while a
+filter runs; TypeScript: the same, or `ctx.apply` as Rust has). Low.
+
+How common: 1 of 24.
+
+## 44. Python's constructors take their items as arguments
+
+Found with multibib.
+
+**The original**: `pandoc.MetaList{}` and `pandoc.Pandoc(blocks, meta)`
+take a table and the blocks first.
+
+**panir**: `MetaList(*items)`, `Pandoc(*blocks, meta=...)`: given a list,
+`MetaList([a, b])` is a list holding a list (plain values convert), and
+`Pandoc(meta, [blocks])` fails only later (`ASTTypeError`). The port
+built its bibliography list as `MetaList(files)`: pandoc then looked for
+one file named `test/secondary.bib test/primary.bib`.
+
+**Proposed**: a "Coming from Lua" line (Lua's table arguments are
+arguments here); perhaps a warning when the only argument of a list
+constructor is a list. Low.
+
+How common: 1 of 24.
