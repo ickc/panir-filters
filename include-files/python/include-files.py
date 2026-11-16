@@ -95,8 +95,10 @@ configure = Filter()
 
 @configure.on_meta
 def get_vars(meta: Meta) -> None:
-    if meta.get("include-auto"):
-        state.auto = True
+    # (for each document: a host may run this filter on many, where Lua
+    # loads the original anew for each)
+    state.auto = bool(meta.get("include-auto"))
+    state.last_level = 0
 
 
 def update_last_level(header: Header) -> None:

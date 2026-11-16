@@ -132,8 +132,11 @@ function transclusion(base: string): Filter {
 
 await runFilter([
   {
+    // (for each document: a host may run this filter on many, where Lua
+    // loads the original anew for each)
     Meta: (meta) => {
-      if (truthy(meta["include-auto"])) auto = true;
+      auto = truthy(meta["include-auto"]);
+      lastLevel = 0;
     },
   },
   transclusion(""),

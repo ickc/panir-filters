@@ -54,7 +54,9 @@ end
 const auto = Ref(false)  # (include-auto)
 const last_level = Ref(0)  # the level of the last heading met
 
-configure(meta::Panir.Meta) = (truthy(get(meta, "include-auto", nothing)) && (auto[] = true); nothing)
+# (for each document: a host may run this filter on many, where Lua loads the
+# original anew for each)
+configure(meta::Panir.Meta) = (auto[] = truthy(get(meta, "include-auto", nothing)); last_level[] = 0; nothing)
 
 "Headings shifted; relative paths taken to the including file's directory."
 struct Update

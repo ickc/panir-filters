@@ -173,6 +173,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "multibib"
+version = "0.1.0"
+dependencies = [
+ "libpandoc",
+ "panir",
+ "serde_json",
+]
+
+[[package]]
 name = "pagebreak"
 version = "0.1.0"
 dependencies = [
