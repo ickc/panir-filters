@@ -1,4 +1,4 @@
-# Survey (round 1)
+# Survey (rounds 1 to 3)
 
 Where the filters come from, what each demands of a filter API, and why
 it was taken or not. Surveyed 2026-11-14; commits as fetched that day.
@@ -72,6 +72,9 @@ What a filter needs of the API, as abbreviations in the tables and in
 | `env` | reads the environment or pandoc's reader options |
 | `error` | stops the conversion with a message |
 | `unicode` | depends on Unicode properties (case, scripts) |
+| `files` | reads files (round 2) |
+| `read` | parses text with pandoc (`pandoc.read`; round 3) |
+| `citeproc` | runs citeproc on a document (`pandoc.utils.citeproc`; round 3) |
 
 ## Chosen for round 1 (21)
 
@@ -192,6 +195,26 @@ How the features are covered (each at least twice where possible):
 | pandoc-latex-environment | chdemko | duplicate of theorem |
 | the Lua manual's examples | jgm/pandoc `doc/` | GPL-2.0-or-later |
 | pandoc-crossref, fignos/eqnos/tablenos, pandoc-subfigs | wiki | GPL (round 4: clean-room only) |
+
+## Chosen for rounds 2 and 3 (3, and amsthm's notes)
+
+Surveyed 2026-11-16; licences checked before any source was opened
+(GitHub's API, then each repository's `LICENSE`).
+
+| name | source | licence | lang | what it does | there for |
+|---|---|---|---|---|---|
+| include-files | pandoc-ext/include-files | MIT (the file's header: MIT) | Lua | code blocks of class `include` replaced by the files they name, read by pandoc | round 2 (reads files, relative to the including file) and round 3 (`pandoc.read` of each file, in its format, with the document's reader options); the directory sandbox's test |
+| include-code-files | pandoc/lua-filters | MIT | Lua | a code block's `include` attribute replaced by the file's text, a range of its lines, dedented | round 2 only (no call into pandoc): its ports run under `run.py test` too |
+| multibib | pandoc-ext/multibib | MIT (the file's header: ISC text) | Lua | a bibliography per topic, each its own file | round 3: citeproc from inside a filter (`pandoc.utils.citeproc`), twice |
+| amsthm's notes | (round 1's amsthm) | BSD-3 | Lua | a theorem's note read as markdown | round 3: `pandoc.read`, a call per note |
+
+Not taken now: pandocfilters' `includes` (Python 2 only); lua-filters'
+include-files (an older pandoc-ext's); section-refs and
+multiple-bibliographies (lua-filters: they spawn `pandoc --citeproc`
+through `run_json_filter`, and section-refs needs
+`pandoc.utils.make_sections`, which no host has); pantable (the owner's,
+BSD-3: next, its CSV core round 2 and its markdown cells round 3, not
+started for time).
 
 ## Later rounds
 

@@ -318,3 +318,147 @@ do is 1.5). In a
 host that keeps Julia running, as LibPandoc.jl's `pandocjl` does, the
 compiling is paid once.
 
+
+## Rounds 2 and 3: the ports in the hosts
+
+Measured 2026-11-16, same machine; pandoc 3.14; libpandoc 1.12; the hosts
+at the commits `HOSTS.md` lists; panir at `aaee247` (its main); Python
+3.13 in the hosts, 3.12 for `run.py test` and `time`; Node 26.13; Rust
+1.97.1; Julia 1.12.7.
+
+**The cases, standalone** (`run.py test`): the 22 filters whose ports
+need no pandoc, all four languages, the same as before plus
+include-code-files' 11 cases (11/11 in each language). include-files (15
+cases) and multibib (12) need pandoc: only the hosts run them.
+
+**The cases, in the hosts** (`run.py host`; a mode is a language in a
+host, `HOSTS.md`):
+
+| mode | filters | case runs | the original's | known |
+|---|---|---|---|---|
+| `pandocpy` (a script) | 24 | 881 | 871 | 10 |
+| `python-api` (functions, `libpandoc.convert`) | 24 | 881 | 871 | 10 |
+| `pandocrs-wasm` | 24 | 881 | 860 | 21 |
+| `pandocrs-native` (a JSON filter) | 22 | 854 | 819 | 35 |
+| `pandocpy-wasm` | 24 | 881 | 860 | 21 |
+| `pandocjl-wasm` | 24 | 881 | 860 | 21 |
+| `node-wasm` | 24 | 881 | 838 | 43 |
+| `pandocjl` (a script, a process a case) | 24 | 881 | 869 | 12 |
+| `node` (a JS function in libpandoc.wasm) | 24 | 881 | 845 | 36 |
+
+7,902 runs, none failing; why each known one is, `HOSTS.md` and each
+filter's `known.tsv`. In the directory sandbox (`run.py host --sandbox`,
+the two filters that read files, nine modes with the Lua originals): 302
+the original's, 24 known, 3 failing (H11, the Lua original's
+`include=""`, now known).
+
+## Inside a warm host
+
+The owner's point: a process per filter is what the hosts save. Each
+filter below was timed three ways on the documents of round 1's table:
+**standalone**, a process as pandoc runs a JSON filter (`run.py time`:
+the JSON in, the filter, the JSON out; the Lua original as pandoc with
+the filter and the JSON written, its writer skipped); **in a command**
+(`pandocpy`, `pandocrs`, `pandocjl`, a new process with the filter
+inside: the whole conversion from JSON to HTML, less the same command
+without the filter); and **warm** (each host loaded once and the filter
+loaded once, then the conversion from JSON to HTML repeated, best of 5,
+Node's of 3; the time with the filter less the time without). The
+Lua original is warm too, in each host's libpandoc. Seconds.
+
+The textbook (9.4 MB of JSON; the conversion alone, warm: 2.2 s
+natively, 7.9 s in libpandoc.wasm under Node):
+
+| filter | Lua original | Python | TypeScript | Rust | Julia |
+|---|---|---|---|---|---|
+| caps, standalone | (a Python original: 0.44 in round 1) | 0.35 | 0.26 | 0.05 | 0.61 |
+| caps, in a command | – | 0.62 (pandocpy, a script) | – | 0.39 (pandocrs, wasm) | 0.85; 0.71 with the system image |
+| caps, warm | – | 0.62 (functions); 0.63 (the script, run anew each time) | 0.87 (in Node's libpandoc.wasm) | 0.35 (a callback); 0.40 (wasm, in libpandoc-rs and libpandoc-python), 0.50 (in LibPandoc.jl), 0.91 (in Node); 0.37 (the JSON filter, a process) | 0.59 (the script, loaded once) |
+| list-table, standalone | 0.54 | 0.30 | 0.24 | 0.04 | 1.29 |
+| list-table, in a command | 0.10 (pandoc) | 0.57 | – | 0.36 | 1.45; 1.30 with the image |
+| list-table, warm | 0.09 (in each native host); 0.10 (Node) | 0.57; 0.58 | 0.76 | 0.35; 0.38 to 0.41 (wasm); 0.37 (JSON filter) | 0.50 |
+
+War and Peace with every script mapped (24 MB of JSON; auto-lang; the
+conversion alone 1.9 s, 5.3 s in Node):
+
+| | Lua original | Python | TypeScript | Rust | Julia |
+|---|---|---|---|---|---|
+| standalone | 5.14 | 1.84 | 0.62 | 0.17 | 2.06 |
+| in a command | 4.32 (pandoc) | 1.87 | – | 1.11 | 2.73; 2.62 with the image |
+| warm | 4.06 to 4.38; 7.39 (Node) | 1.82; 1.82 | 3.84 | 1.00; 1.09 to 1.27 (wasm); 3.13 (Node); 0.92 (JSON filter) | 1.39 |
+
+The textbook with an `amsthm` map (11 MB; amsthm in HTML, 738
+environments numbered; the conversion alone 2.2 s, 7.8 s in Node):
+
+| | Lua original | Python | TypeScript | Rust | Julia |
+|---|---|---|---|---|---|
+| standalone | 1.41 | 0.45 | 0.31 | 0.05 | 3.44 |
+| in a command | 1.02 (pandoc) | 0.80 | – | 0.43 | 3.66; 3.43 with the image |
+| warm | 1.03 to 1.06; 2.94 (Node) | 0.75 to 0.78; 0.75 | 1.06 | 0.36; 0.39 to 0.44 (wasm); 0.99 (Node) | 0.71 to 0.75 |
+
+What this says:
+
+- **A filter in a host pays pandoc's JSON both ways**: 0.35 s on the
+  textbook for Rust's callback, which does no work (caps, list-table),
+  against 0.05 s for the same port standalone, which pays only its own
+  reading and writing of the JSON. The rest is pandoc's: encoding its
+  document as JSON and decoding the answer, in Haskell, the same for a
+  callback, a wasm filter and a JSON filter (0.37 s, the program
+  started by libpandoc). So in a native host a Rust filter costs what a
+  JSON filter costs, process included: the process is cheap; the JSON is
+  not. Python adds its own parsing into panir objects (0.57 to 0.62 s),
+  as standalone.
+- **A Lua filter that touches little is the cheapest of all**:
+  list-table's original adds 0.09 s in any host, a quarter of a Rust
+  callback's: pandoc gives Lua only what the filter asks for, where every
+  other filter is handed the whole document as JSON. Where the filter
+  does real work for every node (auto-lang, amsthm), the ports win: 1.0
+  (Rust), 1.4 (Julia) and 1.8 s (Python) against Lua's 4.1 to 4.4 on War
+  and Peace; 0.4, 0.7 and 0.75 against 1.0 on the textbook.
+- **Julia gains the most**: 3.44 s standalone for amsthm (mostly
+  compiling the script in a new process), 3.4 to 3.7 in `pandocjl` (a
+  new process each time; the system image saves 0.1 to 0.25 s, which is
+  LibPandoc's and Panir's start, not the script's compiling), and 0.71
+  warm in one Julia session, the script loaded once: the compiling is
+  paid once.
+- **Python's script run anew for each conversion costs nothing to
+  speak of** (the script against the same filters as functions: within
+  0.01 s): `pandocpy` saves the process and Python's start (about 30 ms),
+  not the work.
+- **In Node everything is libpandoc.wasm's**: the conversion alone takes
+  3.5 times as long, a Lua filter two to three times as long as
+  natively, and the TypeScript port takes 0.8 to 3.8 s warm against 0.24
+  to 0.62 standalone, most of it the JSON between libpandoc.wasm and JS.
+  (list-table's wasm filter in Node took 4.5 s once, where caps' took
+  0.9: not looked into.)
+- Python's standalone auto-lang is 1.84 s here, 0.99 in round 1's table
+  (Python 3.15 then, 3.12 for `run.py time` now): not looked into.
+
+## Calls into pandoc from a filter
+
+From inside a filter, warm, best of 3: the 738 notes of the textbook
+(half plain text, half with emphasis, math and a citation) read as
+markdown, a call each, then all in one `read_many`:
+
+| | a call each | batched |
+|---|---|---|
+| Lua, `pandoc.read` (pandoc, and pandocpy's libpandoc) | 0.04 | (none) |
+| Python, `libpandoc.read`, `read_many` | 0.25 | 0.015 |
+| Rust callback, `libpandoc::read`, `read_many` | 0.21 | 0.013 |
+| Rust wasm, the same, in pandocrs / pandocpy / pandocjl | 0.23 / 0.30 / 0.24 | 0.014 / 0.014 / 0.016 |
+| Rust wasm in Node (libpandoc.wasm, one thread) | 0.67 | 0.18 |
+| Julia, `LibPandoc.read`, `read_many` | 0.23 | 0.012 |
+| JavaScript, the instance's `readMany` (a JS function given it) | 0.24 | 0.17 |
+| TypeScript port, a filter script | none (H2) | none |
+
+A libpandoc call costs 0.3 ms, six times `pandoc.read`'s 0.05 ms: each
+sets up a conversion (options, the reader, JSON out, panir in), where Lua
+calls the reader. Batched, the same work is cheaper than Lua's (0.013 to
+0.016 s natively, on 32 threads), and in libpandoc.wasm, which has one
+thread, still a quarter of the calls. Every host but JavaScript's offers
+`read_many` to a filter; none of the ports batches (amsthm reads a note
+where the original does). amsthm with a note on each of the 738
+environments, against none: +0.06 s for the Lua original, +0.25 for
+Python (`libpandoc.read`), +0.21 for Julia, +0.15 (libpandoc-rs) to
++0.28 (libpandoc-python) for the Rust wasm filter, and +0.02 for the Rust
+port without a reader (the plain-text rule).
