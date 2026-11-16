@@ -22,6 +22,7 @@ dependencies = [
 name = "amsthm"
 version = "0.1.0"
 dependencies = [
+ "libpandoc",
  "panir",
  "serde_json",
 ]
@@ -105,6 +106,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "include-code-files"
+version = "0.1.0"
+dependencies = [
+ "panir",
+]
+
+[[package]]
+name = "include-files"
+version = "0.1.0"
+dependencies = [
+ "libpandoc",
+ "panir",
+ "serde_json",
+]
+
+[[package]]
 name = "inlinenotes"
 version = "0.1.0"
 dependencies = [
@@ -116,6 +133,24 @@ name = "itoa"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
+
+[[package]]
+name = "libpandoc"
+version = "0.1.0"
+source = "git+https://github.com/ickc/libpandoc-rs?rev=cdd1f3ab52f6ff88c6d647fc3a453ee504267c47#cdd1f3ab52f6ff88c6d647fc3a453ee504267c47"
+dependencies = [
+ "libpandoc-sys",
+ "panir",
+ "serde_json",
+]
+
+[[package]]
+name = "libpandoc-sys"
+version = "0.1.0"
+source = "git+https://github.com/ickc/libpandoc-rs?rev=cdd1f3ab52f6ff88c6d647fc3a453ee504267c47#cdd1f3ab52f6ff88c6d647fc3a453ee504267c47"
+dependencies = [
+ "pkg-config",
+]
 
 [[package]]
 name = "list-table"
@@ -158,6 +193,12 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "pkg-config"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "proc-macro2"

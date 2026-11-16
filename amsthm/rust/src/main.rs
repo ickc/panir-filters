@@ -116,6 +116,7 @@ fn lua_number(text: &str) -> Option<f64> {
 /// but a space), a hyphen inside one, and one of `,;:?!` after one, single
 /// spaces between. pandoc's markdown reader gives such a text as it is, a
 /// Str a word.
+#[cfg(not(target_family = "wasm"))]
 fn is_plain(note: &str) -> bool {
     let letter = |c: char| {
         c.is_ascii_alphanumeric()
@@ -141,13 +142,55 @@ fn is_plain(note: &str) -> bool {
 
 /// A div's note, as the original reads it with pandoc's markdown reader
 /// where it is plain text; otherwise its text, with a warning.
-fn note_inlines(info: &str) -> Vec<Inline> {
-    if !is_plain(info) {
-        warn(format!(
-            "the note {info:?} has markup, which needs pandoc's markdown reader: kept as text"
-        ));
+/// A div's note, read by pandoc's markdown reader as the original reads it
+/// (`pandoc.read`): the host's, built for wasm; natively (a JSON filter has
+/// no pandoc to call) as that reader reads plain text, and any other note
+/// as its text, with a warning.
+fn note_inlines(info: &str) -> Result<Vec<Inline>, String> {
+    #[cfg(target_family = "wasm")]
+    {
+        let doc = libpandoc::read(info, "markdown").map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        for block in doc.blocks {
+            match block {
+                Block::Para(xs) | Block::Plain(xs) => out.extend(xs),
+                // (the original puts the block among inlines, and pandoc fails)
+                other => return Err(format!("the note {info:?} is not inlines: {}", other.tag())),
+            }
+        }
+        Ok(out)
     }
-    panir::inlines(info)
+    #[cfg(not(target_family = "wasm"))]
+    {
+        if !is_plain(info) {
+            warn(format!(
+                "the note {info:?} has markup, which needs pandoc's markdown reader: kept as text"
+            ));
+        }
+        Ok(panir::inlines(info))
+    }
+}
+
+/// Whether a note holds math, a citation, an image or raw TeX, where a `]`
+/// would end LaTeX's optional argument: the original braces it then.
+fn needs_brace(note: &mut [Inline], ctx: &mut Ctx) -> Option<bool> {
+    struct Scan(bool);
+    impl Filter for Scan {
+        fn inline(&mut self, x: &mut Inline, _: &mut Ctx) -> Option<Vec<Inline>> {
+            self.0 |= matches!(
+                x,
+                Inline::Math(_) | Inline::Cite(_) | Inline::Image(_) | Inline::RawInline(_)
+            );
+            None
+        }
+    }
+    let mut scan = Scan(false);
+    for x in note {
+        // (a walk of x is of what is in it, as Lua's `e:walk`)
+        scan.inline(x, ctx);
+        ctx.apply(x, &mut scan)?;
+    }
+    Some(scan.0)
 }
 
 // ---------------------------------------------------------------------------
@@ -432,9 +475,12 @@ impl Default for Counter {
     }
 }
 
-/// The writer's options the original reads (`PANDOC_WRITER_OPTIONS`):
-/// panir has them as the conversion's options, in defaults-file keys, where
-/// its host knows them; a JSON filter is given none.
+/// The writer's options the original reads (`PANDOC_WRITER_OPTIONS`): the
+/// conversion's options (defaults-file keys) where a host running the filter
+/// in process knows them, else its `writer_options`, which libpandoc gives
+/// every filter it runs (Lua's values under the same keys, but
+/// `top-level-chapter` for `chapter`); plain pandoc gives a JSON filter
+/// neither.
 #[derive(Default)]
 struct Writer {
     number_sections: bool,
@@ -446,12 +492,20 @@ struct Writer {
 
 impl Writer {
     fn of(conversion: &Conversion) -> Self {
-        let Some(o) = &conversion.options else {
+        let Some(o) = conversion
+            .options
+            .as_ref()
+            .or(conversion.writer_options.as_ref())
+        else {
             return Writer::default();
         };
+        let division = o["top-level-division"].as_str().unwrap_or("default");
         Writer {
             number_sections: o["number-sections"].as_bool().unwrap_or(false),
-            top_level_division: o["top-level-division"].as_str().unwrap_or("default").into(),
+            top_level_division: division
+                .strip_prefix("top-level-")
+                .unwrap_or(division)
+                .into(),
             number_offset: o["number-offset"]
                 .as_array()
                 .into_iter()
@@ -885,7 +939,7 @@ impl Options {
             };
             // each Str in italics, emphasis in it upright, references as the
             // font applies to them; then neighbouring italics joined
-            let mut note = note_inlines(info);
+            let mut note = ctx.ok(note_inlines(info))?;
             ctx.apply(&mut note, &mut Wrap(Font::Italic))?;
             merge_consecutive(Font::Italic, &mut note);
             note.extend([Inline::Emph(vec![".".into()]), Inline::Space]);
@@ -935,7 +989,7 @@ impl Options {
         }
         if let Some(info) = info.filter(|i| !i.is_empty()) {
             let mut note = vec![Inline::Space, "(".into()];
-            note.extend(note_inlines(info));
+            note.extend(ctx.ok(note_inlines(info))?);
             note.push(")".into());
             runs.push((note, vec![]));
         }
@@ -1413,16 +1467,16 @@ fn cite_to_ref(cite: &Cite, options: &Options) -> Option<Vec<Inline>> {
 
 /// LaTeX: the div's own blocks between `\begin{...}` and `\end{...}`, sharing
 /// a line with the first and last paragraphs, in a bare div.
-fn latex_environment(div: &mut Div, options: &Options) -> Option<Vec<Block>> {
+fn latex_environment(div: &mut Div, options: &Options, ctx: &mut Ctx) -> Option<Vec<Block>> {
     let t = options.find(&div.attr.classes, false)?;
     let env = &options.theorems[t].env_name;
     let mut opening = vec![Inline::raw("latex", format!("\\begin{{{env}}}"))];
     if let Some(info) = div.attr.get("info").filter(|i| !i.is_empty()) {
-        // (the original braces a note holding math, a citation, an image or
-        // raw TeX, where a ] would end it: a note of text has none)
-        opening.push(Inline::raw("latex", "["));
-        opening.extend(note_inlines(info));
-        opening.push(Inline::raw("latex", "]"));
+        let mut note = ctx.ok(note_inlines(info))?;
+        let brace = needs_brace(&mut note, ctx)?;
+        opening.push(Inline::raw("latex", if brace { "[{" } else { "[" }));
+        opening.extend(note);
+        opening.push(Inline::raw("latex", if brace { "}]" } else { "]" }));
     }
     if !div.attr.identifier.is_empty() {
         opening.push(Inline::raw(
@@ -1560,9 +1614,9 @@ impl Filter for Second {
         Order::Topdown
     }
 
-    fn block(&mut self, x: &mut Block, _: &mut Ctx) -> Option<Vec<Block>> {
+    fn block(&mut self, x: &mut Block, ctx: &mut Ctx) -> Option<Vec<Block>> {
         match x {
-            Block::Div(d) if self.latex => latex_environment(d, &self.options),
+            Block::Div(d) if self.latex => latex_environment(d, &self.options, ctx),
             _ => None,
         }
     }
@@ -1598,10 +1652,11 @@ fn main() {
     panir::filter_with(amsthm);
 }
 
-/// The cases with the conversion's options (`NAME.opts`), which a JSON
-/// filter is not given: run here in process, as a host running this filter
-/// would, with them, against what the original made (`run.py test` runs the
-/// port as a JSON filter, without them).
+/// The cases with the conversion's options (`NAME.opts`), run here in
+/// process with them as the conversion's `options` (defaults-file keys), as
+/// a host knowing them would, against what the original made (`run.py test`
+/// runs the port as a JSON filter given `$PANDOC_WRITER_OPTIONS`, as
+/// libpandoc gives it).
 #[cfg(test)]
 mod tests {
     use super::*;

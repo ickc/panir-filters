@@ -12,10 +12,12 @@
 // symbol, and makes citations of them links.
 //
 // A div's `info` is its note, `Theorem 1 (note)`, which the original reads as
-// markdown with pandoc. This port has no markdown reader: a note of plain
-// text (words of letters and digits, a hyphen inside a word, and `,;:?!`
-// after one, single spaces between) is read as pandoc reads it; any other is
-// kept as its text, with a warning.
+// markdown with pandoc. This port has no markdown reader (no JavaScript host
+// gives a filter the pandoc it runs in; running the `pandoc` command for each
+// note costs a process a note): a note of plain text (words of letters and
+// digits, a hyphen inside a word, and `,;:?!` after one, single spaces
+// between) is read as pandoc reads it; any other is kept as its text, with a
+// warning.
 //
 // A port of ickc/pandoc-amsthm's amsthm.lua (Copyright (c) 2016-2026, Kolen
 // Cheung; BSD-3-Clause, see ../LICENSE).
@@ -23,7 +25,7 @@
 import {
   applyFilter, copy, Div, Emph, getAttribute, given, inlines, inlinesOf, items, LineBreak, Link, Math as MathNode, MetaBlocks,
   MetaList, Para, Plain, RawBlock, RawInline, SmallCaps, Space, Span, Str, stringify, Strong, toRomanNumeral,
-  type Block, type Cite, type Filter, type Header, type Inline, type Meta, type MetaValue,
+  type Block, type Cite, type Conversion, type Filter, type Header, type Inline, type Meta, type MetaValue,
 } from "panir";
 import { runFilter } from "panir/node";
 
@@ -192,9 +194,12 @@ interface Counter {
   depth: number;
 }
 
-/** The writer's options the original reads (`PANDOC_WRITER_OPTIONS`): panir
- * has them as the conversion's options, in defaults-file keys, where its
- * host knows them; a JSON filter is given none. */
+/** The writer's options the original reads (`PANDOC_WRITER_OPTIONS`): the
+ * conversion's options (defaults-file keys) where a host running the filter
+ * in process knows them, else its `writerOptions`, which libpandoc gives
+ * every filter it runs (Lua's values under the same keys, but
+ * `top-level-chapter` for `chapter`); plain pandoc gives a JSON filter
+ * neither. */
 interface Writer {
   numberSections: boolean;
   topLevelDivision: string;
@@ -202,12 +207,13 @@ interface Writer {
   secnumdepth: string | undefined; // (a variable, -V)
 }
 
-function writerOf(options: Record<string, unknown> | undefined): Writer {
-  const o = options ?? {};
+function writerOf(conversion: Conversion): Writer {
+  const o = conversion.options ?? conversion.writerOptions ?? {};
   const depth = (o.variables as Record<string, unknown> | undefined)?.secnumdepth;
+  const division = o["top-level-division"];
   return {
     numberSections: o["number-sections"] === true,
-    topLevelDivision: typeof o["top-level-division"] === "string" ? o["top-level-division"] : "default",
+    topLevelDivision: typeof division === "string" ? division.replace(/^top-level-/, "") : "default",
     numberOffset: Array.isArray(o["number-offset"]) ? o["number-offset"] : [],
     secnumdepth: depth === undefined || depth === null ? undefined : String(depth),
   };
@@ -739,7 +745,7 @@ const first: Filter<"topdown"> = {
   Pandoc: (doc, ctx) => {
     const format = ctx.format ?? "";
     latex = LATEX_LIKE.has(format);
-    options = readOptions(doc.meta, writerOf(ctx.conversion.options));
+    options = readOptions(doc.meta, writerOf(ctx.conversion));
     if ([...options.counters.values()].some((c) => c.depth >= c.first && options.numberedDepth < c.first)) {
       warn("theorems are numbered within sections that are not numbered, so their numbers start with 0 as in LaTeX; pass -N (--number-sections)");
     }

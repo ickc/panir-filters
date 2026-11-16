@@ -23,9 +23,22 @@ A div's `info`, the note in its heading, is read by the original with
 `pandoc.read(info, "markdown")`, a call into pandoc (round 3), in three
 places: the heading of a theorem, the heading of a proof (where the note
 is the whole heading, in italics), and LaTeX's `\begin{Theorem}[note]`
-(braced where it holds math, a citation, an image or raw TeX). The ports
-have no reader. A note of **plain text** is what pandoc's reader would
-make of it without reading: words of ASCII letters and digits or of any
+(braced where it holds math, a citation, an image or raw TeX).
+
+**Where a port has pandoc's reader, it reads the note as the original
+does**, and braces it as the original does: Python with libpandoc
+(`libpandoc.read(info, "markdown")`) where this process has it (pandocpy,
+`libpandoc.convert`, or libpandoc installed), Julia with LibPandoc.jl where
+its environment has it (pandocjl's), Rust built for wasm32-wasip1
+(`libpandoc::read`, the host's: pandocrs, pandocpy, pandocjl,
+libpandoc.wasm). A note that is not inlines (a list, two paragraphs) fails,
+as the original fails putting a block among inlines. TypeScript has none:
+no JavaScript host gives a filter the pandoc it runs in, and the `pandoc`
+command would cost a process a note (`HOSTS.md`).
+
+**Without a reader** (`run.py test`; a Rust JSON filter; TypeScript
+everywhere), a note of **plain text** is what pandoc's reader would make
+of it without reading: words of ASCII letters and digits or of any
 character that is not ASCII nor a space, a hyphen inside a word, one of
 `,;:?!` after one, single spaces between: a `Str` a word, a `Space`
 between, exactly. `plain-notes.py` checks the rule against pandoc 3.14
@@ -36,12 +49,13 @@ with a no-break space; two spaces) is **kept as its text** (its words, as
 Lua's `pandoc.Inlines` makes them of a string), with a warning naming it:
 closer to what a user wants than a failure, as amsthm itself warns and
 goes on wherever it can, and the heading is still there, its markup
-showing. The brace in LaTeX is then never needed (text has no math), so
-the ports do not test for it.
+showing. The brace in LaTeX is then never needed (text has no math).
 
-Which of the original's own cases this changes, all known differences
-(`known.tsv`), each with a twin whose notes are plain and which is the
-same in every language:
+Which of the original's own cases this changes, known differences there
+(`known.tsv`: `python@standalone`, `rust@standalone`,
+`rust@pandocrs-native`, `julia@standalone`, and `ts` everywhere), each
+with a twin whose notes are plain and which is the same in every
+language:
 
 - `model-source` (and `-n`, `-chapter`, the golden test's two runs):
   `**This** is *markdown*.`, `can cite \ref{simplestEquation}`,
@@ -54,9 +68,10 @@ same in every language:
   twin `example-proofs-plain`;
 - and this repository's `notes-markup`; `notes-plain` passes.
 
-So 32 of each language's 292 runs differ on notes (and the next item);
-with a reader (libpandoc's `read` in Python, round 3) the plain rule goes
-and they should not.
+In every host with a reader (`run.py host`: pandocpy and libpandoc.convert
+for Python, pandocjl for Julia, the four wasm hosts for Rust) all of them
+are the original's, but `proof-note` in HTML and markdown, whose body is
+the empty list item below.
 
 ## The writer's options
 
@@ -65,20 +80,25 @@ The original reads `PANDOC_WRITER_OPTIONS`: `number_sections` (-N),
 without -N it numbers theorems within sections as LaTeX does then, from
 0. pandoc gives a Lua filter these, and a JSON filter none (checked:
 pandoc 3.14 passes `PANDOC_READER_OPTIONS` and `PANDOC_VERSION` only).
-panir's conversion has the options, in defaults-file keys
-(`number-sections`, `top-level-division`, `number-offset`,
-`variables.secnumdepth`), where its host knows them (libpandoc, in
-process), so the ports read them there, and as JSON filters have none,
-as the original without them. The original's tests run with them, so
-`run.py` grew a case's options (`NAME.opts`, `GAPS.md` 38): the original
-runs with them (`pandoc -d`), and the Python, TypeScript and Julia ports
-in process, through the hand-off a host uses (`host/`), with them in
-`ctx.conversion.options`: all the same. Rust has no hand-off (a Rust
-filter is a program), so `run.py` runs it as a JSON filter, without them:
-36 runs differ, the numbers of those cases in HTML and markdown (LaTeX
-numbers itself), listed in `known.tsv`; and a `cargo test` in the port
-runs the cases with options in process, with them, through the same
-`apply` as `main`: all the same but the three with notes of markup.
+libpandoc (1.10 and later) gives them to every filter it runs, as
+`$PANDOC_WRITER_OPTIONS` for a JSON filter and a script and the
+conversion's `writer_options` for one in process: Lua's values under
+pandoc's JSON keys (`number-sections`, `top-level-division` as
+`top-level-chapter`, `number-offset`, `variables.secnumdepth`). The ports
+read the conversion's `options` (defaults-file keys, where a host running
+them in process knows them) and else its `writer_options`, the prefix
+`top-level-` dropped as the original drops it: so the same in every host
+and as a JSON filter run by libpandoc, Rust's included.
+
+The original's tests run with them, so `run.py` has a case's options
+(`NAME.opts`, `GAPS.md` 38): the original runs with them (`pandoc -d`);
+`run.py test` runs every port with `$PANDOC_WRITER_OPTIONS` as libpandoc
+sets it for those options, and the Python, TypeScript and Julia ports in
+process with them in `ctx.conversion.options` too; `run.py host` runs
+them through the hosts themselves, with the options as a defaults file.
+All the same (the 36 Rust rows `known.tsv` had for them are gone); the
+`cargo test` in the Rust port runs the cases with the conversion's
+`options` in process.
 
 ## The original's behaviour, kept
 
@@ -182,7 +202,8 @@ be porting pandoc's internals, not the filter.
 | a font's filter, for each font | a table built by a function | a `Filter` built by a function | an object built by a function | `struct Wrap(Font)` | `struct Wrap{T}`, a method per kind |
 | the held environments put back | `held[tonumber(i)]`, a copy each (Lua) | `copy.deepcopy` | `copy` | `.clone()` | `deepcopy` |
 | Lua's `tonumber` | built in | a regular expression | a regular expression | by hand (`f64`'s parse takes `inf`) | a regular expression |
-| the writer's options | `PANDOC_WRITER_OPTIONS` | `ctx.conversion.options`, a dict | `ctx.conversion.options`, an object | `ctx.conversion().options`, a JSON value | `ctx.conversion.options`, a `Dict` |
+| the writer's options | `PANDOC_WRITER_OPTIONS` | `ctx.conversion.options` or `.writer_options`, a dict | `ctx.conversion.options` or `.writerOptions`, an object | `conversion.options` or `.writer_options`, a JSON value | `ctx.conversion.options` or `.writer_options`, a `Dict` |
+| a note | `pandoc.read(info, "markdown")` | `libpandoc.read(info, "markdown")`, if imported | none | `libpandoc::read(info, "markdown")`, built for wasm | `LibPandoc.read(info, "markdown")`, if in the environment |
 
 - **Python**: dataclasses for the style, the theorem, the counter and the
   options; `match` for metadata shapes. The held environments are put

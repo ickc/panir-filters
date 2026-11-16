@@ -12,15 +12,18 @@
 # symbol, and makes citations of them links.
 #
 # A div's `info` is its note, `Theorem 1 (note)`, which the original reads
-# as markdown with pandoc. This port has no markdown reader: a note of plain
-# text (words of letters and digits, a hyphen inside a word, and `,;:?!`
-# after one, single spaces between) is read as pandoc reads it; any other
-# is kept as its text, with a warning.
+# as markdown with pandoc (`pandoc.read`); this port reads it with
+# LibPandoc.jl where its environment has it (pandocjl's, or one it is added
+# to). Without it, a note of plain text (words of letters and digits, a
+# hyphen inside a word, and `,;:?!` after one, single spaces between) is
+# read as pandoc reads it; any other is kept as its text, with a warning.
 #
 # A port of ickc/pandoc-amsthm's amsthm.lua (Copyright (c) 2016-2026, Kolen
 # Cheung; BSD-3-Clause, see ../LICENSE).
 
 using Panir
+# pandoc's reader, for the notes
+Base.identify_package("LibPandoc") === nothing || import LibPandoc
 
 # LaTeX's sectioning units, by depth: parent_counter's values.
 const PARENT_COUNTERS = Dict("part" => 0, "chapter" => 1, "section" => 2, "subsection" => 3,
@@ -58,8 +61,30 @@ end
 
 "A div's note, as the original reads it with pandoc's markdown reader where it is plain text; otherwise its text, with a warning."
 function note_inlines(info)
+    if @isdefined LibPandoc
+        out = Inline[]
+        for block in LibPandoc.read(info, "markdown").blocks
+            # (the original puts the block among inlines, and pandoc fails)
+            block isa Union{Para, Plain} || error("the note $(repr(info)) is not inlines: a $(typeof(block))")
+            append!(out, block.content)
+        end
+        return out
+    end
     is_plain(info) || warn("the note $(repr(info)) has markup, which needs pandoc's markdown reader: kept as text")
     inlines(info)
+end
+
+const Unsafe = Union{Math, Cite, Image, RawInline}
+
+"Whether a note holds math, a citation, an image or raw TeX, where a `]` would end LaTeX's optional argument: the original braces it then."
+function needs_brace(note)
+    found = false
+    unsafe(::Unsafe) = (found = true; nothing)
+    for x in note
+        x isa Unsafe && return true
+        walk!(unsafe, x)
+    end
+    found
 end
 
 # ---------------------------------------------------------------------------
@@ -166,9 +191,11 @@ Base.@kwdef mutable struct Counter
     depth::Float64 = 0
 end
 
-"""The writer's options the original reads (`PANDOC_WRITER_OPTIONS`): panir
-has them as the conversion's options, in defaults-file keys, where its host
-knows them; a JSON filter is given none."""
+"""The writer's options the original reads (`PANDOC_WRITER_OPTIONS`): the
+conversion's options (defaults-file keys) where a host running the filter in
+process knows them, else its `writer_options`, which libpandoc gives every
+filter it runs (Lua's values under the same keys, but `top-level-chapter`
+for `chapter`); plain pandoc gives a JSON filter neither."""
 struct Writer
     number_sections::Bool
     top_level_division::String
@@ -176,10 +203,11 @@ struct Writer
     secnumdepth::Union{String, Nothing}  # (a variable, -V)
 end
 
-function Writer(options::Union{AbstractDict, Nothing})
-    o = something(options, Dict{String, Any}())
+function Writer(conversion::Conversion)
+    o = something(conversion.options, conversion.writer_options, Dict{String, Any}())
     depth = get(something(get(o, "variables", nothing), Dict{String, Any}()), "secnumdepth", nothing)
-    Writer(get(o, "number-sections", false) === true, string(get(o, "top-level-division", "default")),
+    division = chopprefix(string(get(o, "top-level-division", "default")), "top-level-")
+    Writer(get(o, "number-sections", false) === true, division,
         Int.(something(get(o, "number-offset", nothing), Int[])), depth === nothing ? nothing : string(depth))
 end
 
@@ -675,9 +703,11 @@ function latex_environment(div, o)
     theorem === nothing && return nothing
     opening = Inline[RawInline("latex", "\\begin{$(theorem.env_name)}")]
     info = get(div.attr, "info", nothing)
-    # (the original braces a note holding math, a citation, an image or raw
-    # TeX, where a ] would end it: a note of text has none)
-    info === nothing || isempty(info) || append!(opening, [RawInline("latex", "["); note_inlines(info); RawInline("latex", "]")])
+    if info !== nothing && !isempty(info)
+        note = note_inlines(info)
+        brace = needs_brace(note)
+        append!(opening, [RawInline("latex", brace ? "[{" : "["); note; RawInline("latex", brace ? "}]" : "]")])
+    end
     isempty(div.attr.identifier) || push!(opening, RawInline("latex", "\\label{$(div.attr.identifier)}"))
     closing = RawInline("latex", "\\end{$(theorem.env_name)}")
     content = div.content
@@ -699,7 +729,7 @@ const state = (options = Ref{Options}(), latex = Ref(false))
 function first_pass(doc::Pandoc, ctx)
     format = something(ctx.format, "")
     state.latex[] = format in LATEX_LIKE
-    o = state.options[] = read_options(doc.meta, Writer(ctx.conversion.options))
+    o = state.options[] = read_options(doc.meta, Writer(ctx.conversion))
     if any(c.depth >= c.first && o.numbered_depth < c.first for c in values(o.counters))
         warn("theorems are numbered within sections that are not numbered, so their numbers start with 0 as in LaTeX; pass -N (--number-sections)")
     end

@@ -12,10 +12,11 @@ their headings and bodies in their style's fonts, ends proofs with a
 symbol, and makes citations of them links.
 
 A div's `info` is its note, `Theorem 1 (note)`, which the original reads as
-markdown with pandoc. This port has no markdown reader: a note of plain
-text (words of letters and digits, a hyphen inside a word, and `,;:?!`
-after one, single spaces between) is read as pandoc reads it; any other
-is kept as its text, with a warning.
+markdown with pandoc (`pandoc.read`); this port reads it with libpandoc
+where this process has it (pandocpy, `libpandoc.convert`, or libpandoc
+installed). Without it, a note of plain text (words of letters and digits,
+a hyphen inside a word, and `,;:?!` after one, single spaces between) is
+read as pandoc reads it; any other is kept as its text, with a warning.
 
 A port of ickc/pandoc-amsthm's amsthm.lua (Copyright (c) 2016-2026, Kolen
 Cheung; BSD-3-Clause, see ../LICENSE).
@@ -25,11 +26,15 @@ import copy
 import math
 import re
 import sys
-from collections.abc import Mapping
+
+try:
+    import libpandoc  # pandoc's reader, for the notes
+except ImportError:
+    libpandoc = None
 from dataclasses import dataclass, field
-from typing import Any
 
 from panir import (
+    Conversion,
     Block,
     Cite,
     CitationMode,
@@ -38,6 +43,7 @@ from panir import (
     Emph,
     Filter,
     Header,
+    Image,
     Inline,
     LineBreak,
     Link,
@@ -108,8 +114,17 @@ PLAIN_NOTE = re.compile(rf"{PLAIN.pattern}(?:-{PLAIN.pattern})*[,;:?!]?(?: {PLAI
 
 
 def note_inlines(info: str) -> list[Inline]:
-    """A div's note, as the original reads it with pandoc's markdown reader
-    where it is plain text; otherwise its text, with a warning."""
+    """A div's note, read by pandoc's markdown reader as the original reads
+    it, where libpandoc is here; else as that reader reads plain text, and
+    any other note as its text, with a warning."""
+    if libpandoc is not None:
+        out: list[Inline] = []
+        for block in libpandoc.read(info, "markdown").blocks:
+            if not isinstance(block, (Para, Plain)):
+                # (the original puts the block among inlines, and pandoc fails)
+                raise ValueError(f"the note {info!r} is not inlines: a {type(block).__name__}")
+            out += block.content
+        return out
     if not PLAIN_NOTE.fullmatch(info):
         warn(f"the note {info!r} has markup, which needs pandoc's markdown reader: kept as text")
     return inlines(info)
@@ -355,8 +370,11 @@ class Counter:
 @dataclass
 class Writer:
     """The writer's options the original reads (`PANDOC_WRITER_OPTIONS`):
-    panir has them as the conversion's options, in defaults-file keys,
-    where its host knows them; a JSON filter is given none."""
+    the conversion's options (defaults-file keys) where a host running the
+    filter in process knows them, else its `writer_options`, which
+    libpandoc gives every filter it runs (Lua's values under the same keys,
+    but `top-level-chapter` for `chapter`); plain pandoc gives a JSON
+    filter neither."""
 
     number_sections: bool = False
     top_level_division: str = "default"
@@ -364,13 +382,13 @@ class Writer:
     secnumdepth: str | None = None  # (a variable, -V)
 
     @classmethod
-    def of(cls, options: Mapping[str, Any] | None) -> "Writer":
-        o = options or {}
+    def of(cls, conversion: Conversion) -> "Writer":
+        o = conversion.options if conversion.options is not None else conversion.writer_options or {}
         variables = o.get("variables") or {}
         depth = variables.get("secnumdepth")
         return cls(
             bool(o.get("number-sections", False)),
-            str(o.get("top-level-division", "default")),
+            str(o.get("top-level-division", "default")).removeprefix("top-level-"),
             list(o.get("number-offset") or []),
             None if depth is None else str(depth),
         )
@@ -874,6 +892,27 @@ def cite_to_ref(cite: Cite, options: Options) -> list[Inline] | None:
     return [Str("("), *out, Str(")")] if paren else out
 
 
+UNSAFE = (Math, Cite, Image, RawInline)
+
+
+def needs_brace(note: list[Inline]) -> bool:
+    """Whether a note holds math, a citation, an image or raw TeX, where a
+    `]` would end LaTeX's optional argument: the original braces it then."""
+    found = False
+    scan = Filter()
+
+    @scan.on(*UNSAFE)
+    def unsafe(_: Inline) -> None:
+        nonlocal found
+        found = True
+
+    for x in note:
+        if isinstance(x, UNSAFE):
+            return True
+        x.walk(scan)
+    return found
+
+
 def latex_environment(div: Div, options: Options) -> Div | None:
     """LaTeX: the div's own blocks between `\\begin{...}` and `\\end{...}`,
     sharing a line with the first and last paragraphs, in a bare div."""
@@ -882,9 +921,9 @@ def latex_environment(div: Div, options: Options) -> Div | None:
         return None
     opening: list[Inline] = [RawInline("latex", f"\\begin{{{theorem.env_name}}}")]
     if info := div.attributes.get("info"):
-        # (the original braces a note holding math, a citation, an image or
-        # raw TeX, where a ] would end it: a note of text has none)
-        opening += [RawInline("latex", "["), *note_inlines(info), RawInline("latex", "]")]
+        note = note_inlines(info)
+        brace = needs_brace(note)
+        opening += [RawInline("latex", "[{" if brace else "["), *note, RawInline("latex", "}]" if brace else "]")]
     if div.identifier:
         opening.append(RawInline("latex", f"\\label{{{div.identifier}}}"))
     closing = RawInline("latex", f"\\end{{{theorem.env_name}}}")
@@ -913,7 +952,7 @@ first, second = Filter(traverse="topdown"), Filter(traverse="topdown")
 @first.on(Pandoc)
 def configure(doc: Pandoc, ctx: Context) -> None:
     state.latex = ctx.format in LATEX_LIKE
-    options = state.options = read_options(doc.meta, Writer.of(ctx.conversion.options))
+    options = state.options = read_options(doc.meta, Writer.of(ctx.conversion))
     if any(c.depth >= c.first and options.numbered_depth < c.first for c in options.counters.values()):
         warn("theorems are numbered within sections that are not numbered, so their numbers start with 0 as in LaTeX; pass -N (--number-sections)")
     if state.latex:
