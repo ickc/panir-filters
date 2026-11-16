@@ -348,9 +348,9 @@ host, `HOSTS.md`):
 
 7,902 runs, none failing; why each known one is, `HOSTS.md` and each
 filter's `known.tsv`. In the directory sandbox (`run.py host --sandbox`,
-the two filters that read files, nine modes with the Lua originals): 302
-the original's, 24 known, 3 failing (H11, the Lua original's
-`include=""`, now known).
+the two filters that read files, nine modes with the Lua originals): 297
+the original's, 27 known (three of them H11, the Lua original's
+`include=""`), none failing.
 
 ## Inside a warm host
 

@@ -50,8 +50,9 @@ standalone, and amsthm's empty list item of pandoc's Lua), amsthm's notes where 
 and the hosts' own: every difference from the standalone result is one
 of the gaps below; none was worked around. In the directory sandbox
 (`--sandbox`: include-files and include-code-files in nine modes, the
-Lua originals among them), 302 runs the original's, 24 known (the wasm
-filters' and the reader's tabs, as outside it), and the three of H11.
+Lua originals among them), 297 runs the original's and 27 known: the
+wasm filters' and the reader's tabs, as outside it, and the three of H11;
+a JSON filter is refused there, status 83 (checked with pandocrs).
 
 ## The gaps, ranked
 

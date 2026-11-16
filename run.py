@@ -524,8 +524,9 @@ HOSTS = {
 
 # The modes `host --sandbox` runs (pandocjl's sandbox is on its branch
 # `sandbox`, not on main: `$PANDOCJL` there names a build of it).
+# (Not a JSON filter: the sandbox refuses it, status 83, documented.)
 SANDBOXED = ["pandocpy-lua", "pandocrs-lua", "pandocjl-lua", "pandocpy", "python-api", "pandocrs-wasm",
-             "pandocrs-native", "pandocpy-wasm", "pandocjl-wasm", "pandocjl"]
+             "pandocpy-wasm", "pandocjl-wasm", "pandocjl"]
 # What a case of the sandbox's reads from outside its directory: each
 # canary's marker (cases/outside/), by how it is named
 CANARIES = re.compile(rb"(?:CANARY|SECRET)-(DOTDOT|LINK|ABSOLUTE)")
