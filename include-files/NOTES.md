@@ -26,7 +26,7 @@ the canaries are in `cases/outside`.
 | | the reader | under plain pandoc (a JSON filter) |
 |---|---|---|
 | Python | `libpandoc.read(text, options=libpandoc.read_options(ctx.conversion, format))`: libpandoc in this process (pandocpy, `libpandoc.convert`) | libpandoc as a library in the filter's process, if installed; else it fails at start, saying so |
-| TypeScript | the `pandoc` command, a process a file (`execFileSync`), as pandocfilters and panflute filters do: no JavaScript host gives a filter the pandoc it runs in (`HOSTS.md`) | the same |
+| TypeScript | in libpandoc's JavaScript host, the instance the filter runs in: the port's `hosted(pandoc)` for panir's `libpandocFilter`, `pandoc.read(text, ctx.conversion, { from: format })` (H2, closed by libpandoc 1.13's JS host) | the `pandoc` command, a process a file (`execFileSync`), as pandocfilters and panflute filters do, without the document's reader options |
 | Rust | built for wasm32-wasip1, libpandoc-rs's `libpandoc::read_many` with `read_options(conversion)` and the format: calls to the host (pandocrs, pandocpy, pandocjl, libpandoc.wasm) | built natively it has none: it fails at the first file it would read, saying to build it for wasm (`run.py host` doesn't run it as `pandocrs-native`) |
 | Julia | `LibPandoc.read(text, ctx.conversion; from = format)`: LibPandoc.jl in this process (pandocjl, `LibPandoc.convert`) | LibPandoc as a library, if in the environment; else Julia's "package not found" |
 

@@ -31,13 +31,13 @@ does**, and braces it as the original does: Python with libpandoc
 `libpandoc.convert`, or libpandoc installed), Julia with LibPandoc.jl where
 its environment has it (pandocjl's), Rust built for wasm32-wasip1
 (`libpandoc::read`, the host's: pandocrs, pandocpy, pandocjl,
-libpandoc.wasm). A note that is not inlines (a list, two paragraphs) fails,
-as the original fails putting a block among inlines. TypeScript has none:
-no JavaScript host gives a filter the pandoc it runs in, and the `pandoc`
-command would cost a process a note (`HOSTS.md`).
+libpandoc.wasm), TypeScript in libpandoc's JavaScript host (the port's
+`hosted(pandoc)` for panir's `libpandocFilter`: `pandoc.read(info,
+"markdown")`, the instance it runs in). A note that is not inlines (a list,
+two paragraphs) fails, as the original fails putting a block among inlines.
 
-**Without a reader** (`run.py test`; a Rust JSON filter; TypeScript
-everywhere), a note of **plain text** is what pandoc's reader would make
+**Without a reader** (`run.py test`; a Rust JSON filter; TypeScript as a
+JSON filter, where the `pandoc` command would cost a process a note), a note of **plain text** is what pandoc's reader would make
 of it without reading: words of ASCII letters and digits or of any
 character that is not ASCII nor a space, a hyphen inside a word, one of
 `,;:?!` after one, single spaces between: a `Str` a word, a `Space`
