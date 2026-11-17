@@ -9,8 +9,9 @@ the ports are the means.
 Round 1 (filters that need only the AST) is chosen in
 [`SURVEY.md`](SURVEY.md) and listed, with each port's status, in
 [`filters.tsv`](filters.tsv). Rounds 2 and 3 (filters that read files and
-call pandoc: `include-files`, `include-code-files`, `multibib`, and
-amsthm's notes) test the hosts that run filters inside a pandoc
+call pandoc: `include-files`, `include-code-files`, `multibib`, amsthm's
+notes, and the owner's `pantable`, CSV tables with markdown cells read in
+one batch) test the hosts that run filters inside a pandoc
 conversion (libpandoc's bindings): what they lack is
 [`HOSTS.md`](HOSTS.md), and the round in a page
 [`ROUND2.md`](ROUND2.md). Ported so far: `caps`, `metavars`,
@@ -55,7 +56,9 @@ One folder per filter:
   original made of each under pandoc 3.14, one line per document and
   format (`{"name", "format", "input", "output"}`, `"env"` and
   `"options"` if any, or
-  `"error": true` where the original fails); committed, so the tests need
+  `"error": true` where the original fails, and `"needs": "pandoc"` from
+  `NAME.needs`, a case whose ports call pandoc where the filter's other
+  cases don't: only `run.py host` runs it); committed, so the tests need
   neither pandoc nor the
   original's runtime;
 - `python/`, `ts/`, `rust/`, `julia/`: the ports, each written as someone
@@ -64,7 +67,8 @@ One folder per filter:
   a port differs from its original;
 - `known.tsv`, if any: the differences `NOTES.md` explains (`language`,
   perhaps with the one mode it differs in, as `rust@pandocrs-wasm` or
-  `python@standalone`; case or document, perhaps with the one format it
+  `python@standalone`, and the one run, as `julia@pandocjl@host` (`run.py
+  host`, not `--sandbox`: `@sandbox`); case or document, perhaps with the one format it
   differs in, as `name (markdown)`; why); they don't fail a run, and one
   that stops differing does.
 
@@ -146,7 +150,8 @@ kept here.
 
 CI (`.github/workflows/ci.yml`) runs `run.py test` for the four languages
 on Linux, with `tsc`, pyright, rustfmt, clippy and `cargo test`, panir's main checked
-out beside this repository; it needs neither pandoc nor the originals.
+out beside this repository; it needs neither pandoc nor the originals
+(PyYAML for pantable's Python port, as its original).
 
 ## Licences
 
