@@ -22,14 +22,6 @@
 using Panir
 import LibPandoc
 
-"A number as Lua's `tonumber` reads text, decimal or hexadecimal, blanks around it; `nothing` if not one."
-function lua_number(text)
-    t = strip(text, [' ', '\t', '\n', '\v', '\f', '\r'])
-    occursin(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$", t) && return parse(Float64, t)
-    m = match(r"^([+-]?)0[xX]([0-9a-fA-F]+)$", t)
-    m === nothing ? nothing : (m[1] == "-" ? -1 : 1) * parse(Int, m[2]; base = 16)
-end
-
 # pandoc.path's functions, as pandoc has them (Haskell's System.FilePath,
 # POSIX): `normalize` drops `.` and doubled slashes but keeps `..`, unlike
 # Julia's normpath.
@@ -120,7 +112,8 @@ function (t::Transclude)(cb::CodeBlock, ctx)
         end
         contents = LibPandoc.read(text, ctx.conversion; from = format).blocks
         last_level[] = 0
-        walk!(Transclude(join_path(t.base, directory(line))), contents; format = ctx.conversion)
+        # (the walk of the included blocks knows this one's conversion)
+        walk!(Transclude(join_path(t.base, directory(line))), contents)
         last_level[] = before
         append!(blocks, walk!(Update(shift_by, directory(line)), contents))
     end

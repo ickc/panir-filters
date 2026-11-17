@@ -26,22 +26,12 @@ import re
 import sys
 
 from panir import Block, CodeBlock, Context, Filter, Header, Image, Link, Meta, main
+from panir import lua_number
 
 try:
     import libpandoc
 except ImportError:
     sys.exit("include-files: needs pandoc's reader, libpandoc (pip install libpandoc), to read the files it includes")
-
-
-def lua_number(text: str) -> float | None:
-    """A number as Lua's `tonumber` reads text: decimal or hexadecimal,
-    blanks around it; None if not one."""
-    text = text.strip(" \t\n\v\f\r")
-    if re.fullmatch(r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?", text):
-        return int(text) if text.lstrip("+-").isdigit() else float(text)
-    if re.fullmatch(r"[+-]?0[xX][0-9a-fA-F]+", text):
-        return int(text, 16)
-    return None
 
 
 # pandoc.path's functions, as pandoc has them (Haskell's System.FilePath,
@@ -135,8 +125,7 @@ def update_contents(blocks: list[Block], shift_by: float | None, include_path: s
         if path is not None and is_relative(path):
             cb.attributes["include"] = normalize(join(include_path, path))
 
-    blocks.walk(update)
-    return blocks
+    return update(blocks)  # (a list of blocks, walked in place)
 
 
 def transclusion(base: str) -> Filter:
@@ -172,7 +161,8 @@ def transclusion(base: str) -> Filter:
                 continue
             contents = libpandoc.read(text, options=libpandoc.read_options(ctx.conversion, fmt)).blocks
             state.last_level = 0
-            contents.walk(transclusion(join(base, directory(line))), conversion=ctx.conversion)
+            # (the walk of the included blocks knows this one's conversion)
+            contents.walk(transclusion(join(base, directory(line))))
             state.last_level = before
             blocks += update_contents(contents, shift_by, directory(line))
         return blocks

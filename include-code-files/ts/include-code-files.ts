@@ -12,17 +12,8 @@
 // MIT, see ../LICENSE).
 
 import { readFileSync } from "node:fs";
-import { getAttribute, removeAttribute, setAttribute } from "panir";
+import { getAttribute, luaNumber, removeAttribute, setAttribute } from "panir";
 import { runFilter } from "panir/node";
-
-/** A number as Lua's `tonumber` reads text: decimal or hexadecimal, blanks
- *  around it; undefined if not one. */
-function luaNumber(text: string): number | undefined {
-  const t = text.replace(/^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$/g, "");
-  if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return Number(t);
-  if (/^[+-]?0[xX][0-9a-fA-F]+$/.test(t)) return (t.startsWith("-") ? -1 : 1) * parseInt(t.replace(/^[+-]/, ""), 16);
-  return undefined;
-}
 
 /** Text as Lua's string functions take it for an integer argument. */
 function luaInteger(text: string, what: string): number {

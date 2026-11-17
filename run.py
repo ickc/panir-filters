@@ -90,11 +90,12 @@ def workdir(folder: Path) -> Path | None:
     return folder / cwd if cwd else None
 
 
-def needs_pandoc(folder: Path) -> bool:
+def needs_pandoc(folder: Path, case: dict | None = None) -> bool:
     """Whether a filter's ports call pandoc (`needs: pandoc` in its ORIGIN,
-    round 2's and 3's): then only `run.py host` runs them, `test` and
-    `diff` leave them out."""
-    return origin(folder).get("needs") == "pandoc"
+    round 2's and 3's), or, given a case, its ports do on that case
+    (`NAME.needs` beside it, `"needs": "pandoc"` in `expected.jsonl`):
+    then only `run.py host` runs them, `test` and `diff` leave them out."""
+    return origin(folder).get("needs") == "pandoc" or (case or {}).get("needs") == "pandoc"
 
 
 def chain(folder: Path) -> list[Path]:
@@ -153,6 +154,8 @@ def original(folder: Path) -> list[str]:
     if how[0] == "python":
         if len(chain(folder)) > 1:
             raise ValueError(f"{folder.name}: `after` is for Lua originals")
+        if how[1] == "-m":  # (a package's module, installed in $ORACLE_PYTHON)
+            return [env("ORACLE_PYTHON", "python3"), "-m", how[2]]
         return [env("ORACLE_PYTHON", "python3"), str(upstream / how[1])]
     if how[0] == "lua":
         lua = []
@@ -332,13 +335,22 @@ def check(cmds: list[list[str]] | Ran, case: dict, label: str, cwd: Path | None 
     return None
 
 
+def expected(folder: Path) -> list[dict]:
+    """cases/expected.jsonl: a case a line (split at newlines only: a
+    string may hold U+2028 or U+0085, which `str.splitlines` splits at)."""
+    text = (folder / "cases" / "expected.jsonl").read_text()
+    return [json.loads(line) for line in text.split("\n") if line]
+
+
 def known(folder: Path) -> dict[tuple[str, str], str]:
     """known.tsv: differences explained in NOTES.md, as `language, case or
     document, why`; the case or document perhaps with a format, `name
     (format)`, if it differs in that one only; the language perhaps with a
     mode, `python@standalone` (`run.py test` and `diff`), `rust@pandocrs-wasm`
-    (a host of `run.py host`), if it differs there only. They don't fail a
-    run; one that no longer differs does."""
+    (a host of `run.py host`), if it differs there only, and perhaps with
+    the run, `julia@pandocjl@host` (`run.py host`) or `@sandbox` (`run.py
+    host --sandbox`). They don't fail a run; one that no longer differs
+    does."""
     path = folder / "known.tsv"
     if not path.exists():
         return {}
@@ -351,12 +363,14 @@ class Tally:
         self.verbose, self.passed, self.failed, self.known = verbose, 0, 0, 0
 
     def add(self, folder: Path, lang: str, name: str, fmt: str, label: str, problem: str | None,
-            mode: str = "standalone") -> None:
-        """A run's result; `known.tsv`'s rows for its language and mode
-        (`rust@pandocrs-wasm`), then for its language in every mode
-        (`rust`)."""
+            mode: str = "standalone", run: str | None = None) -> None:
+        """A run's result; `known.tsv`'s rows for its language, mode and run
+        (`julia@pandocjl@host`: `run.py host` but not `--sandbox`, which is
+        `@sandbox`), then for its language and mode (`rust@pandocrs-wasm`),
+        then for its language in every mode (`rust`)."""
         listed = known(folder)
-        keys = [(who, case) for who in (f"{lang}@{mode}", lang) for case in (f"{name} ({fmt})", name)]
+        whos = ([f"{lang}@{mode}@{run}"] if run else []) + [f"{lang}@{mode}", lang]
+        keys = [(who, case) for who in whos for case in (f"{name} ({fmt})", name)]
         why = next((listed[k] for k in keys if k in listed), None)
         if problem and why:
             self.known += 1
@@ -388,7 +402,7 @@ def julia_in_one(jobs: list[tuple[list[str], dict, Path | None]]) -> list[Ran]:
                     for scripts, case, cwd in jobs)
     driver = [env("JULIA", "julia"), f"--project={ROOT}", "--startup-file=no", str(ROOT / "julia-cases.jl")]
     ran = run(driver, lines.encode(), environ=port_env(), runs=len(jobs))
-    results = ran.out.decode().splitlines()
+    results = ran.out.decode().split("\n")[:-1]  # (newlines only: an output may hold U+2028)
     if ran.code != 0 or len(results) != len(jobs):
         sys.exit(f"julia-cases.jl failed (exit {ran.code}): {ran.err.decode(errors='replace')[-2000:]}")
     out = []
@@ -407,10 +421,10 @@ def cmd_test(args: argparse.Namespace) -> int:
     tally = Tally(args.verbose)
     runs = []  # (folder, lang, case, the port's command, or what it made)
     for folder in filters(args.filters):
-        cases = [json.loads(line) for line in (folder / "cases" / "expected.jsonl").read_text().splitlines()]
+        cases = expected(folder)
         for lang in langs:
             for case in cases:
-                if needs_pandoc(folder):
+                if needs_pandoc(folder, case):
                     continue
                 cmds = ports(folder, lang, "options" in case)
                 if cmds is not None:
@@ -603,6 +617,10 @@ def in_host(cmd: list[str], files: list[str], case: dict, cwd: Path | None = Non
         out = Path(tmp) / "out" if sandbox else os.devnull
         args = [*cmd, *options, "-f", "json", "-t", case["format"], "-o", str(out), *filters, "-L", lua[-1], str(doc)]
         environ = {**os.environ, **case.get("env", {})}
+        if cmd[0].endswith("julia") and "JULIA_LOAD_PATH" not in os.environ:
+            # a Julia script's packages (pantable's YAML.jl...) are loaded from
+            # pandocjl's environment: this project's after it (HOSTS.md, H16)
+            environ["JULIA_LOAD_PATH"] = os.pathsep.join(["@", str(ROOT), "@stdlib"])
         if sandbox:
             environ |= {"LIBPANDOC_SANDBOX": str(cwd or tmp), "LIBPANDOC_SANDBOX_WRITE": tmp}
         return run(args, b"", cwd=cwd or (Path(tmp) if sandbox else None), environ=environ)
@@ -613,7 +631,7 @@ def in_driver(cmd: list[str], jobs: list[dict]) -> list[Ran]:
     `{"scripts" or "wasm": [...], "format", "options", "env", "input"}`."""
     lines = "".join(json.dumps(job, ensure_ascii=False) + "\n" for job in jobs)
     ran = run(cmd, lines.encode(), environ=os.environ.copy(), runs=len(jobs))
-    results = ran.out.decode().splitlines()
+    results = ran.out.decode().split("\n")[:-1]  # (newlines only: an output may hold U+2028)
     if ran.code != 0 or len(results) != len(jobs):
         sys.exit(f"{cmd[-1]} failed (exit {ran.code}): {ran.err.decode(errors='replace')[-2000:]}")
     out = []
@@ -649,8 +667,6 @@ def cmd_host(args: argparse.Namespace) -> int:
         subprocess.run(["cargo", "build", "--release", "--quiet", "--target", "wasm32-wasip1"], cwd=ROOT, check=True)
     tally = Tally(args.verbose)
     probes = []  # (filter, mode, case, what it read from outside), with --sandbox
-    if env("PANDOC"):  # (a port running the `pandoc` command runs this one)
-        os.environ["PATH"] = os.pathsep.join([str(Path(env("PANDOC")).parent), env("PATH", "")])
     for mode in modes:
         lang = HOSTS[mode][0]
         cmd = host_command(mode)
@@ -667,11 +683,16 @@ def cmd_host(args: argparse.Namespace) -> int:
             if mode == "pandocrs-native" and needs_pandoc(folder):
                 print(f"note: {folder.name} rust@{mode} skipped: a JSON filter has no pandoc to call (NOTES.md)")
                 continue
-            for line in (folder / "cases" / "expected.jsonl").read_text().splitlines():
-                case = json.loads(line)
+            skipped = 0
+            for case in expected(folder):
+                if mode == "pandocrs-native" and needs_pandoc(folder, case):
+                    skipped += 1
+                    continue
                 runs.append((folder, case, files))
                 if args.sandbox and case["name"] == "outside":
                     runs.append((folder, absolute_probe(folder, case), files))
+            if skipped:
+                print(f"note: {skipped} cases of {folder.name} skipped in {mode}: a JSON filter has no pandoc to call")
         if mode in ("python-api", "node", "node-wasm"):
             key = "wasm" if mode == "node-wasm" else "scripts"
             jobs = [{key: files, "format": case["format"], "options": case.get("options", {}),
@@ -688,7 +709,8 @@ def cmd_host(args: argparse.Namespace) -> int:
                 what = f"failed: {ran.err.decode(errors='replace').strip()[-160:]}" if ran.code else ", ".join(read) or "nothing"
                 probes.append((folder.name, mode, case["name"], what))
                 continue
-            tally.add(folder, lang, case["name"], case["format"], label, check(ran, case, label), mode)
+            tally.add(folder, lang, case["name"], case["format"], label, check(ran, case, label), mode,
+                      "sandbox" if args.sandbox else "host")
     if probes:
         print("\nWhat each read from outside its directory (cases outside and outside-absolute):")
         print("| filter | host | case | read |\n|---|---|---|---|")
@@ -706,9 +728,12 @@ def cmd_expect(args: argparse.Namespace) -> int:
             environ = case_env(md)
             defaults = md.with_suffix(".opts")
             options = {"options": json.loads(defaults.read_text())} if defaults.exists() else {}
+            needs = md.with_suffix(".needs")
+            needs = {"needs": needs.read_text().strip()} if needs.exists() else {}
             for fmt in formats(folder):
                 ran = run_original(folder, data, fmt, environ=environ, defaults=defaults if options else None)
-                case = {"name": md.stem, "format": fmt, **({"env": environ} if environ else {}), **options, "input": json.loads(data)}
+                case = {"name": md.stem, "format": fmt, **({"env": environ} if environ else {}), **options, **needs,
+                        "input": json.loads(data)}
                 if ran.code != 0:
                     case["error"] = True
                     print(f"{folder.name} {md.stem} ({fmt}): the original fails (expected so)")
@@ -770,7 +795,16 @@ def main() -> int:
     p.add_argument("--lang")
     p.add_argument("--repeat", type=int, default=3)
     args = ap.parse_args()
-    return {"test": cmd_test, "diff": cmd_diff, "expect": cmd_expect, "host": cmd_host, "time": cmd_time}[args.command](args)
+    command = {"test": cmd_test, "diff": cmd_diff, "expect": cmd_expect, "host": cmd_host, "time": cmd_time}[args.command]
+    if not env("PANDOC"):
+        return command(args)
+    # a port or an original running the `pandoc` command runs this one: a
+    # directory of that one name first on PATH (not $PANDOC's own directory,
+    # whose other programs, a python3 among them, would come first too)
+    with tempfile.TemporaryDirectory() as shim:
+        (Path(shim) / "pandoc").symlink_to(Path(env("PANDOC")).resolve())
+        os.environ["PATH"] = os.pathsep.join([shim, env("PATH", "")])
+        return command(args)
 
 
 if __name__ == "__main__":

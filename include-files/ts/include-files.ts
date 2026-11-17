@@ -12,27 +12,43 @@
 // rewritten relative to the including one.
 //
 // Reading the files is Node's; parsing them is pandoc's (`pandoc.read` in
-// the original). No JavaScript host gives a filter the pandoc it runs in,
-// so this one runs the `pandoc` command, as pandocfilters and panflute
-// filters do: a process for each file, which reads it as the command reads
-// its input, without the document's reader options.
+// the original): in libpandoc's JavaScript host, the instance the filter runs
+// in (`hosted`, for panir's `libpandocFilter`), which reads a file as the
+// conversion reads its input (`pandoc.read(text, ctx.conversion)`: its reader
+// options, its tabs kept, in pandoc's sandbox when the conversion is
+// sandboxed); run as a JSON filter, the `pandoc` command, as pandocfilters
+// and panflute filters do: a process for each file, which reads it as the
+// command reads its input, without the document's reader options.
 //
 // A port of pandoc-ext/include-files (© 2019–2021 Albert Krewinkel; MIT,
 // see ../LICENSE).
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { applyFilter, getAttribute, parse, setAttribute, truthy, type Block, type Filter, type Header } from "panir";
+import { pathToFileURL } from "node:url";
+import {
+  applyFilter, fromJSON, getAttribute, luaNumber, parse, setAttribute, truthy,
+  type Block, type Conversion, type Filter, type Header, type Pandoc,
+} from "panir";
 import { runFilter } from "panir/node";
 
-/** A number as Lua's `tonumber` reads text: decimal or hexadecimal, blanks
- *  around it; undefined if not one. */
-function luaNumber(text: string): number | undefined {
-  const t = text.replace(/^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$/g, "");
-  if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return Number(t);
-  if (/^[+-]?0[xX][0-9a-fA-F]+$/.test(t)) return (t.startsWith("-") ? -1 : 1) * parseInt(t.replace(/^[+-]/, ""), 16);
-  return undefined;
+/** What parses a file's text in a format, in the conversion the filter runs in. */
+type Reader = (text: string, format: string, conversion: Conversion) => Pandoc;
+
+/** libpandoc's JavaScript host, as much as this filter uses of it. */
+interface Host {
+  read(text: string, from: unknown, options?: Record<string, unknown>): unknown;
 }
+
+/** The `pandoc` command: a process a file, which reads it as the command
+ *  reads its input. */
+const byCommand: Reader = (text, format) =>
+  parse(execFileSync("pandoc", ["-f", format, "-t", "json"], { input: text }).toString("utf8"));
+
+/** The instance of libpandoc's JavaScript host the filter runs in: as the
+ *  conversion reads its input, in another format. */
+const byHost = (pandoc: Host): Reader => (text, format, conversion) =>
+  fromJSON(pandoc.read(text, conversion, { from: format })) as Pandoc;
 
 // pandoc.path's functions, as pandoc has them (Haskell's System.FilePath,
 // POSIX): `normalize` drops `.` and doubled slashes but keeps `..`, unlike
@@ -97,11 +113,11 @@ function updateContents(blocks: Block[], shiftBy: number | undefined, includePat
 
 /** The filter including files, for blocks of a file in `base` (the original
  *  changes the working directory to it: here the names are joined to it, as
- *  the working directory is the process's). */
-function transclusion(base: string): Filter {
+ *  the working directory is the process's), parsed by `read`. */
+function transclusion(base: string, read: Reader): Filter {
   return {
     Header: updateLastLevel,
-    CodeBlock: (cb) => {
+    CodeBlock: (cb, ctx) => {
       if (!cb.attr.classes.includes("include")) return;
       const format = getAttribute(cb.attr, "format") || "markdown";
       const shiftInput = getAttribute(cb.attr, "shift-heading-level-by");
@@ -119,9 +135,10 @@ function transclusion(base: string): Filter {
           process.stderr.write(`Cannot open file ${line} | Skipping includes\n`);
           continue;
         }
-        const read = parse(execFileSync("pandoc", ["-f", format, "-t", "json"], { input: text }).toString("utf8"));
+        const doc = read(text.toString("utf8"), format, ctx.conversion);
         lastLevel = 0;
-        const contents = applyFilter(read.blocks, transclusion(join(base, directory(line))));
+        // (the walk of the included blocks knows this one's conversion)
+        const contents = applyFilter(doc.blocks, transclusion(join(base, directory(line)), read));
         lastLevel = before;
         blocks.push(...updateContents(contents, shiftBy, directory(line)));
       }
@@ -130,7 +147,8 @@ function transclusion(base: string): Filter {
   };
 }
 
-await runFilter([
+/** The filters, parsing with `read`. */
+const filters = (read: Reader): Filter[] => [
   {
     // (for each document: a host may run this filter on many, where Lua
     // loads the original anew for each)
@@ -139,5 +157,12 @@ await runFilter([
       lastLevel = 0;
     },
   },
-  transclusion(""),
-]);
+  transclusion("", read),
+];
+
+/** For libpandoc's JavaScript host, given the instance the filter runs in
+ *  (`libpandocFilter(hosted)`): reading with it. */
+export const hosted = (pandoc: Host): Filter[] => filters(byHost(pandoc));
+
+// run as a JSON filter (the main module): the pandoc command reads
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await runFilter(filters(byCommand));

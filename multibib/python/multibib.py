@@ -21,7 +21,7 @@ import re
 import sys
 import warnings
 
-from panir import Cite, Context, Div, Filter, Meta, MetaList, MetaMap, MetaString, Pandoc, Para, dumps, loads, main, stringify
+from panir import Cite, Context, Div, Filter, Meta, MetaList, MetaMap, MetaString, MetaValue, Pandoc, Para, dumps, loads, main, stringify
 
 try:
     import libpandoc
@@ -42,7 +42,7 @@ def citeproc(doc: Pandoc) -> Pandoc:
 
 class State:
     cites: list[Cite]  # every citation of the document
-    meta = Meta()  # the document's metadata, as the first pass saw it
+    meta: dict[str, MetaValue] = {}  # the document's metadata, as the first pass saw it
     refs: Div | None = None  # the bibliography's div, as citeproc made it
 
 
@@ -73,10 +73,12 @@ def resolve_doc_citations(doc: Pandoc) -> Pandoc:
     given = doc.meta.get("bibliography")
     # (Lua's pandoc.utils.type: a map is a "table"; its values in any order)
     files = [MetaString(stringify(v)) for v in given.content.values()] if isinstance(given, MetaMap) else []
-    doc.meta["bibliography"] = MetaList(*files)  # (MetaList([...]) is a list in a list)
+    doc.meta["bibliography"] = MetaList(*files)  # (its items as arguments: MetaList([...]) is an error)
     doc.blocks.append(Div(identifier="refs"))
     doc = citeproc(doc)
-    state.refs = doc.blocks.pop()
+    refs = doc.blocks.pop()
+    assert isinstance(refs, Div)  # (the one appended above, as citeproc filled it)
+    state.refs = refs
     # (the original restores `orig_bib`, which it never set: the field goes)
     doc.meta.pop("bibliography", None)
     return doc
@@ -90,7 +92,7 @@ def create_topic_bibliography(div: Div, ctx: Context) -> Div | None:
     bibfile = bibliography.content.get(m[1]) if m and isinstance(bibliography, MetaMap) else None
     if bibfile is None:
         return None
-    meta = Meta({k: copy.deepcopy(state.meta[k]) for k in FIELDS if k in state.meta})
+    meta: dict[str, MetaValue] = {k: copy.deepcopy(state.meta[k]) for k in FIELDS if k in state.meta}
     meta["bibliography"] = copy.deepcopy(bibfile)
     res = citeproc(Pandoc(Para(*copy.deepcopy(state.cites)), Div(identifier="refs"), meta=meta))
     div.content = res.blocks[1].content

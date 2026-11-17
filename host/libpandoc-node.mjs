@@ -4,12 +4,13 @@
 // (pandoc's JSON) to its format, with its options (defaults-file keys) and
 // environment, and as filters
 //
-// - TypeScript ports (mode `node`): JS filter functions; each port's script
-//   imported anew for each case (as a new process would run it), its
-//   `runFilter` from "panir/node" handing its filter over (handoff.mjs); a
-//   function on pandoc's JSON text and the callback's context, which runs
-//   the panir filter with a Conversion made of that context (glue every user
-//   writes: the host has none);
+// - TypeScript ports (mode `node`): JS filter functions, panir's
+//   `libpandocFilter` of each port's filters, with the case's options as the
+//   conversion's; each port's script imported anew for each case (as a new
+//   process would run it), its `runFilter` from "panir/node" handing its
+//   filter over (handoff.mjs), or, for a port that calls pandoc, its
+//   `hosted` export, a function of the instance (which libpandocFilter
+//   gives it) returning its filters;
 // - Rust ports built for wasm32-wasip1 (mode `node-wasm`): libpandoc's
 //   wasm-filter.mjs, given this pandoc for the filter's calls;
 //
@@ -26,7 +27,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
-import { applyFilter, Conversion, parse, serialize } from "panir";
+import { libpandocFilter } from "panir";
 
 register("data:text/javascript," + encodeURIComponent(`
   export async function resolve(specifier, context, next) {
@@ -37,38 +38,28 @@ register("data:text/javascript," + encodeURIComponent(`
 const nodeHost = process.env.LIBPANDOC_NODE;
 const { load } = await import(pathToFileURL(nodeHost).href);
 const { wasmFilter } = await import(pathToFileURL(join(dirname(nodeHost), "wasm-filter.mjs")).href);
-const pandoc = await load(process.env.LIBPANDOC_WASM);
+// the instance sees this repository's files where they are (the cases'
+// bibliographies, for a filter's citeproc), its working directory each
+// case's
+const ROOT = dirname(dirname(new URL(import.meta.url).pathname));
+const pandoc = await load(process.env.LIBPANDOC_WASM, { preopens: { [ROOT]: ROOT } });
 globalThis.panirFiltersHandoff = [];
 let n = 0;
 
-/** The filters a TypeScript port hands over, its script run anew. */
+/** The filters a TypeScript port hands over, its script run anew: its
+ *  `hosted` (a function of the instance) if it has one. */
 async function handedOver(script) {
   globalThis.panirFiltersHandoff = [];
-  await import(`${pathToFileURL(script).href}?case=${n++}`);
+  const port = await import(`${pathToFileURL(script).href}?case=${n++}`);
+  if (typeof port.hosted === "function") return port.hosted;
   const handed = globalThis.panirFiltersHandoff;
   if (!handed.length) throw new Error(`${script} hands no filter over`);
   return handed.flatMap((f) => (Array.isArray(f) ? f : [f]));
 }
 
-/** A JS filter function running panir filters, in the conversion the
- *  callback's context describes. */
-function panirFilter(filters) {
-  return (doc, context) => {
-    const ctx = JSON.parse(context);
-    const conversion = new Conversion({
-      format: ctx.format,
-      inputFormat: ctx["input-format"],
-      outputFormat: ctx["output-format"],
-      readerOptions: ctx["reader-options"],
-      writerOptions: ctx["writer-options"],
-    });
-    return serialize(applyFilter(parse(doc), filters, conversion));
-  };
-}
-
 async function run(job) {
   const fns = [];
-  for (const script of job.scripts ?? []) fns.push(panirFilter(await handedOver(script)));
+  for (const script of job.scripts ?? []) fns.push(libpandocFilter(await handedOver(script), job.options));
   for (const path of job.wasm ?? []) fns.push(await wasmFilter(readFileSync(path), { pandoc, name: path }));
   let kept;
   fns.push((doc) => (kept = doc));
@@ -76,6 +67,7 @@ async function run(job) {
   Object.assign(process.env, job.env ?? {});
   const here = process.cwd();
   process.chdir(job.cwd); // (the case's files are named relative to it)
+  pandoc.chdir(job.cwd);
   try {
     pandoc.convertWithFilters({ ...job.options, from: "json", to: job.format }, JSON.stringify(job.input), fns, { raw: true, bytes: true });
   } finally {

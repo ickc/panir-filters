@@ -23,7 +23,7 @@ and docx (the original names Word's bibliography style). They run in
 | | citeproc | under plain pandoc |
 |---|---|---|
 | Python | `libpandoc.convert(json, from_="json", to="json", citeproc=True)`, its warnings silenced (`pandoc.log.silence` in the original) | libpandoc as a library, if installed |
-| TypeScript | the `pandoc` command with `--citeproc --quiet` on the JSON, a process a call (as the original does where pandoc's Lua has no citeproc) | the same |
+| TypeScript | in libpandoc's JavaScript host, the instance the filter runs in (the port's `hosted(pandoc)` for panir's `libpandocFilter`): `pandoc.convert({from: "json", to: "json", citeproc: true}, json)`, its warnings in its log | the `pandoc` command with `--citeproc --quiet` on the JSON, a process a call (as the original does where pandoc's Lua has no citeproc) |
 | Rust | built for wasm, `libpandoc::convert` with `"citeproc": true`, the host's | none: it fails, saying to build it for wasm |
 | Julia | `LibPandoc.convert(json; from = "json", to = "json", citeproc = true)`, its log silenced (`NullLogger`) | LibPandoc as a library, if in the environment |
 

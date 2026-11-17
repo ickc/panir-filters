@@ -1,0 +1,69 @@
+# language	case or document	why (NOTES.md)
+python	table-width-inf	the original fails: panflute writes the infinite width as `Infinity`, not JSON, which pandoc refuses; panir writes `"+inf"`, which pandoc reads (NOTES.md, for upstream)
+ts	table-width-inf	the original fails: panflute writes the infinite width as `Infinity`, not JSON, which pandoc refuses; panir writes `"+inf"`, which pandoc reads (NOTES.md, for upstream)
+rust	table-width-inf	the original fails: panflute writes the infinite width as `Infinity`, not JSON, which pandoc refuses; panir writes `"+inf"`, which pandoc reads (NOTES.md, for upstream)
+julia	table-width-inf	the original fails: panflute writes the infinite width as `Infinity`, not JSON, which pandoc refuses; panir writes `"+inf"`, which pandoc reads (NOTES.md, for upstream)
+ts	caption-odd	YAML: the yaml package's YAML 1.1 reads the key `n` as false (as the 1.1 spec's booleans have it); PyYAML keeps `n` and `y` text (NOTES.md, YAML)
+ts	yaml-parser-error	YAML: the yaml package's errors aren't PyYAML's scanner and parser errors: the port leaves the block as it is (the original's way with a scanner error), where PyYAML's parser error fails the original (NOTES.md, YAML)
+ts	yaml-values	YAML: the yaml package reads `1e3` as a float (1000.0); PyYAML's YAML 1.1 wants a dot in one, so text (NOTES.md, YAML)
+rust	caption	YAML: yaml-rust2 reads YAML 1.2: `yes` is text; PyYAML's YAML 1.1 reads True (NOTES.md, YAML)
+rust	yaml-blocks	YAML: yaml-rust2 refuses a key given twice (the port leaves the block as it is), PyYAML takes the later; and the csv crate skips a blank line inside the data (NOTES.md, YAML, CSV)
+rust	yaml-parser-error	YAML: yaml-rust2's errors aren't PyYAML's scanner and parser errors: the port leaves the block as it is, where PyYAML's parser error fails the original (NOTES.md, YAML)
+rust	yaml-tag	YAML: yaml-rust2 takes an unknown tag (`!!python/name:os.system`, its value read as it is); PyYAML's safe loader refuses it and the original fails (NOTES.md, YAML)
+rust	yaml-values	YAML: yaml-rust2 reads YAML 1.2: `010` is 10, `1:30` and `1_000` text, `1e3` 1000.0, `on` and `Off` text; PyYAML's 1.1: 8, 90, 1000, text, True, False (NOTES.md, YAML)
+rust	md-switch	YAML: yaml-rust2 reads YAML 1.2: `markdown: no` is the text `no`, true as Python's bool, so the cells are read as markdown (NOTES.md, YAML)
+julia	alignment	Julia's `uppercase` is Unicode's simple case mapping: `ß` stays one letter, not ASCII, so every column is default; Python's `str.upper` makes it `SS` (NOTES.md)
+julia	caption	YAML: YAML.jl reads `yes` as text; PyYAML True (NOTES.md, YAML)
+julia	yaml-scanner-error	YAML: YAML.jl reports `caption: a: b` as a parser error, PyYAML as a scanner error (the original leaves the block as it is): the port fails (NOTES.md, YAML)
+julia	yaml-values	YAML: YAML.jl reads `1:30` and `1_000` as text, `1e3` as 1000.0, `on` and `Off` as text; PyYAML's 1.1: 90, 1000, text, True, False (NOTES.md, YAML)
+ts	csv-kwargs	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+ts	csv-kwargs-dialect	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+ts	csv-kwargs-multichar	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+ts	csv-kwargs-nonnumeric	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+ts	csv-kwargs-unknown	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+ts	example-include	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the documentation's example sets a delimiter and skipinitialspace)
+rust	csv-kwargs	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+rust	csv-kwargs-dialect	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+rust	csv-kwargs-multichar	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+rust	csv-kwargs-nonnumeric	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+rust	csv-kwargs-unknown	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+rust	example-include	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the documentation's example sets a delimiter and skipinitialspace)
+julia	csv-kwargs	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+julia	csv-kwargs-dialect	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+julia	csv-kwargs-multichar	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+julia	csv-kwargs-nonnumeric	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+julia	csv-kwargs-unknown	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+julia	example-include	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the documentation's example sets a delimiter and skipinitialspace)
+rust	csv-kwargs-strict	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+ts	csv-quoting	CSV at csv-parse's defaults (owner's decision): it refuses a quote inside an unquoted field (`a"b`), which Python's csv reads
+ts	csv-unterminated	CSV at csv-parse's defaults (owner's decision): it refuses a quote never closed, which Python's csv reads to the end of the data
+rust	csv-quoting	CSV at the csv crate's defaults (owner's decision): it skips a blank line, which Python's csv reads as an empty row
+rust	ragged	CSV at the csv crate's defaults (owner's decision): it skips a blank line, which Python's csv reads as an empty row
+rust	include-encoding	CSV at the csv crate's defaults (owner's decision): it drops a UTF-8 byte-order mark at the start of its input, which Python's `utf-8` keeps in the first cell
+julia	csv-quoting	CSV at DelimitedFiles' defaults (owner's decision): it refuses text after a closing quote (`"c"d`), which Python's csv reads as `cd`
+julia	csv-unterminated	CSV at DelimitedFiles' defaults (owner's decision): it refuses a quote never closed, which Python's csv reads to the end of the data
+julia	ragged	CSV at DelimitedFiles' defaults (owner's decision): it skips a blank line, which Python's csv reads as an empty row
+julia	yaml-blocks	CSV at DelimitedFiles' defaults (owner's decision): it skips a blank line inside the data, which Python's csv reads as an empty row
+python	md-blocks	the original reads a table's texts as one document (its cells joined in divs): headings' identifiers are made unique across the cells (`a-heading-1`); the ports read each text on its own, in one read_many (NOTES.md)
+python	md-notes	the original reads a table's texts as one document: a note or a reference link defined in one cell resolves in another; the ports read each text on its own, in one read_many (NOTES.md)
+python	md-break	the original fails: a cell holding a line `:::` closes its div in the joined document (a panflute type error); the ports read each text on its own (NOTES.md, for upstream)
+ts	md-blocks	the original reads a table's texts as one document (its cells joined in divs): headings' identifiers are made unique across the cells (`a-heading-1`); the ports read each text on its own, in one read_many (NOTES.md)
+ts	md-notes	the original reads a table's texts as one document: a note or a reference link defined in one cell resolves in another; the ports read each text on its own, in one read_many (NOTES.md)
+ts	md-break	the original fails: a cell holding a line `:::` closes its div in the joined document (a panflute type error); the ports read each text on its own (NOTES.md, for upstream)
+rust	md-blocks	the original reads a table's texts as one document (its cells joined in divs): headings' identifiers are made unique across the cells (`a-heading-1`); the ports read each text on its own, in one read_many (NOTES.md)
+rust	md-notes	the original reads a table's texts as one document: a note or a reference link defined in one cell resolves in another; the ports read each text on its own, in one read_many (NOTES.md)
+rust	md-break	the original fails: a cell holding a line `:::` closes its div in the joined document (a panflute type error); the ports read each text on its own (NOTES.md, for upstream)
+julia	md-blocks	the original reads a table's texts as one document (its cells joined in divs): headings' identifiers are made unique across the cells (`a-heading-1`); the ports read each text on its own, in one read_many (NOTES.md)
+julia	md-notes	the original reads a table's texts as one document: a note or a reference link defined in one cell resolves in another; the ports read each text on its own, in one read_many (NOTES.md)
+julia	md-break	the original fails: a cell holding a line `:::` closes its div in the joined document (a panflute type error); the ports read each text on its own (NOTES.md, for upstream)
+rust@pandocrs-wasm	outside	a wasm filter sees the working directory only, read-only: not a file through .., nor through a symbolic link leaving it (HOSTS.md)
+rust@pandocpy-wasm	outside	a wasm filter sees the working directory only, read-only: not a file through .., nor through a symbolic link leaving it (HOSTS.md)
+rust@pandocjl-wasm	outside	a wasm filter sees the working directory only, read-only: not a file through .., nor through a symbolic link leaving it (HOSTS.md)
+rust@node-wasm	outside	a wasm filter sees the working directory only, read-only: not a file through .., nor through a symbolic link leaving it (HOSTS.md)
+rust@pandocjl-wasm@host	big-markdown	pandocjl cuts a Lua filter's writes to a pipe at 65,536 bytes (run.py's capture.lua): the port gives the original's result written to a file (HOSTS.md, H17)
+rust@pandocjl-wasm@host	big-text	pandocjl cuts a Lua filter's writes to a pipe at 65,536 bytes (run.py's capture.lua): the port gives the original's result written to a file (HOSTS.md, H17)
+rust@pandocjl-wasm@host	readme	pandocjl cuts a Lua filter's writes to a pipe at 65,536 bytes (run.py's capture.lua): the port gives the original's result written to a file (HOSTS.md, H17)
+julia@pandocjl@host	big-markdown	pandocjl cuts a Lua filter's writes to a pipe at 65,536 bytes (run.py's capture.lua): the port gives the original's result written to a file (HOSTS.md, H17)
+julia@pandocjl@host	big-text	pandocjl cuts a Lua filter's writes to a pipe at 65,536 bytes (run.py's capture.lua): the port gives the original's result written to a file (HOSTS.md, H17)
+julia@pandocjl@host	readme	pandocjl cuts a Lua filter's writes to a pipe at 65,536 bytes (run.py's capture.lua): the port gives the original's result written to a file (HOSTS.md, H17)
+julia	md-switch	YAML: YAML.jl reads `markdown: no` as the text `no`, true as Python's bool, so the cells are read as markdown (NOTES.md, YAML)

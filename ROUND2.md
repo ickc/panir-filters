@@ -47,8 +47,17 @@ its `main` against libpandoc 1.12 (`HOSTS.md` has the commits).
   in every native host, six times `pandoc.read`'s, and batched
   (`read_many`, which every host but JavaScript's offers a filter) less
   than Lua's loop (H15).
-- **Not done**: pantable (the owner's; BSD-3, its CSV core round 2's, its
-  markdown cells round 3's): not started, for time.
+- **pantable** (the owner's; BSD-3-Clause; 2026-11-17, on libpandoc 1.13
+  and panir 0.2): CSV in a code block with YAML options made a table, in
+  the four languages, 80 cases (its own tests and examples among them).
+  Its `include` is round 2's, its markdown cells round 3's, and the first
+  port that **batches**: the original reads a table's texts in one
+  `pandoc` process, as one document of divs; the ports read them with one
+  `read_many` (`pantable/NOTES.md` has what the joined document did that
+  the ports don't). CSV and YAML are each language's library (the owner
+  ruled out replicating Python's `csv` module: `csv-kwargs` is Python's
+  only); `pantable2csv` left out. Its bugs, for the owner, in its
+  `NOTES.md`.
 
 ## What the hosts lack
 
@@ -66,9 +75,14 @@ and none in Node; H8 nor the process's environment; H9 to H13 smaller
 a host, WASI's empty name, binary output in JavaScript, `pandocjl`'s
 `main` ignoring `LIBPANDOC_SANDBOX`); H14 every filter in a host is handed
 the whole document as JSON (the cost, not the process, is pandoc's
-encoding), H15 a call into pandoc costs six times `pandoc.read`'s. And in panir (`GAPS.md` 41 to 44):
-pandoc.path's functions, Lua's `tonumber`, a fragment's walk that forgets
-the conversion, Python's list constructors.
+encoding), H15 a call into pandoc costs six times `pandoc.read`'s; with
+pantable, H16 a Julia script's packages come only from `pandocjl`'s load
+path, H17 `pandocjl` cuts a Lua filter's output to a pipe at 64 KiB, H18
+`read_many`'s errors name a text by its place in the batch. And in panir
+(`GAPS.md` 41 to 46): pandoc.path's functions, Lua's `tonumber`, a
+fragment's walk that forgets the conversion, Python's list constructors,
+and with pantable a table from a grid of cells and a parser of pandoc's
+attribute syntax.
 
 ## Time inside a host
 

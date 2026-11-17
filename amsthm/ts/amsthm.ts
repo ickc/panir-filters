@@ -12,22 +12,29 @@
 // symbol, and makes citations of them links.
 //
 // A div's `info` is its note, `Theorem 1 (note)`, which the original reads as
-// markdown with pandoc. This port has no markdown reader (no JavaScript host
-// gives a filter the pandoc it runs in; running the `pandoc` command for each
-// note costs a process a note): a note of plain text (words of letters and
-// digits, a hyphen inside a word, and `,;:?!` after one, single spaces
-// between) is read as pandoc reads it; any other is kept as its text, with a
-// warning.
+// markdown with pandoc: in libpandoc's JavaScript host this port does too,
+// with the instance it runs in (`hosted`, for panir's `libpandocFilter`).
+// Run as a JSON filter it has no reader (the `pandoc` command would cost a
+// process a note): a note of plain text (words of letters and digits, a
+// hyphen inside a word, and `,;:?!` after one, single spaces between) is
+// read as pandoc reads it; any other is kept as its text, with a warning.
 //
 // A port of ickc/pandoc-amsthm's amsthm.lua (Copyright (c) 2016-2026, Kolen
 // Cheung; BSD-3-Clause, see ../LICENSE).
 
+import { pathToFileURL } from "node:url";
 import {
-  applyFilter, copy, Div, Emph, getAttribute, given, inlines, inlinesOf, items, LineBreak, Link, Math as MathNode, MetaBlocks,
-  MetaList, Para, Plain, RawBlock, RawInline, SmallCaps, Space, Span, Str, stringify, Strong, toRomanNumeral,
-  type Block, type Cite, type Conversion, type Filter, type Header, type Inline, type Meta, type MetaValue,
+  applyFilter, copy, Div, Emph, fromJSON, getAttribute, given, inlines, inlinesOf, items, LineBreak, Link, luaNumber,
+  Math as MathNode, MetaBlocks, MetaList, Para, Plain, RawBlock, RawInline, SmallCaps, Space, Span, Str, stringify, Strong,
+  toRomanNumeral, type Block, type Cite, type Conversion, type Filter, type Header, type Inline, type Meta, type MetaValue,
+  type Pandoc,
 } from "panir";
 import { runFilter } from "panir/node";
+
+/** libpandoc's JavaScript host, as much as this filter uses of it. */
+interface Host {
+  read(text: string, from: unknown, options?: Record<string, unknown>): unknown;
+}
 
 // LaTeX's sectioning units, by depth: parent_counter's values.
 const PARENT_COUNTERS = new Map([["part", 0], ["chapter", 1], ["section", 2], ["subsection", 3], ["subsubsection", 4], ["paragraph", 5], ["subparagraph", 6]]);
@@ -50,15 +57,6 @@ const fail = (message: string): never => {
   throw new Error(`amsthm: ${message}`);
 };
 
-/** A number as Lua's `tonumber` reads text, decimal or hexadecimal, blanks
- * around it; undefined if not one. */
-function luaNumber(text: string): number | undefined {
-  const t = text.replace(/^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$/g, "");
-  if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return Number(t);
-  if (/^[+-]?0[xX][0-9a-fA-F]+$/.test(t)) return (t.startsWith("-") ? -1 : 1) * parseInt(t.replace(/^[+-]?0[xX]/, ""), 16);
-  return undefined;
-}
-
 // A note of plain text: words of letters and digits (anything not ASCII but
 // a space), a hyphen inside one, and one of `,;:?!` after one, single spaces
 // between. pandoc's markdown reader gives such a text as it is, a Str a word.
@@ -66,11 +64,37 @@ const WORD = String.raw`(?:[A-Za-z0-9]|[^\x00-\x7f\x85\xa0  -     
 const TOKEN = `${WORD}(?:-${WORD})*[,;:?!]?`;
 const PLAIN_NOTE = new RegExp(`^${TOKEN}(?: ${TOKEN})*$`, "u");
 
-/** A div's note, as the original reads it with pandoc's markdown reader where
- * it is plain text; otherwise its text, with a warning. */
+// The host's instance, where the filter runs in one (`hosted`), to read notes.
+let host: Host | undefined;
+
+/** A div's note, read by pandoc's markdown reader as the original reads it,
+ * where the filter runs in libpandoc's JavaScript host; else as that reader
+ * reads plain text, and any other note as its text, with a warning. */
 function noteInlines(info: string): Inline[] {
+  if (host) {
+    return (fromJSON(host.read(info, "markdown")) as Pandoc).blocks.flatMap((b) => {
+      // (the original puts the block among inlines, and pandoc fails)
+      if (b.t !== "Para" && b.t !== "Plain") throw new Error(`amsthm: the note ${JSON.stringify(info)} is not inlines: a ${b.t}`);
+      return b.content;
+    });
+  }
   if (!PLAIN_NOTE.test(info)) warn(`the note ${JSON.stringify(info)} has markup, which needs pandoc's markdown reader: kept as text`);
   return inlines(info);
+}
+
+const UNSAFE = new Set(["Math", "Cite", "Image", "RawInline"]);
+
+/** Whether a note holds math, a citation, an image or raw TeX, where a `]`
+ * would end LaTeX's optional argument: the original braces it then. */
+function needsBrace(note: Inline[]): boolean {
+  let found = false;
+  const scan = { Math: () => void (found = true), Cite: () => void (found = true), Image: () => void (found = true),
+    RawInline: () => void (found = true) };
+  for (const x of note) {
+    if (UNSAFE.has(x.t)) return true;
+    applyFilter(x, scan);
+  }
+  return found;
 }
 
 // ---------------------------------------------------------------------------
@@ -722,9 +746,11 @@ function latexEnvironment(div: Div, o: Options): Div | undefined {
   if (!theorem) return undefined;
   const opening: Inline[] = [RawInline("latex", `\\begin{${theorem.envName}}`)];
   const info = getAttribute(div.attr, "info");
-  // (the original braces a note holding math, a citation, an image or raw
-  // TeX, where a ] would end it: a note of text has none)
-  if (info) opening.push(RawInline("latex", "["), ...noteInlines(info), RawInline("latex", "]"));
+  if (info) {
+    const note = noteInlines(info);
+    const brace = needsBrace(note);
+    opening.push(RawInline("latex", brace ? "[{" : "["), ...note, RawInline("latex", brace ? "}]" : "]"));
+  }
   if (div.attr.identifier) opening.push(RawInline("latex", `\\label{${div.attr.identifier}}`));
   const closing = RawInline("latex", `\\end{${theorem.envName}}`);
   const content = div.content;
@@ -792,4 +818,12 @@ const second: Filter<"topdown"> = {
   },
 };
 
-await runFilter([first, second]);
+/** For libpandoc's JavaScript host, given the instance the filter runs in
+ * (`libpandocFilter(hosted)`): notes read with it. */
+export const hosted = (pandoc: Host): Filter[] => {
+  host = pandoc;
+  return [first, second] as Filter[];
+};
+
+// run as a JSON filter (the main module): no reader
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await runFilter([first, second]);

@@ -23,6 +23,11 @@ jobs:
         with:
           repository: ickc/panir
           path: panir
+      # (its sources, for pyright: the Python ports' calls into pandoc)
+      - uses: actions/checkout@v7
+        with:
+          repository: ickc/libpandoc-python
+          path: libpandoc-python
       - uses: actions/setup-python@v7
         with:
           python-version: "3.15"
@@ -45,6 +50,7 @@ jobs:
         run: npm ci && npm run build
       - name: Set up the ports
         run: |
+          python3 -m pip install PyYAML  # (pantable's Python port, as its original)
           npm ci
           julia --project=. -e 'using Pkg; Pkg.instantiate(); using Panir'
       - name: Check the ports

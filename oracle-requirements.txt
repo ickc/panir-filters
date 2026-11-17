@@ -1,3 +1,7 @@
 # What the Python originals need (run.py expect, diff, time): ORACLE_PYTHON
 pandocfilters==1.5.1
 panflute==2.3.1
+# pantable (and what it pins: numpy and PyYAML, at the versions checked)
+pantable==0.15.0
+numpy==2.5.5
+PyYAML==6.0.3

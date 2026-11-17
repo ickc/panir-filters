@@ -34,6 +34,7 @@ except ImportError:
 from dataclasses import dataclass, field
 
 from panir import (
+    lua_number,
     Conversion,
     Block,
     Cite,
@@ -92,17 +93,6 @@ Font = type[Emph] | type[Strong] | type[SmallCaps]
 
 def warn(message: str) -> None:
     print(f"[amsthm] warning: {message}", file=sys.stderr)
-
-
-def lua_number(text: str) -> float | None:
-    """A number as Lua's `tonumber` reads text: decimal or hexadecimal,
-    blanks around it; None if not one."""
-    text = text.strip(" \t\n\v\f\r")
-    if re.fullmatch(r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?", text):
-        return int(text) if text.lstrip("+-").isdigit() else float(text)
-    if re.fullmatch(r"[+-]?0[xX][0-9a-fA-F]+", text):
-        return int(text, 16)
-    return None
 
 
 # A note of plain text: words of letters and digits (anything not ASCII but

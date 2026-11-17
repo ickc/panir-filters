@@ -6,7 +6,9 @@
     "check": "tsc --noEmit && pyright"
   },
   "dependencies": {
-    "panir": "file:../panir/ts"
+    "csv-parse": "^7.0.3",
+    "panir": "file:../panir/ts",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

@@ -346,6 +346,17 @@ host, `HOSTS.md`):
 | `pandocjl` (a script, a process a case) | 24 | 881 | 869 | 12 |
 | `node` (a JS function in libpandoc.wasm) | 24 | 881 | 845 | 36 |
 
+Again on 2026-11-17 with libpandoc 1.13 (a local build of
+ickc/libpandoc#8), panir 0.2.0 and the bindings' `adopt-1.13` branches
+(`HOSTS.md`, "Since"): 7,749 the original's, 153 known, none failing
+(`CHECK_UNIQUE=1`); every mode one known fewer (H4: include-files'
+`reader-options`), but `pandocrs-native`, which doesn't run it;
+`node-wasm` 23 fewer (H7), `node` 27 fewer (H2: amsthm's notes read by
+the instance, include-files read with the conversion's reader options).
+In the directory sandbox (`--sandbox`): 303 the original's, 21 known,
+none failing. `run.py test`: 3,274 the original's, 142 known, none
+failing.
+
 7,902 runs, none failing; why each known one is, `HOSTS.md` and each
 filter's `known.tsv`. In the directory sandbox (`run.py host --sandbox`,
 the two filters that read files, nine modes with the Lua originals): 297
@@ -449,7 +460,7 @@ markdown, a call each, then all in one `read_many`:
 | Rust wasm in Node (libpandoc.wasm, one thread) | 0.67 | 0.18 |
 | Julia, `LibPandoc.read`, `read_many` | 0.23 | 0.012 |
 | JavaScript, the instance's `readMany` (a JS function given it) | 0.24 | 0.17 |
-| TypeScript port, a filter script | none (H2) | none |
+| TypeScript port, a filter script | none (H2); since libpandoc 1.13 the instance's `read`, `readMany` (`libpandocFilter`) | |
 
 A libpandoc call costs 0.3 ms, six times `pandoc.read`'s 0.05 ms: each
 sets up a conversion (options, the reader, JSON out, panir in), where Lua
@@ -462,3 +473,46 @@ environments, against none: +0.06 s for the Lua original, +0.25 for
 Python (`libpandoc.read`), +0.21 for Julia, +0.15 (libpandoc-rs) to
 +0.28 (libpandoc-python) for the Rust wasm filter, and +0.02 for the Rust
 port without a reader (the plain-text rule).
+
+## pantable (rounds 2 and 3, the last)
+
+Measured 2026-11-17, same machine; pandoc 3.14; libpandoc 1.13 (the
+release); the hosts as `HOSTS.md`'s "pantable" lists; panir 0.2.0 (its
+`main`, `62c78c2`); pantable 0.15.0 and panflute 2.3.1 for the original
+(`oracle-requirements.txt`).
+
+**The cases** (80, in `html`; 24 need pandoc, markdown cells, so `run.py
+test` runs 56 a language), `CHECK_UNIQUE=1`:
+
+| | Python | TypeScript | Rust | Julia |
+|---|---|---|---|---|
+| standalone (`run.py test`) | 55/56, 1 known | 44/56, 12 known | 40/56, 16 known | 41/56, 15 known |
+
+In the hosts (`run.py host`): 696 runs, 548 the original's, 148 known,
+none failing; in the directory sandbox, 474, 387 and 87, none failing
+(`pantable/NOTES.md` has each mode's). The known ones: CSV and YAML each
+language's library (the owner's decision: `csv-kwargs` is Python's
+only), the original's joined document of cells, panflute's `Infinity`,
+and the hosts' (`HOSTS.md` H6, H17).
+
+**Lines** (code, without blank and comment lines): the original 2,405
+(1,929), the package with both directions; Python 496 (397), TypeScript
+647 (545), Rust 1,219 (1,060), Julia 596 (505).
+
+**Time.** Two documents: a table of 1,001 rows by 10 columns as CSV
+(0.2 MB of JSON), and the same with markdown cells and `table-width`
+(10,011 texts read by pandoc). Best of 3, seconds.
+
+| | the original | Python | TypeScript | Rust | Julia |
+|---|---|---|---|---|---|
+| CSV, standalone (`run.py time`: a process, JSON in and out) | 0.17 (59 MB) | 0.11 (27 MB) | 0.14 (129 MB) | under 0.01 (22 MB) | 5.11 (596 MB: compiling) |
+| markdown, standalone | 0.92 (142 MB; its own `pandoc` process included) | 0.43 (384 MB; libpandoc as a library) | (the `pandoc` command a text: not timed) | (no pandoc natively) | (LibPandoc not in the project) |
+| markdown, the whole conversion in a command (a process) | 1.13 (pandoc with the filter) | – | – | 0.40 (pandocrs, wasm), 0.42 (pandocpy), 0.71 (pandocjl) | – |
+| markdown, warm (the conversion from JSON to HTML, repeated) | – | 0.44 (`libpandoc.convert`) | 3.29 (libpandoc.wasm in Node) | – | 0.36 (`LibPandoc.convert`) |
+| CSV, warm | – | 0.13 | 0.29 | – | 0.11 |
+
+The batch against a call a cell (the reads, and each host's): `HOSTS.md`,
+"Calls into pandoc", and `pantable/NOTES.md`. In short: batched, every
+native host reads the 10,011 texts in 0.17 to 0.22 s, against 0.51 s for
+the original's one `pandoc` process on its joined document, and 0.58 to
+3.50 s a call a text; libpandoc.wasm in Node takes 2.7 s either way.

@@ -2,16 +2,7 @@
 rust@pandocrs-wasm	outside	a wasm filter sees the working directory only, read-only: not a file through .., nor through a symbolic link leaving it (HOSTS.md)
 rust@pandocpy-wasm	outside	a wasm filter sees the working directory only, read-only: not a file through .., nor through a symbolic link leaving it (HOSTS.md)
 rust@pandocjl-wasm	outside	a wasm filter sees the working directory only, read-only: not a file through .., nor through a symbolic link leaving it (HOSTS.md)
-rust@node-wasm	dedent	libpandoc.wasm's Node host gives a wasm filter no directory unless its caller builds one in memory (wasm-filter.mjs's preopens): every file is missing (HOSTS.md)
-rust@node-wasm	error-dedent-float	libpandoc.wasm's Node host gives a wasm filter no directory unless its caller builds one in memory (wasm-filter.mjs's preopens): every file is missing (HOSTS.md)
-rust@node-wasm	error-dedent	libpandoc.wasm's Node host gives a wasm filter no directory unless its caller builds one in memory (wasm-filter.mjs's preopens): every file is missing (HOSTS.md)
-rust@node-wasm	error-directory	libpandoc.wasm's Node host gives a wasm filter no directory unless its caller builds one in memory (wasm-filter.mjs's preopens): every file is missing (HOSTS.md)
-rust@node-wasm	error-end-line	libpandoc.wasm's Node host gives a wasm filter no directory unless its caller builds one in memory (wasm-filter.mjs's preopens): every file is missing (HOSTS.md)
-rust@node-wasm	error-start-line	libpandoc.wasm's Node host gives a wasm filter no directory unless its caller builds one in memory (wasm-filter.mjs's preopens): every file is missing (HOSTS.md)
-rust@node-wasm	files-kinds	libpandoc.wasm's Node host gives a wasm filter no directory unless its caller builds one in memory (wasm-filter.mjs's preopens): every file is missing (HOSTS.md)
-rust@node-wasm	outside	libpandoc.wasm's Node host gives a wasm filter no directory unless its caller builds one in memory (wasm-filter.mjs's preopens): every file is missing (HOSTS.md)
-rust@node-wasm	ranges	libpandoc.wasm's Node host gives a wasm filter no directory unless its caller builds one in memory (wasm-filter.mjs's preopens): every file is missing (HOSTS.md)
-rust@node-wasm	sample	libpandoc.wasm's Node host gives a wasm filter no directory unless its caller builds one in memory (wasm-filter.mjs's preopens): every file is missing (HOSTS.md)
+rust@node-wasm	outside	a wasm filter sees the working directory only, read-only: not a file through .., nor through a symbolic link leaving it (HOSTS.md)
 lua@pandocpy-lua	missing	inside the directory sandbox, the original in libpandoc.wasm: in WASI an empty name is the working directory, which io.open opens and lines() then fails to read (HOSTS.md, H11); natively a missing file
 lua@pandocrs-lua	missing	inside the directory sandbox, the original in libpandoc.wasm: in WASI an empty name is the working directory, which io.open opens and lines() then fails to read (HOSTS.md, H11); natively a missing file
 lua@pandocjl-lua	missing	inside the directory sandbox, the original in libpandoc.wasm: in WASI an empty name is the working directory, which io.open opens and lines() then fails to read (HOSTS.md, H11); natively a missing file

@@ -12,21 +12,10 @@ A port of pandoc/lua-filters' include-code-files (© 2020 Bruno BEAUFILS;
 MIT, see ../LICENSE).
 """
 
-import re
 import sys
 
 from panir import CodeBlock, Filter, main
-
-
-def lua_number(text: str) -> float | None:
-    """A number as Lua's `tonumber` reads text: decimal or hexadecimal,
-    blanks around it; None if not one."""
-    text = text.strip(" \t\n\v\f\r")
-    if re.fullmatch(r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?", text):
-        return int(text) if text.lstrip("+-").isdigit() else float(text)
-    if re.fullmatch(r"[+-]?0[xX][0-9a-fA-F]+", text):
-        return int(text, 16)
-    return None
+from panir import lua_number
 
 
 def lua_integer(text: str, what: str) -> int:

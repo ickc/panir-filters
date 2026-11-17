@@ -6,31 +6,46 @@
 // of every work the document cites. The document's citations are resolved
 // with all the files together.
 //
-// citeproc is pandoc's (`pandoc.utils.citeproc` in the original). No
-// JavaScript host gives a filter the pandoc it runs in, so this one runs the
-// `pandoc` command with `--citeproc` on the document's JSON, as the
-// original does where pandoc's Lua has no citeproc (`run_json_filter`).
+// citeproc is pandoc's (`pandoc.utils.citeproc` in the original): in
+// libpandoc's JavaScript host, the instance the filter runs in (`hosted`,
+// for panir's `libpandocFilter`), a conversion of the document's JSON with
+// `citeproc`; run as a JSON filter, the `pandoc` command with `--citeproc`,
+// as the original does where pandoc's Lua has no citeproc
+// (`run_json_filter`).
 //
 // A port of pandoc-ext/multibib (Copyright © 2018-2024 Albert Krewinkel;
 // MIT, see ../LICENSE).
 
 import { execFileSync } from "node:child_process";
-import { copy, Div, MetaList, MetaString, Pandoc, Para, parse, serialize, stringify, type Cite, type Meta } from "panir";
+import { pathToFileURL } from "node:url";
+import {
+  copy, Div, MetaList, MetaString, Pandoc, Para, parse, serialize, stringify, type Cite, type Filter, type Meta,
+} from "panir";
 import { runFilter } from "panir/node";
+
+/** libpandoc's JavaScript host, as much as this filter uses of it. */
+interface Host {
+  convert(options: Record<string, unknown>, input: string): unknown;
+}
 
 // What citeproc reads of the metadata, copied for a topic's bibliography.
 const FIELDS = ["bibliography", "references", "csl", "citation-style", "link-citations", "citation-abbreviations",
   "lang", "suppress-bibliography", "reference-section-title", "notes-after-punctuation", "nocite"];
 
-/** pandoc's citeproc on a document, its warnings silenced. */
-const citeproc = (doc: Pandoc): Pandoc =>
+/** pandoc's citeproc on a document, its warnings silenced: the `pandoc`
+ *  command's, or the host's (whose warnings go to its log). */
+type Citeproc = (doc: Pandoc) => Pandoc;
+const byCommand: Citeproc = (doc) =>
   parse(execFileSync("pandoc", ["--from=json", "--to=json", "--citeproc", "--quiet"], { input: serialize(doc) }).toString("utf8"));
+const byHost = (pandoc: Host): Citeproc => (doc) =>
+  parse(String(pandoc.convert({ from: "json", to: "json", citeproc: true }, serialize(doc))));
 
 let cites: Cite[] = []; // every citation of the document
 let docMeta: Meta = {}; // the document's metadata, as the first pass saw it
 let refs: Div | undefined; // the bibliography's div, as citeproc made it
 
-await runFilter([
+/** The filters, with `citeproc`. */
+const filters = (citeproc: Citeproc): Filter[] => [
   // a new document (a host may run these filters on many: Lua loads the
   // original anew for each)
   { Pandoc: () => void (cites = []) },
@@ -76,4 +91,11 @@ await runFilter([
       return div;
     },
   },
-]);
+];
+
+/** For libpandoc's JavaScript host, given the instance the filter runs in
+ *  (`libpandocFilter(hosted)`): its citeproc. */
+export const hosted = (pandoc: Host): Filter[] => filters(byHost(pandoc));
+
+// run as a JSON filter (the main module): the pandoc command's citeproc
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await runFilter(filters(byCommand));

@@ -40,7 +40,7 @@ def inputs() -> list[dict]:
     difference names it."""
     out = []
     for path in sorted(ROOT.glob("*/cases/expected.jsonl")):
-        cases = [json.loads(line) for line in path.read_text().splitlines()]
+        cases = [json.loads(line) for line in path.read_text().split("\n") if line]
         left_out = {c["name"] for c in cases if c.get("error")}
         known = path.parent.parent / "known.tsv"
         if known.exists():
