@@ -1359,8 +1359,12 @@ How common: 1 of 21 (amsthm).
 ## Round 2 and 3: what the filters that read files and call pandoc found in panir
 
 Round 2's and 3's filters (include-files, include-code-files, multibib,
-and amsthm's notes) were mostly about the hosts: those gaps are in
-`HOSTS.md`. What they found in panir itself:
+amsthm's notes, and pantable: CSV and YAML in a code block, markdown
+cells read with pandoc, an included file) were mostly about the hosts:
+those gaps are in `HOSTS.md`. What they found in panir itself (45 and 46
+pantable's; its options are YAML in the code block, not metadata, so
+nothing of panir's metadata; its widths count code points as Python's
+`len`, which each language has, so no text width was needed):
 
 | # | gap | languages | filters hitting it (of 24) | status |
 |---|---|---|---|---|
@@ -1368,6 +1372,8 @@ and amsthm's notes) were mostly about the hosts: those gaps are in
 | 42 | Lua's `tonumber` (and the integer `string.sub` takes) | all | 4: amsthm, list-table, include-files, include-code-files (each port has `lua_number`) | open |
 | 43 | a fragment's walk from a filter function doesn't know the conversion unless given it, where Lua's `PANDOC_READER_OPTIONS` and `FORMAT` are globals | Python, TypeScript, Julia (Rust's `ctx.apply` passes it) | 1: include-files (a nested include read with the document's reader options) | open |
 | 44 | Python's `MetaList([...])` and `Pandoc(meta, blocks)` take their items as arguments: a list passed is one item (a list in a list), silently | Python | 1: multibib | open (documentation) |
+| 45 | a table from a grid of cells: panir has `Table`'s constructors only; a filter making one from rows with spans and row blocks writes the grid (covered cells, anchors) and the split into head, bodies and foot | all | 2: pantable (each port about 40 lines), list-table | open |
+| 46 | pandoc's attribute syntax (`{#id .class key=value}`) has no parser: a filter reads `[]{...}` with pandoc's reader and takes the span's attributes, a call into pandoc, and none where there is no reader | all | 1: pantable (attributes of cells, rows and row blocks) | open |
 
 ## 41. pandoc.path's functions
 
@@ -1452,3 +1458,51 @@ arguments here); perhaps a warning when the only argument of a list
 constructor is a list. Low.
 
 How common: 1 of 24.
+
+## 45. A table from a grid of cells
+
+Found with pantable (list-table met it first, smaller).
+
+**The original**: pantable's `TableArray` (a numpy array of cells, each
+covered cell holding its span's text and anchor) and `PanTable`'s
+`to_panflute_ast`: rows of the anchored cells only, split into the head,
+each body's head and rows, and the foot by counts (`ms`, numpy's
+`split`), every block with its attributes; panflute's constructors below.
+
+**panir**: `Table`, `TableHead`, `TableBody`, `TableFoot`, `Row`, `Cell`
+and their attributes, as pandoc's types; nothing that takes a grid. Each
+port has a `Grid` (the texts, the spans, `put`, `shape`, `is_at`: 25 to
+35 lines) and the row blocks by counts (8 to 12 lines), then builds the
+nodes; Rust's struct literals take the most. list-table builds its table
+from lists the same way, its spans from attributes.
+
+**Proposed**: a helper beside the constructors, `table_of(rows,
+head=1, bodies=[(head_rows, rows, row_head_columns)], foot=0)` (each
+language's spelling), taking rows of cells (spans included, covered
+positions absent) and the blocks' sizes, defaults for what isn't given;
+or a "Building a table" example in each README with a grid of spans.
+Low: two filters, and the arithmetic is the filter's own.
+
+How common: 2 of 25 (pantable, list-table: the two `table` filters of
+`SURVEY.md`).
+
+## 46. pandoc's attribute syntax has no parser
+
+Found with pantable.
+
+**The original**: a markdown cell's first line may hold its attributes,
+`{#id .class key=value}`, and the fancy table's first column the rows'
+and blocks'; pantable reads each as the markdown `[]{...}` with pandoc
+and takes the empty span's attributes (`Ica.from_panflute_ast`).
+
+**panir**: no parser of the syntax; the ports do as the original, the
+texts in the same `read_many` as the cells. Without a reader (a Rust
+JSON filter, the TypeScript port under plain pandoc a process a text)
+attributes cost what a cell does.
+
+**Proposed**: `parse_attr(text)` (or `Attr.parse`) in each language, as
+pandoc's markdown reads `{...}` (identifier, classes, quoted values,
+`key=value`, `-` for unnumbered), checked against pandoc on a corpus;
+or leave it to the reader and say so. Low.
+
+How common: 1 of 25 (pantable).

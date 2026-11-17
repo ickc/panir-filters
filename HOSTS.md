@@ -63,7 +63,36 @@ and the Node driver runs every TypeScript port through `libpandocFilter`
 | H12 | **closed** by libpandoc 1.13: the JS host returns bytes for binary writers |
 | H13 | **closed** (LibPandoc.jl#6: `pandocjl` has the directory sandbox) |
 | H14 | open (performance: the JSON exchange) |
-| H15 | open (`read_many` documented in each README) |
+| H15 | open (`read_many` documented in each README); measured with pantable's batch |
+| H16 | open (found with pantable) |
+| H17 | open (found with pantable) |
+| H18 | open (found with pantable) |
+
+## pantable (2026-11-17)
+
+The owner's pantable (`pantable/NOTES.md`), the last filter of rounds 2
+and 3: CSV with YAML options, an included file (round 2), markdown cells
+read by the host's pandoc, all of a table's texts in one `read_many`
+(round 3: the first port that batches). Its hosts were built in scratch
+from clean exports of the bindings' `adopt-1.13` branches, against the
+released libpandoc 1.13 (`continuous`, pandoc 3.14, checked against its
+`SHA256SUMS` and build attestation by `fetch-libpandoc.sh`):
+
+| host | commit | built |
+|---|---|---|
+| libpandoc-python | `6a51dba` (`adopt-1.13`; its tip `9248791` adds tests and CI only) | a venv, Python 3.13, panir 0.2.0 (panir's `main`, `62c78c2`), wasmtime-py 50 |
+| libpandoc-rs | `0b82607` (`adopt-1.13`, the tree its `main` merged as `b709b02`) | `cargo build --release -p pandocrs`, Rust 1.97.1 |
+| LibPandoc.jl | `f3faaf3` (`adopt-1.13`; its tip `9b1d07f` adds a Windows-only change to Ctrl-C and tests) | `Pkg.instantiate()`, Julia 1.12.7, no system image |
+| libpandoc's JavaScript host | `f2bd848` (`main` then; now `7000f75`, a fix to cancelling during a callback) | `npm ci` in `wasm/`, Node 26.13, the release's `libpandoc.wasm` |
+
+`run.py host pantable` (`CHECK_UNIQUE=1`): 696 case runs, 548 the
+original's, 148 known, none failing (`pantable/NOTES.md` has each mode's);
+`--sandbox`: 474, 387 the original's, 87 known, none failing. The known
+ones are the ports' standalone ones (CSV and YAML libraries, the owner's
+decision on `csv-kwargs`), the original's joined document (three cases
+in every mode), a wasm filter's `outside` (H6), YAML 1.2's `no`, and H17.
+It found H16 to H18 below; and measured H15 with a batch (below, "Calls
+into pandoc").
 
 ## How the ports ran
 
@@ -102,7 +131,8 @@ user's code, read the canaries themselves, by design; nothing else did).
 ## The gaps, ranked
 
 By rank (the last column), then as found; H14 and H15 came last, from the
-timings, and H14 ranks with H3 to H5.
+timings, and H14 ranks with H3 to H5; H16 to H18 with pantable, H17 with
+H3 to H5.
 
 | # | gap | hosts | filters hitting it (of 24) | rank |
 |---|---|---|---|---|
@@ -121,6 +151,9 @@ timings, and H14 ranks with H3 to H5.
 | H13 | `pandocjl`'s `main` ignores `LIBPANDOC_SANDBOX` | Julia (`main`) | every sandboxed command | low (the branch closes it) |
 | H14 | a filter in a host is handed the whole document as JSON, both ways: a filter that does little costs four times a Lua one | every host, every non-Lua filter | every filter; 0.35 s a filter on a 9 MB document | medium (performance) |
 | H15 | a call into pandoc from a filter costs six times `pandoc.read`'s | every host | 3 that read fragments (amsthm: hundreds of calls) | low (`read_many` exists) |
+| H16 | a Julia filter script's packages come from pandocjl's load path only (its project, the default environment), not from the script's own project; the README doesn't say | Julia (`pandocjl`, scripts) | 1: pantable (YAML.jl, DelimitedFiles, StringEncodings, OrderedCollections; `run.py` stacks this repository's project with `JULIA_LOAD_PATH`) | medium |
+| H17 | `pandocjl` cuts a Lua filter's writes to standard output and error at 65,536 bytes when the stream is a pipe; to a file they are whole | Julia (`pandocjl`) | every filter whose output passes `run.py`'s `capture.lua` above 64 KiB: pantable's three big cases, in `pandocjl` and `pandocjl-wasm` | medium (silent loss of output) |
+| H18 | `read_many`'s error names a text by its place in the batch, counted from 0 in Python and Rust and from 1 in Julia (JavaScript's is in the text's place, unnumbered): a filter that batches maps it back to its cell itself | every host | 1: pantable (a table's texts in one call) | low |
 
 ### H1. `read(text, ctx.conversion)` reads files outside a command's directory sandbox
 
@@ -445,8 +478,107 @@ conversion and kept for the filter's calls), or each README's section on
 calls from filters saying to batch with `read_many`, with this number.
 Low.
 
-**How common**: 3 (the filters that read fragments); amsthm's notes,
-pantable's cells (hundreds of calls) most.
+**How common**: 4 (the filters that read fragments); amsthm's notes,
+pantable's cells (thousands of texts) most. pantable's ports batch (a
+table's texts in one `read_many`): on a table of 10,011 texts, Python
+reads them in 0.20 s batched against 3.50 s a call each (0.35 ms a
+call), Julia 0.18 against 0.58, Rust as wasm 0.17 to 0.22 against 0.58
+to 0.92; libpandoc.wasm in Node 2.73 against 3.03 (one thread: the
+reading is the cost). The original's one `pandoc` process reads its
+joined document in 0.51 s.
+
+### H16. A Julia filter script's packages: pandocjl's load path only
+
+Found with pantable, the first Julia port with dependencies of its own
+(YAML.jl, DelimitedFiles, StringEncodings, OrderedCollections; this
+repository's `Project.toml`).
+
+**The original**: a Python filter imports what its Python has; under
+plain pandoc a Julia filter script runs as `julia --project=DIR
+script.jl`, a wrapper's choice.
+
+**The hosts**: `pandocjl` loads a script into a module of its own, in its
+own process, so the script's `using YAML` resolves against pandocjl's
+load path: LibPandoc.jl's environment (or the app's), the default one
+(`@v#.#`), the standard library. The script's own project (a
+`Project.toml` beside it or above) isn't consulted: `Package
+OrderedCollections not found in current path`, then pandocjl's advice to
+run it as a subprocess. The README says scripts run as a subprocess get
+"its load path", and nothing of in-process scripts. `run.py` sets
+`JULIA_LOAD_PATH` to pandocjl's project, then this repository's, then
+the standard library, which works (checked: the case runs).
+
+**Proposed**: while loading a script, stack the project found from the
+script's directory (`Base.current_project(dirname(script))`) after
+pandocjl's own, so its dependencies resolve as `julia --project` would
+find them, pandocjl's packages winning; or at least a README line: a
+script's packages come from pandocjl's load path, extend it with
+`JULIA_LOAD_PATH` or add them to the default environment. Medium: any
+Julia filter that uses a package.
+
+**How common**: 1 of 25 (pantable); any Julia filter with a dependency.
+
+### H17. `pandocjl` cuts a Lua filter's output to a pipe at 64 KiB
+
+Found with pantable's big cases, whose documents `run.py`'s
+`capture.lua` writes to standard output.
+
+**The hosts**: a Lua filter (in `pandocjl`, any) that writes 100,000
+bytes with `io.stdout:write` and 100,000 with `io.stderr:write`:
+
+    -- big.lua
+    function Pandoc(doc)
+      io.stdout:write(string.rep("x", 100000))
+      io.stderr:write(string.rep("y", 100000))
+      return doc
+    end
+
+    echo hi | pandocjl -t plain -o /dev/null -L big.lua | wc -c   # 65536
+    echo hi | pandocjl -t plain -o /dev/null -L big.lua > out      # 100000
+
+pandocrs, pandocpy and pandoc write 100,000 to the pipe. Standard error
+to a pipe is cut the same way (65,536 bytes of `y`), and with standard
+output to a file and standard error to a pipe, the file holds 65,536
+`x` and the pipe 65,536 `x` as well as the `y`s: the bytes go astray.
+pandoc's own output (`-t json` to standard output, 1.3 MB) is whole: only
+what the Lua filter writes; and in `pandocjl`'s directory sandbox
+(`run.py host --sandbox`) the same three cases come whole. Likely Julia's
+libuv putting a pipe into non-blocking mode, so libpandoc's writes stop at
+the pipe's buffer (unverified). Through a file, the Julia port and the
+Rust port as wasm in `pandocjl` give the original's result on all three
+cases (`known.tsv`, `@host` rows: `run.py host`, not `--sandbox`).
+
+**Proposed**: in LibPandoc.jl, make the standard streams blocking while
+pandoc runs (or hand Lua's `io` writes to Julia's streams), with a test
+that writes 100 KB through a pipe. Medium: silent loss of output, which
+a filter's author would not suspect.
+
+**How common**: any Lua filter writing more than 64 KiB to a pipe under
+`pandocjl` (here 6 case runs: 3 cases, 2 modes).
+
+### H18. `read_many`'s error names a text by its place in the batch
+
+Found with pantable (`md-yaml-cell`: a cell holding a YAML block pandoc
+can't read).
+
+**The original**: one `pandoc` process a table; when it fails panflute
+raises `OSError('')`, naming nothing.
+
+**The hosts**: `PandocParseError: reading input 2: Error parsing YAML
+metadata...` in Python and Rust (from 0), `reading input 3` in Julia (from
+1), for the same text; JavaScript's `readMany` puts `{error: {kind,
+message}}` in the text's place and the port throws `kind: message`. The
+number is the text's place in what the filter sent (pantable sends only
+the non-empty texts: the caption, the short caption, the cells, the
+attributes), so it means nothing to the document's author unless the
+filter maps it back; `return_exceptions` (Python, Julia) and Rust's
+`ReadMany::docs` let it.
+
+**Proposed**: each README's `read_many` section: the number counts from
+0 (or 1 in Julia), and a filter reporting a failed text should map it
+back (`return_exceptions=True`); perhaps one numbering everywhere. Low.
+
+**How common**: 1 of 25 (the only filter that batches).
 
 ## Differences between hosts in the same situation
 
@@ -477,6 +609,12 @@ pantable's cells (hundreds of calls) most.
   them (`with_logger`), Rust returns them in the output's log, JavaScript
   returns them in the result's log; Lua's `pandoc.log.silence` has a twin
   in none (multibib silences each its own way).
+
+- **A failed text in `read_many`** (H18): Python and Rust number it from
+  0, Julia from 1 (`reading input N`); JavaScript puts the error in its
+  place.
+- **A Lua filter's output to a pipe** (H17): `pandocjl` cuts it at 64 KiB;
+  the others pass it whole.
 
 Same everywhere, checked: the writer's options a filter is given
 (`PANDOC_WRITER_OPTIONS` for scripts and wasm filters, `writer_options`
@@ -517,6 +655,17 @@ through pandoc.
 
 `pandocjl` on `main` ignores the variables (H13).
 
+pantable's `include` (2026-11-17, the hosts on `adopt-1.13`, `pandocjl`
+with its sandbox) gives the same: its Python port as a script
+(`pandocpy`) and as functions (`python-api`), and its Julia port as a
+script (`pandocjl`), read all three canaries, by design (the filter is the
+user's code, its reads its own); its Rust port as wasm reads none in
+pandocrs, pandocpy and pandocjl (the include fails: a wasm filter sees the
+mounts only), as outside the sandbox (`known.tsv`); every case inside the
+directory gives the original's result in every mode. Its markdown cells
+are read with `read_many` and the conversion, so in pandoc's sandbox when
+the conversion is (H1, closed); markdown reads no files.
+
 ## Calls into pandoc from a filter
 
 What each host offers a filter, and what a call costs (from inside a
@@ -535,5 +684,13 @@ half with emphasis, math and a citation, read as markdown):
 
 A call from a filter costs about 0.3 ms in every native host, six times
 `pandoc.read`'s 0.05 ms (H15); batched, less than Lua's loop. Every host
-but JavaScript's lets a filter batch (`read_many`); none of the ports
-does, as their originals read a note, a file, where they meet it.
+lets a filter batch (`read_many`; JavaScript's instance `readMany` since
+1.13); of the ports, pantable's only, as its original reads a table's
+texts in one process: a table of 1,001 rows by 10 markdown cells (10,011
+texts), the reads alone, warm (Rust: a process each, its filter's own
+timing):
+
+| | Python | Julia | Rust, wasm (pandocrs, pandocpy, pandocjl) | JavaScript (Node) | the original (`pandoc` on its joined document) |
+|---|---|---|---|---|---|
+| a call a text (s) | 3.50 | 0.58 | 0.58, 0.92, 0.73 | 3.03 | – |
+| one `read_many` (s) | 0.20 | 0.18 | 0.20, 0.17, 0.22 | 2.73 | 0.51 |
