@@ -536,8 +536,7 @@ HOSTS = {
     "pandocjl-lua": ("lua", "a Lua original in pandocjl (-L), for the sandbox"),
 }
 
-# The modes `host --sandbox` runs (pandocjl's sandbox is on its branch
-# `sandbox`, not on main: `$PANDOCJL` there names a build of it).
+# The modes `host --sandbox` runs.
 # (Not a JSON filter: the sandbox refuses it, status 83, documented.)
 SANDBOXED = ["pandocpy-lua", "pandocrs-lua", "pandocjl-lua", "pandocpy", "python-api", "pandocrs-wasm",
              "pandocpy-wasm", "pandocjl-wasm", "pandocjl"]

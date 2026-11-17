@@ -100,7 +100,9 @@ and:
     python3 run.py test list-table --lang rust,julia -v
     npm run check                        # tsc and pyright on the ports
 
-pyright checks the Python ports (`*/python/`) against panir and, for the
+pyright checks the Python ports (`*/python/`, named on its command line:
+a pattern in `pyrightconfig.json` that matches nothing is no error, and
+once checked no port) against panir and, for the
 ports that call pandoc, against libpandoc-python's sources, a checkout
 beside this one too (`../libpandoc-python`; it needs no build for this).
 
