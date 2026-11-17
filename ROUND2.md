@@ -78,7 +78,10 @@ the whole document as JSON (the cost, not the process, is pandoc's
 encoding), H15 a call into pandoc costs six times `pandoc.read`'s; with
 pantable, H16 a Julia script's packages come only from `pandocjl`'s load
 path, H17 `pandocjl` cuts a Lua filter's output to a pipe at 64 KiB, H18
-`read_many`'s errors name a text by its place in the batch. And in panir
+`read_many`'s errors name a text by its place in the batch. (Since, in
+`HOSTS.md`: closed are H1, H2, H4, H7, H9, H12, H13 and H17; documented
+H5, H8, H10, H11, H15, H16 and H18; open, each with a proposal, H3, H6
+and H14.) And in panir
 (`GAPS.md` 41 to 46): pandoc.path's functions, Lua's `tonumber`, a
 fragment's walk that forgets the conversion, Python's list constructors,
 and with pantable a table from a grid of cells and a parser of pandoc's

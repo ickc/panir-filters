@@ -293,36 +293,35 @@ Copies: none (`CHECK_UNIQUE=1` in `run.py test`).
 ## In the hosts
 
 `run.py host` (`CHECK_UNIQUE=1`; the hosts built from the bindings'
-`adopt-1.13`, `HOSTS.md`), 696 case runs: 548 the original's, 148 known,
-none failing. Each mode's known ones:
+`main`s after they adopted libpandoc 1.13, `HOSTS.md`), 696 case runs:
+554 the original's, 142 known, none failing. Each mode's known ones:
 
 | mode | runs | known |
 |---|---|---|
 | `pandocpy`, `python-api` | 80 each | 4 each: the joined document (`md-blocks`, `md-notes`, `md-break`), panflute's `Infinity` |
 | `node` | 80 | 15: the TypeScript port's standalone ones (YAML, CSV, `csv-kwargs`) and the joined document's three |
-| `pandocrs-wasm`, `pandocpy-wasm`, `node-wasm` | 80 each | 21 each: the Rust port's standalone ones, the joined document's three, `outside` (a wasm filter sees the working directory only), `md-switch` (YAML 1.2) |
-| `pandocjl-wasm` | 80 | 24: those, and `pandocjl`'s output cut at 64 KiB (H17: `big-markdown`, `big-text`, `readme`) |
+| `pandocrs-wasm`, `pandocpy-wasm`, `pandocjl-wasm`, `node-wasm` | 80 each | 21 each: the Rust port's standalone ones, the joined document's three, `outside` (a wasm filter sees the working directory only), `md-switch` (YAML 1.2) |
 | `pandocrs-native` | 56 (not the 24 with markdown: no pandoc to call) | 16: the Rust port's standalone ones |
-| `pandocjl` | 80 | 22: the Julia port's standalone ones, the joined document's three, `md-switch`, and H17's three |
+| `pandocjl` | 80 | 19: the Julia port's standalone ones, the joined document's three, `md-switch` |
 
 Tabs: a read with a conversion keeps them, the original's `pandoc`
 command expands them; the ports ask for `"preserve-tabs": false` (every
-binding takes it), and `md-tabs` is the original's everywhere. Through a
-file instead of `capture.lua`'s pipe, the Julia port and the Rust port in
-`pandocjl` give the original's result on H17's three cases.
+binding takes it), and `md-tabs` is the original's everywhere.
 
 The host gaps pantable found (`HOSTS.md`): H16, a Julia script's
 packages come only from `pandocjl`'s load path (`run.py` stacks this
-repository's project with `JULIA_LOAD_PATH`); H17, `pandocjl` cuts a Lua
-filter's writes to a pipe at 65,536 bytes; H18, `read_many`'s errors
-number a text by its place in the batch, from 0 in Python and Rust, from
-1 in Julia. And H15 measured with a batch (above).
+repository's project with `JULIA_LOAD_PATH`; now documented); H17,
+`pandocjl` cut a Lua filter's writes to a pipe at 65,536 bytes (three
+cases in its two modes, whose documents `capture.lua` writes; fixed in
+LibPandoc.jl#8, and the six runs are the original's); H18, `read_many`'s
+errors number a text by its place in the batch, from 0 in Python and
+Rust, from 1 in Julia (now documented). And H15 measured with a batch
+(above).
 
 In the directory sandbox (`run.py host --sandbox`, only `cases/files`
 listed, read-only), 474 case runs in six modes: 387 the original's, 87
-known (the same rows as outside it; H17's cases come whole there, so its
-rows are `@host`), none failing. The canaries outside the directory
-(`outside`, and `outside-absolute` by an absolute name): the Python
-script and functions and the Julia script read all three (`..`, the
-symbolic link, the absolute name), by design (`HOSTS.md`); the Rust port
-as wasm none, failing (it sees the mounts only).
+known (the same rows as outside it), none failing. The canaries outside
+the directory (`outside`, and `outside-absolute` by an absolute name): the
+Python script and functions and the Julia script read all three (`..`,
+the symbolic link, the absolute name), by design (`HOSTS.md`); the Rust
+port as wasm none, failing (it sees the mounts only).

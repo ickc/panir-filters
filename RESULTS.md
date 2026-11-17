@@ -488,12 +488,12 @@ test` runs 56 a language), `CHECK_UNIQUE=1`:
 |---|---|---|---|---|
 | standalone (`run.py test`) | 55/56, 1 known | 44/56, 12 known | 40/56, 16 known | 41/56, 15 known |
 
-In the hosts (`run.py host`): 696 runs, 548 the original's, 148 known,
+In the hosts (`run.py host`): 696 runs, 554 the original's, 142 known,
 none failing; in the directory sandbox, 474, 387 and 87, none failing
 (`pantable/NOTES.md` has each mode's). The known ones: CSV and YAML each
 language's library (the owner's decision: `csv-kwargs` is Python's
 only), the original's joined document of cells, panflute's `Infinity`,
-and the hosts' (`HOSTS.md` H6, H17).
+and the hosts' (`HOSTS.md` H6).
 
 **Lines** (code, without blank and comment lines): the original 2,405
 (1,929), the package with both directions; Python 496 (397), TypeScript

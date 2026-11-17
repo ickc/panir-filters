@@ -63,10 +63,10 @@ and the Node driver runs every TypeScript port through `libpandocFilter`
 | H12 | **closed** by libpandoc 1.13: the JS host returns bytes for binary writers |
 | H13 | **closed** (LibPandoc.jl#6: `pandocjl` has the directory sandbox) |
 | H14 | open (performance: the JSON exchange) |
-| H15 | open (`read_many` documented in each README); measured with pantable's batch |
-| H16 | open (found with pantable) |
-| H17 | open (found with pantable) |
-| H18 | open (found with pantable) |
+| H15 | documented: each README says to batch, with what it saves (amsthm's 738 notes; pantable's 10,011 texts in Python's and Julia's) |
+| H16 | documented (LibPandoc.jl#8: where a script's packages come from, and the line a script adds for its own); the script's project is not searched for, on purpose (below) |
+| H17 | **closed** (LibPandoc.jl#8: the standard streams are blocking while `pandocjl`'s pandoc runs; the cause below). A library call leaves them as Julia has them: documented |
+| H18 | documented (the three READMEs: the number's base, in the message only, and how a filter maps a failure back) |
 
 ## pantable (2026-11-17)
 
@@ -93,6 +93,14 @@ decision on `csv-kwargs`), the original's joined document (three cases
 in every mode), a wasm filter's `outside` (H6), YAML 1.2's `no`, and H17.
 It found H16 to H18 below; and measured H15 with a batch (below, "Calls
 into pandoc").
+
+**Since** (the same day, the bindings' pull requests merged): the hosts
+built again from their `main`s, libpandoc-python `a550d99`, libpandoc-rs
+`a79688f`, LibPandoc.jl `750f173` (libpandoc's JavaScript host has not
+changed since `f2bd848`), and every filter run again in every mode.
+`run.py host`: 8,598 case runs, 8,303 the original's, 295 known, none
+failing (pantable's 696: 554 and 142; H17's six are the original's now).
+`--sandbox`: 798 runs, 690 the original's, 108 known, none failing.
 
 ## How the ports ran
 
@@ -518,6 +526,15 @@ Julia filter that uses a package.
 
 **How common**: 1 of 25 (pantable); any Julia filter with a dependency.
 
+**Since** (LibPandoc.jl#8): documented, not built. Looking for a
+`Project.toml` beside or above a script would let a directory someone
+else controls supply the code a filter loads, and neither `julia
+script.jl` nor a script run as a subprocess looks there. The README says
+where a script's packages come from and gives the line a script adds for
+its own (`@__DIR__() in LOAD_PATH || push!(LOAD_PATH, @__DIR__)`, which
+works in process, as a subprocess and in the app), and `JULIA_LOAD_PATH`
+for `julia -m LibPandoc`, as `run.py` sets it.
+
 ### H17. `pandocjl` cuts a Lua filter's output to a pipe at 64 KiB
 
 Found with pantable's big cases, whose documents `run.py`'s
@@ -556,6 +573,22 @@ a filter's author would not suspect.
 **How common**: any Lua filter writing more than 64 KiB to a pipe under
 `pandocjl` (here 6 case runs: 3 cases, 2 modes).
 
+**Since** (LibPandoc.jl#8): closed in `pandocjl`. The cause, seen with
+strace: Julia's libuv duplicates fd 1 and 2 and sets the copies
+non-blocking, a flag the originals share; Lua's `write(1, 98304)` wrote
+65,536 and the next failed with `EAGAIN` (`io.stdout:write` returned
+`nil, "Resource temporarily unavailable"`); the stray `x`s were zsh
+sending standard output to the file and the pipe both. `pandocjl` now has
+the three streams blocking while pandoc runs, as its directory sandbox
+had: 100,000 bytes to a pipe on each, and the six case runs are the
+original's (their `known.tsv` rows gone). A library call
+(`LibPandoc.convert` with a Lua filter, in a Julia program whose standard
+output is a pipe) is still cut, on purpose: with the streams blocking, a
+program that reads its own standard output (`redirect_stdout()`, as test
+and documentation tools do) hung on one write of 200,000 bytes by a
+filter. LibPandoc.jl's README says so, and that a JSON filter writing
+much to the standard error it inherits fails likewise.
+
 ### H18. `read_many`'s error names a text by its place in the batch
 
 Found with pantable (`md-yaml-cell`: a cell holding a YAML block pandoc
@@ -579,6 +612,11 @@ filter maps it back; `return_exceptions` (Python, Julia) and Rust's
 back (`return_exceptions=True`); perhaps one numbering everywhere. Low.
 
 **How common**: 1 of 25 (the only filter that batches).
+
+**Since**: documented in the three READMEs (from 0 in Python and Rust,
+from 1 in Julia, in the message only; `return_exceptions`, `ReadMany::docs`
+to map a failure back). One numbering, or the number as a field of the
+error: not done, a question for the owner.
 
 ## Differences between hosts in the same situation
 
