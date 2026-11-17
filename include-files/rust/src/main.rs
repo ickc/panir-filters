@@ -21,30 +21,7 @@
 //! A port of pandoc-ext/include-files (© 2019–2021 Albert Krewinkel; MIT,
 //! see ../LICENSE).
 
-use panir::{Block, Conversion, Ctx, Filter, Inline, Meta, Pandoc, truthy};
-
-/// A number as Lua's `tonumber` reads text, decimal or hexadecimal, blanks
-/// around it; None if not one.
-fn lua_number(text: &str) -> Option<f64> {
-    let text = text.trim_matches([' ', '\t', '\n', '\x0b', '\x0c', '\r']);
-    let digits = text.strip_prefix(['+', '-']).unwrap_or(text);
-    if let Some(hex) = digits
-        .strip_prefix("0x")
-        .or_else(|| digits.strip_prefix("0X"))
-    {
-        let n = i64::from_str_radix(hex, 16).ok()? as f64;
-        return Some(if text.starts_with('-') { -n } else { n });
-    }
-    // (f64's parse also takes `inf` and `nan`, which Lua's doesn't)
-    let decimal = digits
-        .chars()
-        .all(|c| c.is_ascii_digit() || matches!(c, '.' | 'e' | 'E' | '+' | '-'));
-    if decimal && digits.starts_with(|c: char| c.is_ascii_digit() || c == '.') {
-        text.parse().ok()
-    } else {
-        None
-    }
-}
+use panir::{Block, Conversion, Ctx, Filter, Inline, Meta, Pandoc, lua_number, truthy};
 
 // pandoc.path's functions, as pandoc has them (Haskell's System.FilePath,
 // POSIX): `normalize` drops `.` and doubled slashes but keeps `..`, unlike
@@ -108,8 +85,7 @@ fn normalize(path: &str) -> String {
 /// options: the host's pandoc, built for wasm.
 #[cfg(target_family = "wasm")]
 fn read(text: &str, format: &str, conversion: &Conversion) -> Result<Pandoc, String> {
-    let mut options = libpandoc::read_options(conversion);
-    options["from"] = format.into();
+    let options = libpandoc::read_options(conversion, Some(format));
     let mut docs = libpandoc::read_many(&[text], &options)
         .and_then(libpandoc::ReadMany::all)
         .map_err(|e| e.to_string())?;

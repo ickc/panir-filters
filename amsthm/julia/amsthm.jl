@@ -42,14 +42,6 @@ const Blank = Union{Space, SoftBreak, LineBreak}
 
 warn(message) = println(stderr, "[amsthm] warning: ", message)
 
-"A number as Lua's `tonumber` reads text, decimal or hexadecimal, blanks around it; `nothing` if not one."
-function lua_number(text)
-    t = strip(text, [' ', '\t', '\n', '\v', '\f', '\r'])
-    occursin(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$", t) && return parse(Float64, t)
-    m = match(r"^([+-]?)0[xX]([0-9a-fA-F]+)$", t)
-    m === nothing ? nothing : (m[1] == "-" ? -1 : 1) * parse(Int, m[2]; base = 16)
-end
-
 # A note of plain text: words of letters and digits (anything not ASCII but a
 # space), a hyphen inside one, and one of `,;:?!` after one, single spaces
 # between. pandoc's markdown reader gives such a text as it is, a Str a word.

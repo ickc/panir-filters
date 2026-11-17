@@ -24,7 +24,8 @@ use std::fmt::Display;
 
 use panir::{
     Attr, Block, CitationMode, Cite, Conversion, Ctx, Div, Filter, Inline, Link, Math, MathType,
-    Meta, MetaValue, Order, Pandoc, Span, Target, inlines_of, items, stringify, to_roman_numeral,
+    Meta, MetaValue, Order, Pandoc, Span, Target, inlines_of, items, lua_number, stringify,
+    to_roman_numeral,
 };
 
 /// LaTeX's sectioning units, by depth: parent_counter's values.
@@ -87,29 +88,6 @@ fn depth_of(unit: &str) -> Option<i64> {
 
 fn warn(message: impl Display) {
     eprintln!("[amsthm] warning: {message}");
-}
-
-/// A number as Lua's `tonumber` reads text, decimal or hexadecimal, blanks
-/// around it; None if not one.
-fn lua_number(text: &str) -> Option<f64> {
-    let text = text.trim_matches([' ', '\t', '\n', '\x0b', '\x0c', '\r']);
-    let digits = text.strip_prefix(['+', '-']).unwrap_or(text);
-    if let Some(hex) = digits
-        .strip_prefix("0x")
-        .or_else(|| digits.strip_prefix("0X"))
-    {
-        let n = i64::from_str_radix(hex, 16).ok()? as f64;
-        return Some(if text.starts_with('-') { -n } else { n });
-    }
-    // (f64's parse also takes `inf` and `nan`, which Lua's doesn't)
-    let decimal = digits
-        .chars()
-        .all(|c| c.is_ascii_digit() || matches!(c, '.' | 'e' | 'E' | '+' | '-'));
-    if decimal && digits.starts_with(|c: char| c.is_ascii_digit() || c == '.') {
-        text.parse().ok()
-    } else {
-        None
-    }
 }
 
 /// A note of plain text: words of letters and digits (anything not ASCII
