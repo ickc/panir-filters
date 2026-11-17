@@ -29,6 +29,42 @@ README says:
 | LibPandoc.jl (`pandocjl`, `LibPandoc.convert`) | `f31e113` (`main`, which has no directory sandbox); the sandbox's runs used its unmerged branch `sandbox` at `35ad4ce` | `Pkg.instantiate()`, Julia 1.12.7, Panir.jl at panir's `main`; a system image by `sysimage/build.jl` |
 | libpandoc's JavaScript hosts (`wasm/node.mjs`, `wasm/wasm-filter.mjs`) | `bad3c1d` | `npm ci` in `wasm/`, Node 26.13, the release's `libpandoc.wasm` |
 
+## Since: libpandoc 1.13 and panir 0.2 (2026-11-17)
+
+libpandoc 1.13 (ickc/libpandoc#8: filters told whether pandoc's sandbox
+is on; cancel tokens; the JavaScript hosts give a filter the instance it
+runs in, `fn(doc, ctx, pandoc)`, with `pandoc.read`, and bytes for binary
+output; a wasm filter in Node sees the working directory), panir 0.2.0
+(ickc/panir#19: `Conversion.sandbox`, `Conversion.from_context`,
+`lua_number`, a sub-walk inherits the conversion, TypeScript's
+`libpandocFilter`), and the three bindings adopting both (their branches
+`adopt-1.13`). The ports now use panir's `lua_number` (not each its own
+copy) and a sub-walk's inherited conversion; the TypeScript ports of
+include-files, multibib and amsthm read and run citeproc with the
+instance of libpandoc's JavaScript host they run in (each port's
+`hosted(pandoc)`, given to `libpandocFilter`; as a JSON filter they run
+the `pandoc` command, or for amsthm read only plain notes, as before),
+and the Node driver runs every TypeScript port through `libpandocFilter`
+(no glue of its own) with the case's options. Each gap below:
+
+| # | now |
+|---|---|
+| H1 | **closed**: libpandoc 1.13 tells every filter whether pandoc's sandbox is on (a callback's context, `PANDOC_SANDBOX`); each binding confines a read through a conversion when it is told so, or its options ask for a sandbox, or nothing can tell (no `sandbox`, no options), and its directory sandbox tells every filter it runs outside the module `true`; a test in each binding, for every kind of filter (the bindings' `adopt-1.13`) |
+| H2 | **closed**: libpandoc 1.13's JavaScript host gives a filter its instance, panir 0.2's `libpandocFilter` makes the conversion; the TypeScript ports call pandoc there (amsthm's notes read as the original reads them) |
+| H3 | open: a wasm filter's calls still run in pandoc's sandbox (multibib's bibliography files; `known.tsv`) |
+| H4 | **closed** (the bindings' host-gaps pull requests: a read with a conversion keeps tabs; libpandoc 1.13's JS host's `readOptions` too) |
+| H5 | documented (each README; the ports reset their state) |
+| H6 | open (proposed: `LIBPANDOC_WASM_DIRS`) |
+| H7 | **closed** by libpandoc 1.13: in Node a wasm filter sees the working directory, read-only (`node-dir.mjs`), as in the other hosts |
+| H8 | documented |
+| H9 | **closed** (libpandoc-rs#15: a callback's conversion has the options, `read_options(conversion, format)`, a directory sandbox mapped to `true`) |
+| H10 | documented (libpandoc-rs's README) |
+| H11 | documented (each README's sandbox section); include-code-files' `include=""` inside the sandbox stays known |
+| H12 | **closed** by libpandoc 1.13: the JS host returns bytes for binary writers |
+| H13 | **closed** (LibPandoc.jl#6: `pandocjl` has the directory sandbox) |
+| H14 | open (performance: the JSON exchange) |
+| H15 | open (`read_many` documented in each README) |
+
 ## How the ports ran
 
 `run.py host` (its docstring has the variables naming each host). A mode
@@ -36,15 +72,21 @@ is a language in a host:
 
 | mode | what runs | filters | case runs | the same | known (`known.tsv`) |
 |---|---|---|---|---|---|
-| `pandocpy` | a Python port as a filter script, in process (`pandocpy -F port.py`) | 24 | 881 | 871 | 10 |
-| `python-api` | a Python port's `panir.Filter`s as functions, `libpandoc.convert(filters=[...])` | 24 | 881 | 871 | 10 |
-| `pandocrs-wasm` | a Rust port built for wasm32-wasip1 (`pandocrs -F port.wasm`) | 24 | 881 | 860 | 21 |
-| `pandocrs-native` | a Rust port as a JSON filter, a program libpandoc runs (`pandocrs -F port`) | 22 (not the two that need pandoc) | 854 | 819 | 35 (32 of them amsthm's notes: no reader) |
-| `pandocpy-wasm`, `pandocjl-wasm`, `node-wasm` | the same wasm file in pandocpy, pandocjl, and libpandoc.wasm's Node host (`wasm-filter.mjs`) | 24 each | 881 each | 860, 860, 838 | 21, 21, 43 |
-| `pandocjl` | a Julia port as a filter script, in process (`pandocjl -F port.jl`), a process a case | 24 | 881 | 869 | 12 |
-| `node` | a TypeScript port's filter as a JS function inside libpandoc.wasm in Node (`convertWithFilters`) | 24 | 881 | 845 | 36 (amsthm's notes: no reader, H2) |
+| `pandocpy` | a Python port as a filter script, in process (`pandocpy -F port.py`) | 24 | 881 | 871; since 1.13: 872 | 10; 9 |
+| `python-api` | a Python port's `panir.Filter`s as functions, `libpandoc.convert(filters=[...])` | 24 | 881 | 871; 872 | 10; 9 |
+| `pandocrs-wasm` | a Rust port built for wasm32-wasip1 (`pandocrs -F port.wasm`) | 24 | 881 | 860; 861 | 21; 20 |
+| `pandocrs-native` | a Rust port as a JSON filter, a program libpandoc runs (`pandocrs -F port`) | 22 (not the two that need pandoc) | 854 | 819; 819 | 35 (32 of them amsthm's notes: no reader); 35 |
+| `pandocpy-wasm`, `pandocjl-wasm`, `node-wasm` | the same wasm file in pandocpy, pandocjl, and libpandoc.wasm's Node host (`wasm-filter.mjs`) | 24 each | 881 each | 860, 860, 838; 861, 861, 861 | 21, 21, 43; 20, 20, 20 |
+| `pandocjl` | a Julia port as a filter script, in process (`pandocjl -F port.jl`), a process a case | 24 | 881 | 869; 870 | 12; 11 |
+| `node` | a TypeScript port's filter as a JS function inside libpandoc.wasm in Node (`convertWithFilters`; since 1.13 panir's `libpandocFilter`) | 24 | 881 | 845; 872 | 36 (amsthm's notes: no reader, H2); 9 |
 
-7,902 runs, 7,693 the original's, 209 known, none failing. The known
+7,902 runs, 7,693 the original's, 209 known, none failing. Since 1.13
+("Since", above; the same runs on 2026-11-17, the hosts on their
+`adopt-1.13` branches against a local build of libpandoc 1.13): 7,749
+the original's, 153 known, none failing: H4's tabs (the reader-options
+case, in eight modes), H7 (every include of include-files and
+include-code-files in Node) and H2 (amsthm's notes and include-files'
+reader options in the TypeScript port) no longer differ. The known
 ones are round 1's (the originals' bugs a port doesn't copy, as
 standalone, and amsthm's empty list item of pandoc's Lua), amsthm's notes where a port has no reader,
 and the hosts' own: every difference from the standalone result is one
@@ -52,7 +94,10 @@ of the gaps below; none was worked around. In the directory sandbox
 (`--sandbox`: include-files and include-code-files in nine modes, the
 Lua originals among them), 297 runs the original's and 27 known: the
 wasm filters' and the reader's tabs, as outside it, and the three of H11;
-a JSON filter is refused there, status 83 (checked with pandocrs).
+a JSON filter is refused there, status 83 (checked with pandocrs). Since
+1.13: 303 the original's, 21 known (the tabs no longer differ), none
+failing; what each read from outside unchanged (the filter scripts, the
+user's code, read the canaries themselves, by design; nothing else did).
 
 ## The gaps, ranked
 
@@ -407,7 +452,8 @@ pantable's cells (hundreds of calls) most.
 
 - **A script's read under the command's sandbox** (H1): confined for a
   filter function given to `convert(sandbox=...)` (Python, Julia); not for
-  a script under `pandocpy` or `pandocjl`, nor for a Rust callback.
+  a script under `pandocpy` or `pandocjl`, nor for a Rust callback. (Now
+  confined in every host: "Since", above.)
 - **A Python script and a Julia script, run twice in one process** (H5):
   the Python script starts afresh, the Julia one goes on.
 - **What a wasm filter sees** (H6, H7): the working directory in
@@ -463,9 +509,9 @@ through pandoc.
 | Python or Julia filter **function** (`convert(sandbox=...)`) | unconfined, documented: all three read | – | the same | a JS function: unconfined (no setting to confine it) |
 | Rust callback (`convert_with` with a sandbox) | – | unconfined, documented: the file read | – | – |
 | JSON filter (a program) | refused, documented | refused (status 83: "libpandoc.wasm runs no programs") | refused, documented | can't run |
-| **a script's `read(text, ctx.conversion)`** | **reads inside and outside** (H1; the README says pandoc's sandbox) | – | **reads inside and outside** (H1) | – |
+| **a script's `read(text, ctx.conversion)`** | **reads inside and outside** (H1; the README says pandoc's sandbox); since 1.13: neither | – | **reads inside and outside** (H1); since 1.13: neither | – |
 | a function's `read(text, ctx.conversion)` | pandoc's sandbox: neither | – | pandoc's sandbox: neither | the instance: inside only; `sandbox: true`: neither |
-| a callback's `read_many(read_options(conversion))` | – | **reads inside and outside** (H1) | – | – |
+| a callback's `read_many(read_options(conversion))` | – | **reads inside and outside** (H1); since 1.13: neither | – | – |
 | a wasm filter's `read`, `read_many` | untrusted: neither | untrusted: neither | untrusted: neither | untrusted: neither |
 | `read(text, "latex")` with no conversion, anywhere in the process | reads both (no sandbox asked) | reads both | reads both | – |
 
@@ -479,10 +525,10 @@ half with emphasis, math and a citation, read as markdown):
 
 | | Lua | Python | Rust, wasm | Rust, callback | Julia | JavaScript |
 |---|---|---|---|---|---|---|
-| read one text | `pandoc.read` | `libpandoc.read(text, conversion)` | `libpandoc::read`, `read_as` | the same | `LibPandoc.read(text, conversion)` | none for a filter (H2); the instance's `readMany([text])` if handed over |
+| read one text | `pandoc.read` | `libpandoc.read(text, conversion)` | `libpandoc::read`, `read_as` | the same | `LibPandoc.read(text, conversion)` | none for a filter (H2); since 1.13 `pandoc.read(text, conversion)`, the instance a filter is given |
 | read many at once | none | `read_many` | `read_many`, `read_many_as` | the same | `read_many` | the instance's `readMany` |
-| citeproc | `pandoc.utils.citeproc` | `convert(json, from_="json", to="json", citeproc=True)` | `libpandoc::convert` (no files: H3) | `convert` | `convert(...; citeproc = true)` | none (H2) |
-| write | `pandoc.write` | `write` | `write` | the same | `write` | none |
+| citeproc | `pandoc.utils.citeproc` | `convert(json, from_="json", to="json", citeproc=True)` | `libpandoc::convert` (no files: H3) | `convert` | `convert(...; citeproc = true)` | none (H2); since 1.13 `pandoc.convert({..., citeproc: true}, json)` |
+| write | `pandoc.write` | `write` | `write` | the same | `write` | none; since 1.13 `pandoc.convert` |
 | 738 notes, a call each (s) | 0.04 | 0.25 | 0.23 (pandocrs), 0.30 (pandocpy), 0.24 (pandocjl), 0.67 (Node) | 0.21 | 0.23 | 0.24 (the instance's) |
 | the same, one `read_many` (s) | – | 0.015 | 0.014, 0.014, 0.016, 0.18 | 0.013 | 0.012 | 0.17 |
 | amsthm on the textbook, a note on each of 738 environments, against none (s) | +0.06 | +0.25 | +0.15 (libpandoc-rs), +0.28 (libpandoc-python) | (no reader natively: +0.02) | +0.21 | (no reader: H2) |

@@ -346,6 +346,17 @@ host, `HOSTS.md`):
 | `pandocjl` (a script, a process a case) | 24 | 881 | 869 | 12 |
 | `node` (a JS function in libpandoc.wasm) | 24 | 881 | 845 | 36 |
 
+Again on 2026-11-17 with libpandoc 1.13 (a local build of
+ickc/libpandoc#8), panir 0.2.0 and the bindings' `adopt-1.13` branches
+(`HOSTS.md`, "Since"): 7,749 the original's, 153 known, none failing
+(`CHECK_UNIQUE=1`); every mode one known fewer (H4: include-files'
+`reader-options`), but `pandocrs-native`, which doesn't run it;
+`node-wasm` 23 fewer (H7), `node` 27 fewer (H2: amsthm's notes read by
+the instance, include-files read with the conversion's reader options).
+In the directory sandbox (`--sandbox`): 303 the original's, 21 known,
+none failing. `run.py test`: 3,274 the original's, 142 known, none
+failing.
+
 7,902 runs, none failing; why each known one is, `HOSTS.md` and each
 filter's `known.tsv`. In the directory sandbox (`run.py host --sandbox`,
 the two filters that read files, nine modes with the Lua originals): 297
@@ -449,7 +460,7 @@ markdown, a call each, then all in one `read_many`:
 | Rust wasm in Node (libpandoc.wasm, one thread) | 0.67 | 0.18 |
 | Julia, `LibPandoc.read`, `read_many` | 0.23 | 0.012 |
 | JavaScript, the instance's `readMany` (a JS function given it) | 0.24 | 0.17 |
-| TypeScript port, a filter script | none (H2) | none |
+| TypeScript port, a filter script | none (H2); since libpandoc 1.13 the instance's `read`, `readMany` (`libpandocFilter`) | |
 
 A libpandoc call costs 0.3 ms, six times `pandoc.read`'s 0.05 ms: each
 sets up a conversion (options, the reader, JSON out, panir in), where Lua
