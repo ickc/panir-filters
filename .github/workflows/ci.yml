@@ -45,6 +45,7 @@ jobs:
         run: npm ci && npm run build
       - name: Set up the ports
         run: |
+          python3 -m pip install PyYAML  # (pantable's Python port, as its original)
           npm ci
           julia --project=. -e 'using Pkg; Pkg.instantiate(); using Panir'
       - name: Check the ports

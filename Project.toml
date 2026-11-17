@@ -1,11 +1,17 @@
-# The Julia ports: julia --project=. FILTER/julia/FILTER.jl
 [deps]
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 Panir = "5b2d8b07-d308-4414-b8d3-1709445610f6"
+StringEncodings = "69024149-9ee7-55f6-a4c4-859efe599b68"
+YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
-# panir's checkout beside this one, while Panir.jl isn't registered
 [sources]
 Panir = {path = "../panir/julia"}
 
 [compat]
+DelimitedFiles = "1.9"
+OrderedCollections = "1.6, 2"
 Panir = "0.2"
+StringEncodings = "0.3"
+YAML = "0.4"
 julia = "1.11"
