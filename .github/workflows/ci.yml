@@ -23,6 +23,11 @@ jobs:
         with:
           repository: ickc/panir
           path: panir
+      # (its sources, for pyright: the Python ports' calls into pandoc)
+      - uses: actions/checkout@v7
+        with:
+          repository: ickc/libpandoc-python
+          path: libpandoc-python
       - uses: actions/setup-python@v7
         with:
           python-version: "3.15"

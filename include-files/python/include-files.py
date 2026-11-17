@@ -125,8 +125,7 @@ def update_contents(blocks: list[Block], shift_by: float | None, include_path: s
         if path is not None and is_relative(path):
             cb.attributes["include"] = normalize(join(include_path, path))
 
-    blocks.walk(update)
-    return blocks
+    return update(blocks)  # (a list of blocks, walked in place)
 
 
 def transclusion(base: str) -> Filter:

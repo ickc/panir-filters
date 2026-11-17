@@ -100,6 +100,10 @@ and:
     python3 run.py test list-table --lang rust,julia -v
     npm run check                        # tsc and pyright on the ports
 
+pyright checks the Python ports (`*/python/`) against panir and, for the
+ports that call pandoc, against libpandoc-python's sources, a checkout
+beside this one too (`../libpandoc-python`; it needs no build for this).
+
 `run.py` builds the Rust ports (`cargo build --release`), and runs each
 port as pandoc runs a JSON filter: Python with panir from
 `../panir/python/src` (`$PYTHON`, default `python3`), TypeScript with
@@ -149,7 +153,8 @@ divs' classes, for amsthm on the textbooks read from LaTeX); none are
 kept here.
 
 CI (`.github/workflows/ci.yml`) runs `run.py test` for the four languages
-on Linux, with `tsc`, pyright, rustfmt, clippy and `cargo test`, panir's main checked
+on Linux, with `tsc`, pyright, rustfmt, clippy and `cargo test`, panir's main
+and libpandoc-python's (for pyright) checked
 out beside this repository; it needs neither pandoc nor the originals
 (PyYAML for pantable's Python port, as its original).
 

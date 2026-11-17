@@ -1369,11 +1369,13 @@ nothing of panir's metadata; its widths count code points as Python's
 | # | gap | languages | filters hitting it (of 24) | status |
 |---|---|---|---|---|
 | 41 | pandoc.path's functions (`normalize`, `join`, `directory`, `is_relative`, `filename`), whose `normalize` no language's own path functions match | all | 1: include-files (every port has the five, 25 lines) | open |
-| 42 | Lua's `tonumber` (and the integer `string.sub` takes) | all | 4: amsthm, list-table, include-files, include-code-files (each port has `lua_number`) | open |
-| 43 | a fragment's walk from a filter function doesn't know the conversion unless given it, where Lua's `PANDOC_READER_OPTIONS` and `FORMAT` are globals | Python, TypeScript, Julia (Rust's `ctx.apply` passes it) | 1: include-files (a nested include read with the document's reader options) | open |
-| 44 | Python's `MetaList([...])` and `Pandoc(meta, blocks)` take their items as arguments: a list passed is one item (a list in a list), silently | Python | 1: multibib | open (documentation) |
+| 42 | Lua's `tonumber` (and the integer `string.sub` takes) | all | 4: amsthm, list-table, include-files, include-code-files (each port has `lua_number`) | closed, panir#19 |
+| 43 | a fragment's walk from a filter function doesn't know the conversion unless given it, where Lua's `PANDOC_READER_OPTIONS` and `FORMAT` are globals | Python, TypeScript, Julia (Rust's `ctx.apply` passes it) | 1: include-files (a nested include read with the document's reader options) | closed, panir#19 |
+| 44 | Python's `MetaList([...])` and `Pandoc(meta, blocks)` take their items as arguments: a list passed is one item (a list in a list), silently | Python | 1: multibib | closed, panir#19 |
 | 45 | a table from a grid of cells: panir has `Table`'s constructors only; a filter making one from rows with spans and row blocks writes the grid (covered cells, anchors) and the split into head, bodies and foot | all | 2: pantable (each port about 40 lines), list-table | open |
 | 46 | pandoc's attribute syntax (`{#id .class key=value}`) has no parser: a filter reads `[]{...}` with pandoc's reader and takes the span's attributes, a call into pandoc, and none where there is no reader | all | 1: pantable (attributes of cells, rows and row blocks) | open |
+| 47 | Python's `Meta`, the name a metadata function is annotated with, was `dict[str, MetaValue]` to a type checker: `meta["indent"] = True` ran and did not check | Python | 3: count-para, first-line-indent, scholarly-metadata (6 of the 11 errors of pyright's first real run) | closed, panir#20 |
+| 48 | no public name for the lists a function is given (`NodeList[Block, ...]`, `NodeList[Inline, ...]`): annotated `list[Block]`, `blocks.walk(f)` doesn't check | Python | 1: include-files | open |
 
 ## 41. pandoc.path's functions
 
@@ -1419,6 +1421,9 @@ a helper for ports, the same in the four languages. Low.
 
 How common: 4 of 24.
 
+**Closed** in panir#19: `lua_number` (TypeScript `luaNumber`) in the four
+languages; the ports' copies are gone.
+
 ## 43. A fragment's walk doesn't know the conversion
 
 Found with include-files.
@@ -1440,6 +1445,9 @@ filter runs; TypeScript: the same, or `ctx.apply` as Rust has). Low.
 
 How common: 1 of 24.
 
+**Closed** in panir#19: a walk started inside a filter function knows the
+conversion of the walk it is in, unless given one.
+
 ## 44. Python's constructors take their items as arguments
 
 Found with multibib.
@@ -1458,6 +1466,9 @@ arguments here); perhaps a warning when the only argument of a list
 constructor is a list. Low.
 
 How common: 1 of 24.
+
+**Closed** in panir#19: `MetaList([a, b])` is an error (and a type
+checker's), with "Coming from Lua"'s line.
 
 ## 45. A table from a grid of cells
 
@@ -1506,3 +1517,46 @@ pandoc's markdown reads `{...}` (identifier, classes, quoted values,
 or leave it to the reader and say so. Low.
 
 How common: 1 of 25 (pantable).
+
+## 47. Python: `Meta` didn't take plain values for a type checker (closed)
+
+Found when pyright first ran on the ports: `pyrightconfig.json`'s
+`include` (`*/python`) matched no file, so `npm run check` and CI had
+checked no Python port since the first round (it is `**/python` now, with
+libpandoc-python's sources beside for the ports that call pandoc). Of the
+11 errors of its first real run, 6 were this.
+
+**panir**: metadata converts plain values put into it (`doc.meta["draft"]
+= True`, the README's), and `doc.meta` is typed so. But `Meta`, the name
+a function is annotated with (`def read(meta: Meta)`, the README's too),
+was `dict[str, MetaValue]`: in count-para (`meta["header-includes"] =
+new`, a list), first-line-indent (`meta["indent"] = True`) and
+scholarly-metadata (`meta["author"] = authors`, a list of maps) the
+assignment ran and did not check.
+
+**Closed** in panir#20: to a type checker `Meta` is the map the function
+is given (`NodeDict[MetaValue, ...]`); a plain dict annotated `Meta` no
+longer checks (multibib built two with `Meta(...)`: plain dicts now, which
+is what they were).
+
+How common: 3 of 25.
+
+## 48. Python: no name for the lists a function is given
+
+Found by the same run (include-files).
+
+**panir**: a function for every list of blocks or inlines (`on_blocks`,
+`on_inlines`), `doc.blocks` and a node's `content` are a `NodeList[Block,
+...]` or `NodeList[Inline, ...]`: a list that checks and converts what is
+put into it, with `walk`. Its second parameter (what converts) is
+private, so a port annotates `list[Block]`, which is true and lets a
+function be registered, but `blocks.walk(update)` then doesn't check
+(include-files; it calls `update(blocks)` now, the same walk).
+
+**Proposed**: public names, as `Meta` is for the metadata: `Blocks` and
+`Inlines`. One thing to settle first: in Lua `pandoc.Inlines("text")` is
+a constructor, and a name that is a plain `list` when running would make
+`Inlines("text")` a list of characters; so either the names construct
+(as Lua's do) or they are for annotations only and say so. Low.
+
+How common: 1 of 25 seen; any typed Python filter that walks a list.

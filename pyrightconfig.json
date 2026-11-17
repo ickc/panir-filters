@@ -1,6 +1,6 @@
 {
-  "include": ["*/python"],
-  "extraPaths": ["../panir/python/src"],
+  "include": ["**/python"],
+  "extraPaths": ["../panir/python/src", "../libpandoc-python/src"],
   "pythonVersion": "3.11",
   "typeCheckingMode": "standard"
 }
