@@ -3,7 +3,7 @@
   "description": "The TypeScript ports (Node.js runs them as they are), and the type checkers of the TypeScript and Python ports",
   "type": "module",
   "scripts": {
-    "check": "tsc --noEmit && pyright"
+    "check": "tsc --noEmit && pyright */python"
   },
   "dependencies": {
     "csv-parse": "^7.0.3",
