@@ -19,9 +19,10 @@ from its README, its design notes, and its own tests, which are the cases
 here.
 
 **The version mirrored** is the proposed v4.0.0 (`upstream/ORIGIN`:
-`646d53e`, the tip of the stack of pull requests ickc/pandoc-amsthm#39 to
+`544ff6c`, the tip of the stack of pull requests ickc/pandoc-amsthm#39 to
 #48, not merged yet): eight fixes, then the note moved from the `info`
-attribute to a span, then (`646d53e`) four of the findings below. Until 2026-11-18 the ports mirrored v3.1.1
+attribute to a span, then (`646d53e`) four of the findings below, then
+(`544ff6c`) the attribute trimmed in one pass. Until 2026-11-18 the ports mirrored v3.1.1
 (`ba1008f`), whose note was the attribute read as markdown by the filter
 (`pandoc.read`), round 3's call into pandoc; the ports read it with the
 host's pandoc where they had one and kept a note of plain text as its
@@ -207,6 +208,8 @@ New at `646d53e`:
    document can make the filter take minutes. The ports trim in linear
    time (Python's `strip`, Rust's `trim_matches`, Julia's `strip`, a loop
    in TypeScript): the same output, only faster.
+   **Fixed upstream** in the next commit, `544ff6c` (the one-pass match
+   above), which is the original here now: that line is its only change.
 7. **`name_to_text`'s new test is its text, so an empty list is silent
    too.** `name_to_text: []` (and `[""]`) no longer warns, where
    `qed_symbol: []` does ("not math or text"); a list of names

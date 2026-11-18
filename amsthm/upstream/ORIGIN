@@ -1,7 +1,7 @@
-url: https://github.com/ickc/pandoc-amsthm/blob/646d53e6c0fe518a7895f6fab6ee062be000fac8/_extensions/amsthm/amsthm.lua
+url: https://github.com/ickc/pandoc-amsthm/blob/544ff6c2f4b0eb20c807665506d93b1b871304a6/_extensions/amsthm/amsthm.lua
 repository: https://github.com/ickc/pandoc-amsthm
-commit: 646d53e6c0fe518a7895f6fab6ee062be000fac8
-note: this is the proposed v4.0.0, not yet merged: the tip of the stack of pull requests ickc/pandoc-amsthm#39 to #48 (branch v4/10-note-span; eight fixes, then the note as a leading [...]{.info} span, the breaking change, then 646d53e: a blank span no note, the attribute's end spaces dropped, an empty name_to_text text silent); before it, the ports mirrored v3.1.1 (ba1008f)
+commit: 544ff6c2f4b0eb20c807665506d93b1b871304a6
+note: this is the proposed v4.0.0, not yet merged: the tip of the stack of pull requests ickc/pandoc-amsthm#39 to #48 (branch v4/10-note-span; eight fixes, then the note as a leading [...]{.info} span, the breaking change, then 646d53e: a blank span no note, the attribute's end spaces dropped, an empty name_to_text text silent; then 544ff6c: that trim in one pass); before it, the ports mirrored v3.1.1 (ba1008f)
 path: _extensions/amsthm/amsthm.lua
 licence: BSD-3-Clause, Copyright (c) 2016-2026, Kolen Cheung (../LICENSE, the repository's, verbatim and unchanged at this commit; the file's header says BSD-3-Clause too); it covers the original, its tests and the ports here
 cases: the repository's own tests at that commit, verbatim: tests/cases/*.md under their names, tests/model-source.md as model-source.md, docs/examples/*.md as example-*.md; with the writer's options its spec/cases_spec.lua and spec/golden_spec.lua give them, as NAME.opts (a case run with two sets of options is there twice: scalar-meta-n, section-numbering-n and -secnumdepth, model-source-n and -chapter), and the spec's -M as NAME.args; the others are written for the ports
