@@ -300,7 +300,7 @@ Copies: none (`CHECK_UNIQUE=1` in `run.py test`).
 |---|---|---|
 | `pandocpy`, `python-api` | 80 each | 4 each: the joined document (`md-blocks`, `md-notes`, `md-break`), panflute's `Infinity` |
 | `node` | 80 | 15: the TypeScript port's standalone ones (YAML, CSV, `csv-kwargs`) and the joined document's three |
-| `pandocrs-wasm`, `pandocpy-wasm`, `pandocjl-wasm`, `node-wasm` | 80 each | 21 each: the Rust port's standalone ones, the joined document's three, `outside` (a wasm filter sees the working directory only), `md-switch` (YAML 1.2) |
+| `pandocrs-wasm`, `pandocpy-wasm`, `pandocjl-wasm`, `node-wasm` | 80 each | 21 each: the Rust port's standalone ones, the joined document's three, `outside` (a wasm filter sees the working directory only; since libpandoc 1.14, given `../outside` too, it fails on the symbolic link), `md-switch` (YAML 1.2) |
 | `pandocrs-native` | 56 (not the 24 with markdown: no pandoc to call) | 16: the Rust port's standalone ones |
 | `pandocjl` | 80 | 19: the Julia port's standalone ones, the joined document's three, `md-switch` |
 
@@ -325,3 +325,13 @@ the directory (`outside`, and `outside-absolute` by an absolute name): the
 Python script and functions and the Julia script read all three (`..`,
 the symbolic link, the absolute name), by design (`HOSTS.md`); the Rust
 port as wasm none, failing (it sees the mounts only).
+
+Since libpandoc 1.14 (2026-11-18, `HOSTS.md`) a wasm filter sees no
+directory but those `LIBPANDOC_WASM_DIRS` gives, here the working
+directory (`wasm-dirs: .` in the ORIGIN): given none, the 9 cases that
+include a file and are otherwise the original's differ. `outside` gives
+`../outside` too (`outside.env`): with the sandbox or without, the port
+reads the file through `..` (and, in `outside-absolute`, the absolute
+name) and fails on the symbolic link, refused as "Operation not
+permitted" wherever it leads, as a file the original may not read fails
+it. The counts above are unchanged.

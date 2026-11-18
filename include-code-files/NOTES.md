@@ -71,9 +71,12 @@ Copies: none (`CHECK_UNIQUE=1`, every language).
 ## In the hosts
 
 The same in every host (`run.py host`), but for what the host decides
-(`known.tsv`, `HOSTS.md`): a wasm filter sees only the working directory,
-read-only (`outside`, in pandocrs, pandocpy and pandocjl), and in
-libpandoc.wasm's Node host no directory at all (every case). Under the
+(`known.tsv`, `HOSTS.md`). A wasm filter is given no directory unless
+`LIBPANDOC_WASM_DIRS` names some (libpandoc 1.14's hosts; the working
+directory here, `wasm-dirs: .`): given none, 9 of the 11 cases differ.
+`outside` gives `.` and `../outside` (`outside.env`): the file through
+`..` is read, the symbolic link leaving the working directory is refused
+wherever it leads, and its include skipped, in the four wasm hosts. Under the
 directory sandbox the Lua original, inside the module, fails on
 `include=""` (case `missing`), where natively it skips it: in WASI an
 empty name is the working directory, which `io.open` opens and `lines`
