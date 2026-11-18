@@ -7,14 +7,18 @@
 //!
 //! citeproc is pandoc's (`pandoc.utils.citeproc` in the original), which a
 //! Rust filter gets from the host running it when built for wasm (`cargo
-//! build --target wasm32-wasip1`: libpandoc's `convert` goes to pandocrs,
-//! pandocpy, pandocjl or libpandoc.wasm). Built natively, as a JSON filter,
-//! it has no pandoc to call, and fails, saying so.
+//! build --target wasm32-wasip1`: `libpandoc::citeproc` reads the
+//! bibliography files itself, with the directories the host gave the
+//! filter, and hands them to pandocrs, pandocpy, pandocjl or
+//! libpandoc.wasm). Built natively, as a JSON filter, it has no pandoc to
+//! call, and fails, saying so.
 //!
 //! A port of pandoc-ext/multibib (Copyright © 2018-2024 Albert Krewinkel;
 //! MIT, see ../LICENSE).
 
-use panir::{Attr, Block, Ctx, Div, Filter, Inline, Meta, MetaValue, Pandoc, stringify};
+use panir::{
+    Attr, Block, Conversion, Ctx, Div, Filter, Inline, Meta, MetaValue, Pandoc, stringify,
+};
 
 /// What citeproc reads of the metadata, copied for a topic's bibliography.
 const FIELDS: [&str; 11] = [
@@ -31,19 +35,18 @@ const FIELDS: [&str; 11] = [
     "nocite",
 ];
 
-/// pandoc's citeproc on a document (the host's, its warnings in its log).
+/// pandoc's citeproc on a document (the host's, its warnings in its log):
+/// libpandoc's, which reads the files the metadata names itself, with the
+/// directories the filter was given, and hands them to pandoc, whose calls
+/// from a wasm filter read no file.
 #[cfg(target_family = "wasm")]
-fn citeproc(doc: &Pandoc) -> Result<Pandoc, String> {
-    let options = serde_json::json!({"from": "json", "to": "json", "citeproc": true});
-    let out = libpandoc::convert(&options, Some(panir::to_string(doc).as_bytes()))
-        .map_err(|e| e.to_string())?;
-    let text = String::from_utf8(out.bytes).map_err(|e| e.to_string())?;
-    panir::from_str(&text).map_err(|e| e.to_string())
+fn citeproc(doc: &Pandoc, conversion: &Conversion) -> Result<Pandoc, String> {
+    libpandoc::citeproc(doc, conversion).map_err(|e| e.to_string())
 }
 
 /// Natively, a JSON filter has no pandoc to call.
 #[cfg(not(target_family = "wasm"))]
-fn citeproc(_: &Pandoc) -> Result<Pandoc, String> {
+fn citeproc(_: &Pandoc, _: &Conversion) -> Result<Pandoc, String> {
     Err(
         "multibib needs pandoc's citeproc, which a Rust filter gets from the host running it: \
          build it for wasm32-wasip1 and run it in pandocrs, pandocpy, pandocjl or libpandoc.wasm"
@@ -82,7 +85,7 @@ impl Filter for Collect {
 
 /// The citations resolved with every bibliography at once; the
 /// bibliography's div, as citeproc made it.
-fn resolve_doc_citations(doc: &mut Pandoc) -> Result<Block, String> {
+fn resolve_doc_citations(doc: &mut Pandoc, conversion: &Conversion) -> Result<Block, String> {
     // (Lua's pandoc.utils.type: a map is a "table"; its values in any order)
     let files = match doc.meta.get("bibliography") {
         Some(MetaValue::MetaMap(m)) => m
@@ -94,7 +97,7 @@ fn resolve_doc_citations(doc: &mut Pandoc) -> Result<Block, String> {
     doc.meta
         .insert("bibliography".into(), MetaValue::MetaList(files));
     doc.blocks.push(refs_div());
-    *doc = citeproc(doc)?;
+    *doc = citeproc(doc, conversion)?;
     let refs = doc.blocks.pop().ok_or("citeproc left no blocks")?;
     // (the original restores `orig_bib`, which it never set: the field goes)
     doc.meta.remove("bibliography");
@@ -131,7 +134,7 @@ impl Filter for Topics {
         meta.insert("bibliography".into(), bibfile);
         let mut doc = Pandoc::new(vec![Block::Para(self.collected.cites.clone()), refs_div()]);
         doc.meta = meta;
-        let res = ctx.ok(citeproc(&doc))?;
+        let res = ctx.ok(citeproc(&doc, ctx.conversion()))?;
         let Some(Block::Div(filled)) = res.blocks.into_iter().nth(1) else {
             return ctx.fail("citeproc's result has no bibliography's div");
         };
@@ -165,7 +168,7 @@ fn main() {
     panir::filter_with(|doc, conversion| {
         let mut collected = Collect::default();
         panir::apply_with(doc, &mut collected, conversion)?;
-        let refs = match resolve_doc_citations(doc) {
+        let refs = match resolve_doc_citations(doc, conversion) {
             Ok(refs) => refs,
             Err(e) => {
                 eprintln!("multibib: {e}");
