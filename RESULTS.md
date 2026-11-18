@@ -117,8 +117,8 @@ Known differences (`known.tsv`, explained in each `NOTES.md`):
   tests give (36 runs: the same in process, by `cargo test`). Since
   2026-11-18 the ports mirror amsthm's proposed v4.0.0 (`amsthm/NOTES.md`):
   its 340 cases (85 documents, 4 formats, 27 documents with the writer's
-  options, none failing in the original) are the original's in every
-  language, none known; the notes are spans pandoc has read, and the two
+  options, none failing in the original; 348 and 87 since `646d53e`) are
+  the original's in every language, none known; the notes are spans pandoc has read, and the two
   test cases with lists for bodies have words.
 
 How long the whole suite (`run.py test`) takes per language: with 70

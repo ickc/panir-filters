@@ -25,7 +25,7 @@ stays.
 :::
 
 ::: Theorem
-[ ]{.info} A span of a space is a note of a space.
+[ ]{.info} A span of a space is no note, and goes.
 :::
 
 ::: Theorem

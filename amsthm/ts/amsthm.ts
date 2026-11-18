@@ -305,8 +305,8 @@ function readOptions(meta: Meta, writer: Writer): Options {
 
   const ntt = opt.name_to_text;
   const nameToText = new Map(ntt?.t === "MetaMap" ? Object.entries(ntt.content).map(([k, v]) => [metaKey(k), stringify(v)]) : []);
-  // (an empty `name_to_text:` names nothing)
-  if (ntt !== undefined && ntt.t !== "MetaMap" && !(ntt.t === "MetaString" && ntt.text === "")) {
+  // (`name_to_text:` or `""` names nothing)
+  if (ntt !== undefined && ntt.t !== "MetaMap" && stringify(ntt) !== "") {
     warn("name_to_text is not a map from names to their text; ignoring it");
   }
   // one unit for every environment, or a map of them by name
@@ -602,22 +602,32 @@ function placeQedhere(div: Div, o: Options): boolean {
 
 const withInlines = (block: Block | undefined) => (block?.t === "Para" || block?.t === "Plain" ? block.content : undefined);
 
+/** A string without Lua's spaces at its ends. */
+function luaTrim(s: string): string {
+  const space = " \t\n\v\f\r";
+  let [start, end] = [0, s.length];
+  while (start < end && space.includes(s[start]!)) start++;
+  while (end > start && space.includes(s[end - 1]!)) end--;
+  return s.slice(start, end);
+}
+
 /** Takes a div's note out of it: a span with class `info` that starts its
  * first paragraph, as pandoc has read it, with the space after it, and the
  * paragraph if nothing is left in it (the span's other attributes ignored);
- * else its `info` attribute, as plain text. */
+ * without one, or with a blank one, its `info` attribute, as plain text, the
+ * spaces at its ends dropped. */
 function takeNote(div: Div, o: Options): Inline[] | undefined {
   let note: Inline[] | undefined;
   const first = withInlines(div.content[0]);
   const span = first?.[0];
   if (span?.t === "Span" && span.attr.classes.includes("info")) {
     first!.shift();
-    note = span.content;
+    if (!span.content.every((x) => BLANK.has(x.t))) note = span.content;
     if (first![0]?.t === "Space" || first![0]?.t === "SoftBreak") first!.shift();
     if (first!.length === 0) div.content.shift();
   }
-  const info = getAttribute(div.attr, "info");
-  if (info && /[^ \t\n\v\f\r]/.test(info)) {
+  const info = luaTrim(getAttribute(div.attr, "info") ?? "");
+  if (info) {
     if (note) warn(`a note in both a leading [...]{.info} span and info="${info}"; using the span`);
     else {
       if (!PLAIN_TEXT.test(info) && !o.warnedInfo) {
@@ -628,7 +638,7 @@ function takeNote(div: Div, o: Options): Inline[] | undefined {
       note = inlines(info);
     }
   }
-  return note?.length ? note : undefined;
+  return note;
 }
 
 /** Not LaTeX: the heading, the body's font, the end of a proof. */

@@ -1,6 +1,6 @@
 # amsthm
 
-ickc/pandoc-amsthm's `amsthm.lua`, the largest filter of round 1 (1,412
+ickc/pandoc-amsthm's `amsthm.lua`, the largest filter of round 1 (1,427
 lines at the proposed v4.0.0): amsthm's theorem and proof environments,
 declared in the metadata by style (`plain`, `definition`, `remark`, and
 styles of one's own), with counters shared (`Theorem: [Lemma]`) or within
@@ -19,9 +19,10 @@ from its README, its design notes, and its own tests, which are the cases
 here.
 
 **The version mirrored** is the proposed v4.0.0 (`upstream/ORIGIN`:
-`8606511`, the tip of the stack of pull requests ickc/pandoc-amsthm#39 to
+`544ff6c`, the tip of the stack of pull requests ickc/pandoc-amsthm#39 to
 #48, not merged yet): eight fixes, then the note moved from the `info`
-attribute to a span. Until 2026-11-18 the ports mirrored v3.1.1
+attribute to a span, then (`646d53e`) four of the findings below, then
+(`544ff6c`) the attribute trimmed in one pass. Until 2026-11-18 the ports mirrored v3.1.1
 (`ba1008f`), whose note was the attribute read as markdown by the filter
 (`pandoc.read`), round 3's call into pandoc; the ports read it with the
 host's pandoc where they had one and kept a note of plain text as its
@@ -41,15 +42,18 @@ reading no file and no variable.
   identifier, other classes and attributes are dropped (`.smallcaps` shows
   because pandoc's reader makes a `SmallCaps` inside the span). A span with
   class `info` anywhere else, or first in a heading, is an ordinary span.
-  An empty span is no note (cases `note-span`, `note-edges`).
-- **Else the `info` attribute, as plain text** (`pandoc.Inlines(info)`:
-  its words, single `Space`s, a `SoftBreak` for a newline), none when it
-  is empty or blank. Markup in it is shown as typed, with one warning a
+  A blank span (empty, or only spaces and line breaks: `[ ]{.info}`) is
+  no note, and goes all the same (cases `note-span`, `note-edges`).
+- **Else, or after a blank span, the `info` attribute, as plain text**,
+  the spaces at its ends dropped (Lua's `%s`), then `pandoc.Inlines`: its
+  words, single `Space`s, a `SoftBreak` for a newline; none when nothing
+  is left. Markup in it is shown as typed, with one warning a
   document (the first such note, and the porting guide), where "markup" is
   any character but ASCII letters and digits, Lua's spaces, anything not
   ASCII, and `,.;:!?()/-` (`note-attribute`, `note-text`).
 - **Both**: the span, with a warning naming the attribute; the markup
-  test is then not made (`note-both`).
+  test is then not made. A blank span and the attribute: the attribute,
+  with no warning (`note-both`, `note-attribute`).
 - Where the note goes is v3's: in parentheses in a theorem's heading, in
   the note font; a proof's whole heading, in italics but its references;
   LaTeX's `\begin{Theorem}[note]`, braced where it holds math, a
@@ -94,9 +98,9 @@ conversion's `options` in process.
   `parent_counter` drops a backslash before ASCII punctuation, as markdown
   does in a value (`Claim\*` as a key is `Claim*`: `escaped-keys`,
   `escaped-more`, `theorems`); `name_to_text` a map, anything else
-  ignored, with a warning unless it is empty text (`name_to_text:` or
-  null: `name-to-text-*`, `meta-shapes`, `config-lists`, whose list now
-  warns);
+  ignored, with a warning unless its text is empty (`name_to_text:`, null,
+  `""`, and so `[]` too: `name-to-text-*`, `meta-shapes`, `config-lists`,
+  whose list warns);
   `parent_counter` a map, or any value's text (`[chapter]` is `chapter`,
   `true` unsupported: `config-lists`, `config-text`); `counter_depth`
   Lua's `tonumber` of its text (`"1.5"`, `"0"`, `abc`, `false`:
@@ -169,35 +173,47 @@ each fix:
 
 ### Found in the v4 original while porting it
 
-Small, none worth a port's difference (each port reproduces it, and the
-cases pin it). Each with a document that shows it, run as
-`pandoc -L amsthm.lua -t markdown doc.md` (pandoc 3.14), front matter
-`amsthm: {plain: [Theorem]}`:
+At `8606511`, five small things, each a document run as `pandoc -L
+amsthm.lua -t markdown doc.md` (pandoc 3.14), front matter `amsthm:
+{plain: [Theorem]}`. The owner took four upstream in `646d53e`, which the
+ports follow:
 
-1. **A blank span is a note; a blank attribute is not.** `[ ]{.info}
-   Body.` (pandoc reads `Span [Space]`) gives `Theorem 1 ( ).`; the
-   attribute's test is `info:match("%S")`, the span's `#note > 0`. The
-   same test for both (no note when the span's content stringifies to
-   blanks) would match (case `note-edges`, Theorem 5).
-2. **An empty span with the attribute warns "using the span" and gives no
-   note.** `::: {.Theorem info="the attribute"}` then `[]{.info} Body.`:
-   warning `a note in both a leading [...]{.info} span and info="the
-   attribute"; using the span`, heading `Theorem 1.`. Either the
-   attribute could be used when the span is empty, or the warning could
-   say the note is empty (`note-both`, Theorem 2).
-3. **The attribute's spaces at its ends are kept, without a warning.**
-   `info="trailing "` gives `(trailing )`, where v3, reading markdown,
-   gave `(trailing)`; the porting guide says a note of plain text renders
-   as before. pandoc's attribute syntax refuses a leading space, so only
-   a trailing one (or HTML or JSON input) reaches it. Trimming before
-   `pandoc.Inlines` would match v3 (`note-text`, Theorem 4).
-4. **`name_to_text: ""` warns, `name_to_text:` does not.** The quoted
-   empty string is `MetaInlines []`, not `""`, so it is "not a map"; the
-   pull request names only the empty and null forms. Harmless.
-5. **When both forms are on one div, the attribute stays on it** in
-   other output (`data-info="the attribute"` in HTML) while the heading
-   shows the span's note: v3 left the attribute too, but then it was the
-   note (`note-both`, Theorem 1).
+1. **Fixed in `646d53e`: a blank span was a note, a blank attribute
+   not.** `[ ]{.info} Body.` gave `Theorem 1 ( ).`; now a blank span is no
+   note (`note-edges`, Theorem 5; upstream's `note-span`).
+2. **Fixed in `646d53e`: an empty span with the attribute warned "using
+   the span" and gave no note.** Now the attribute is the note, without the
+   warning (`note-both`, Theorems 2 and 4; upstream's `note-attribute`).
+3. **Fixed in `646d53e`: the spaces at the attribute's ends were kept.**
+   `info="trailing "` gave `(trailing )`; now they are dropped, before the
+   markup test and the warnings quote it (`note-text`, Theorem 4).
+4. **Fixed in `646d53e`: `name_to_text: ""` warned, `name_to_text:` did
+   not.** Now the test is the value's text being empty
+   (`name-to-text-quoted`).
+5. **Left as it is: with both forms on one div, the attribute stays on
+   it** in other output (`data-info="the attribute"` in HTML) while the
+   heading shows the span's note (`note-both`, Theorem 1).
+
+New at `646d53e`:
+
+6. **The trim of the attribute takes time quadratic in its length.**
+   `info:match("^%s*(.-)%s*$")` tries `%s*$` at each place the lazy
+   `.-` reaches, and a run of spaces inside is scanned again each time. A
+   document (as JSON, or HTML input) with `info` set to `x`, 40,000
+   spaces and `y` takes 4.5 s with `pandoc -L amsthm.lua -f json -t
+   markdown` (0.03 s at `8606511`), 20,000 0.9 s, 10,000 0.24 s; the
+   match alone on 80,000 spaces 14 s. Expected: linear, as
+   `info:match("^%s*(.*%S)") or ""` is (0.0001 s on the same string; the
+   same result on it, on `" a b  "`, `"   "` and `""`). An untrusted
+   document can make the filter take minutes. The ports trim in linear
+   time (Python's `strip`, Rust's `trim_matches`, Julia's `strip`, a loop
+   in TypeScript): the same output, only faster.
+   **Fixed upstream** in the next commit, `544ff6c` (the one-pass match
+   above), which is the original here now: that line is its only change.
+7. **`name_to_text`'s new test is its text, so an empty list is silent
+   too.** `name_to_text: []` (and `[""]`) no longer warns, where
+   `qed_symbol: []` does ("not math or text"); a list of names
+   (`[a]`) still warns. Harmless; pinned by `name-to-text-empty-list`.
 
 ## By language
 
@@ -212,7 +228,7 @@ cases pin it). Each with a document that shows it, run as
 | the held environments put back | `held[i]`, each once | the node itself | the node itself | moved out of an `Option` | the node itself |
 | Lua's `tonumber` | built in | panir's `lua_number` | `luaNumber` | `lua_number` | `lua_number` |
 | the writer's options | `PANDOC_WRITER_OPTIONS` | `ctx.conversion.options` or `.writer_options`, a dict | `ctx.conversion.options` or `.writerOptions`, an object | `conversion.options` or `.writer_options`, a JSON value | `ctx.conversion.options` or `.writer_options`, a `Dict` |
-| the note | `take_note`: the span out of the first paragraph, or `pandoc.Inlines(info)` | `take_note`, `inlines(info)` | `takeNote`, `inlines(info)` | `take_note`, `panir::inlines(info)` | `take_note!`, `inlines(info)` |
+| the note | `take_note`: the span out of the first paragraph, `is_blank`, or the trimmed `pandoc.Inlines(info)` | `take_note`, `inlines(info)` | `takeNote`, `inlines(info)` | `take_note`, `panir::inlines(info)` | `take_note!`, `inlines(info)` |
 | the markup test | a Lua pattern, `[^%w%s\128-\255,.;:!?()/%-]` | a regular expression | a regular expression (`u`) | a `chars().all` | `all` over the characters |
 | a key's backslash | `gsub("\\(%p)", "%1")` | `re.sub` | `replace` with `/g` | by hand (`next_if`) | `replace` with a regex |
 | the metadata's shape | `pandoc.utils.type` | `match` on the classes | `.t` | `match` on `MetaValue` | `isa` |

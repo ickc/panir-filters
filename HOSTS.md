@@ -207,6 +207,14 @@ filter: 3,774 the original's, 58 known, none failing (before: 3,454 and
 H2, H9, H10 and H15 no longer have amsthm among the filters hitting them
 (H10 none left here).
 
+The same day the owner added `646d53e` to the stack (a blank note span is
+no note, the attribute's end spaces are dropped, an empty `name_to_text`
+text is silent), and the ports follow it: 87 documents, 348 runs a mode.
+`run.py host amsthm`, libpandoc's JavaScript host at `3c2f499`: 3,132
+runs, all the original's; with the other filters' runs as before, 9,102
+runs, 8,923 the original's, 179 known. `run.py test`, every filter: 3,806
+the original's, 58 known, none failing.
+
 ## What each filter needs
 
 From the runs above: a wasm port is given no directory unless its ORIGIN
