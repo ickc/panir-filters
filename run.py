@@ -90,6 +90,18 @@ def workdir(folder: Path) -> Path | None:
     return folder / cwd if cwd else None
 
 
+def wasm_dirs(folder: Path) -> dict[str, str]:
+    """What a filter's port built for wasm is given in a host: the
+    directories its ORIGIN's `wasm-dirs` names (`wasm-dirs: .`, relative
+    to its `cwd`; the chain's together), as `LIBPANDOC_WASM_DIRS`, a list
+    as PATH's, which every host reads. None for a filter that names none:
+    a wasm filter is given no directory by default, so its runs prove it
+    needs none. A case may give more, its `NAME.env` setting the variable
+    itself (include-files' `outside`)."""
+    dirs = [d for f in chain(folder) for d in origin(f).get("wasm-dirs", "").split()]
+    return {"LIBPANDOC_WASM_DIRS": os.pathsep.join(dict.fromkeys(dirs))} if dirs else {}
+
+
 def needs_pandoc(folder: Path, case: dict | None = None) -> bool:
     """Whether a filter's ports call pandoc (`needs: pandoc` in its ORIGIN,
     round 2's and 3's), or, given a case, its ports do on that case
@@ -536,6 +548,10 @@ HOSTS = {
     "pandocjl-lua": ("lua", "a Lua original in pandocjl (-L), for the sandbox"),
 }
 
+# The modes running a port built for wasm, given what its filter states
+# (`wasm_dirs`).
+WASM = ("pandocrs-wasm", "pandocpy-wasm", "pandocjl-wasm", "node-wasm")
+
 # The modes `host --sandbox` runs.
 # (Not a JSON filter: the sandbox refuses it, status 83, documented.)
 SANDBOXED = ["pandocpy-lua", "pandocrs-lua", "pandocjl-lua", "pandocpy", "python-api", "pandocrs-wasm",
@@ -683,10 +699,13 @@ def cmd_host(args: argparse.Namespace) -> int:
                 print(f"note: {folder.name} rust@{mode} skipped: a JSON filter has no pandoc to call (NOTES.md)")
                 continue
             skipped = 0
+            given = wasm_dirs(folder) if mode in WASM else {}
             for case in expected(folder):
                 if mode == "pandocrs-native" and needs_pandoc(folder, case):
                     skipped += 1
                     continue
+                if given:  # (the case's own environment after: it may give more)
+                    case = {**case, "env": {**given, **case.get("env", {})}}
                 runs.append((folder, case, files))
                 if args.sandbox and case["name"] == "outside":
                     runs.append((folder, absolute_probe(folder, case), files))
@@ -795,6 +814,9 @@ def main() -> int:
     p.add_argument("--repeat", type=int, default=3)
     args = ap.parse_args()
     command = {"test": cmd_test, "diff": cmd_diff, "expect": cmd_expect, "host": cmd_host, "time": cmd_time}[args.command]
+    # a wasm filter is given what its filter states (wasm_dirs), not the
+    # directories of the caller's LIBPANDOC_WASM_DIRS
+    os.environ.pop("LIBPANDOC_WASM_DIRS", None)
     if not env("PANDOC"):
         return command(args)
     # a port or an original running the `pandoc` command runs this one: a

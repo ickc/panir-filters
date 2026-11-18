@@ -36,7 +36,9 @@ One folder per filter:
   then run one after the other, in one pandoc if both are Lua, and each
   language's ports likewise; as `cwd: cases/files`, the directory the
   original, the ports and the hosts run in, where the files its cases
-  name are; as `needs: pandoc`, that its ports call pandoc, so only
+  name are; as `wasm-dirs: .`, the directories, relative to it, its port
+  built for wasm is given in a host (`LIBPANDOC_WASM_DIRS`; none for a
+  filter that names none); as `needs: pandoc`, that its ports call pandoc, so only
   `run.py host` runs them);
 - `cases/`: input documents (`*.md`, read by pandoc's markdown reader, with
   the reader's options in `NAME.args` beside one, if any: `-M lang=en-GB`,
@@ -47,7 +49,8 @@ One folder per filter:
   with `NAME.args` as that reader's options, `--track-changes=all`: input
   only that reader makes, with nothing but markdown kept; with `NAME.env`,
   `KEY=VALUE` lines, the original and the ports run that case with those
-  environment variables; with `NAME.opts`, a JSON object of pandoc's
+  environment variables (`LIBPANDOC_WASM_DIRS` among them, for a case
+  whose wasm port is given more than its filter's `wasm-dirs`); with `NAME.opts`, a JSON object of pandoc's
   defaults-file keys, the conversion's options, the writer's among them,
   which a JSON filter is not given: the original runs with them, the
   Python, TypeScript and Julia ports in process, as a host does, with
@@ -125,12 +128,16 @@ Python originals, a Python with `oracle-requirements.txt`
     python3 run.py expect caps           # regenerate cases/expected.jsonl
     python3 run.py time caps --doc doc.json   # time and peak memory, original and ports
 
-Inside libpandoc's hosts, built from their checkouts as their READMEs
-say (`HOSTS.md` lists the commits), named by `$PANDOCPY`, `$HOST_PYTHON`
-(a Python with libpandoc), `$PANDOCRS`, `$PANDOCJL` (a command line:
-`julia -J IMAGE --project=DIR -m LibPandoc`), `$LIBPANDOC_NODE` (libpandoc's
-`wasm/node.mjs`) and `$LIBPANDOC_WASM`; a mode whose host isn't named is
-skipped:
+Inside libpandoc's hosts (libpandoc 1.14 or later), built from their
+checkouts as their READMEs say (`HOSTS.md` lists the commits), named by
+`$PANDOCPY`, `$HOST_PYTHON` (a Python with libpandoc), `$PANDOCRS`,
+`$PANDOCJL` (a command line: `julia -J IMAGE --project=DIR -m
+LibPandoc`), `$LIBPANDOC_NODE` (libpandoc's `wasm/node.mjs`) and
+`$LIBPANDOC_WASM`; a mode whose host isn't named is skipped. A wasm port
+is given the directories its filter's `wasm-dirs` names, and a case's
+`NAME.env` more, as `LIBPANDOC_WASM_DIRS`; `run.py` sets the variable
+itself, ignoring the caller's, so a filter that names none runs with no
+directory, as a wasm filter does by default:
 
     python3 run.py host                  # every port in each of its hosts, on the cases
     python3 run.py host include-files --host pandocpy,pandocrs-wasm

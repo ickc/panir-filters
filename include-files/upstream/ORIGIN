@@ -7,4 +7,5 @@ cases: cases/sample.md is the repository's sample.md, verbatim, and cases/files/
 run: lua include-files.lua
 formats: html
 cwd: cases/files
+wasm-dirs: .
 needs: pandoc

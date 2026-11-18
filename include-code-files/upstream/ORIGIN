@@ -7,3 +7,4 @@ cases: cases/sample.md is the repository's include-code-files/sample.md, verbati
 run: lua include-code-files.lua
 formats: html
 cwd: cases/files
+wasm-dirs: .

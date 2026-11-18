@@ -7,4 +7,5 @@ cases: cases/sample.md is the repository's test/input.md, verbatim, and cases/fi
 run: lua multibib.lua
 formats: html docx
 cwd: cases/files
+wasm-dirs: .
 needs: pandoc
