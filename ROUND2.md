@@ -42,6 +42,9 @@ its `main` against libpandoc 1.12, and again against 1.13 and 1.14
 - **Round 3**: amsthm's notes are read by the host's pandoc where a port
   has one (every host but JavaScript), and are then the original's in
   every case; standalone, the ports keep round 1's plain-text rule.
+  (2026-11-18: the ports now mirror amsthm's proposed v4.0.0, whose note
+  is a span pandoc has read with the document; no reader, no rule, and
+  amsthm is pure: `amsthm/NOTES.md`.)
   multibib (pandoc-ext) runs citeproc from inside a
   filter, twice: in the four languages, the same in every host but the
   wasm ones (H3); since libpandoc 1.14 in those too, the Rust port reading
@@ -90,7 +93,8 @@ give some; documented H5, H8, H10, H11, H15, H16 and H18; H14 measured,
 to build the owner's decision, not made.) What each filter needs from a
 host, from the runs: 19 of the 25 are pure, 4 read files, 1 the
 process's environment, 4 call pandoc (`HOSTS.md`, "What each filter
-needs"). And in panir
+needs"; since 2026-11-18, amsthm's ports mirroring the proposed v4.0.0,
+whose note pandoc has read with the document: 20 pure, 3 calling pandoc). And in panir
 (`GAPS.md` 41 to 46): pandoc.path's functions, Lua's `tonumber`, a
 fragment's walk that forgets the conversion, Python's list constructors,
 and with pantable a table from a grid of cells and a parser of pandoc's

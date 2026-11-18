@@ -122,7 +122,9 @@ in Rust; amsthm numbering the textbook's 738 environments in HTML, 1.4,
   pantable; auto-lang's table is compiled in, where the original `dofile`s
   it, so `PANDOC_SCRIPT_FILE` and paths beside a filter went untested.
 - **Calling pandoc** (round 3): `pandoc.read` (amsthm's notes, which the
-  ports read as plain text only; short-captions), `pandoc.write`
+  ports read as plain text only, until 2026-11-18, when they followed the
+  proposed v4.0.0, whose note pandoc reads with the document;
+  short-captions), `pandoc.write`
   (list-table's error message), citeproc (multibib, section-refs). Python
   has libpandoc for it; the other languages' bindings were not used.
 - **Running programs**: diagram, graphviz, plantuml and the like, not
@@ -143,7 +145,9 @@ in Rust; amsthm numbering the textbook's 738 environments in HTML, 1.4,
   script's folder on `sys.path`), 33 (a metadata value as inlines or
   blocks, as Lua converts it), 36, 39, 40 (low).
 - For the owner: auto-lang's and amsthm's lists of what looks unintended
-  (`auto-lang/NOTES.md`, `amsthm/NOTES.md`); the other originals' bugs
+  (`auto-lang/NOTES.md`, `amsthm/NOTES.md`; amsthm's, 2026-11-18, filed
+  as ickc/pandoc-amsthm#31 to #38 and fixed in the proposed v4.0.0,
+  which the ports now mirror); the other originals' bugs
   are in their `NOTES.md`, and two (pandoc-quotes' `.t`, track-changes'
   `trackChanges`) are pandoc 2's API under pandoc 3.
 - Julia's cases take minutes now (a module per case compiles each

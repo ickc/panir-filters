@@ -114,7 +114,12 @@ Known differences (`known.tsv`, explained in each `NOTES.md`):
   28 runs); pandoc's Lua making an empty list item `[Plain []]` once the
   original reads the list's `content` (every language, 4 runs); and Rust,
   run as a JSON filter, without the writer's options the original's
-  tests give (36 runs: the same in process, by `cargo test`).
+  tests give (36 runs: the same in process, by `cargo test`). Since
+  2026-11-18 the ports mirror amsthm's proposed v4.0.0 (`amsthm/NOTES.md`):
+  its 340 cases (85 documents, 4 formats, 27 documents with the writer's
+  options, none failing in the original) are the original's in every
+  language, none known; the notes are spans pandoc has read, and the two
+  test cases with lists for bodies have words.
 
 How long the whole suite (`run.py test`) takes per language: with 70
 cases, Python 1.5 s, TypeScript 4.8 s (a Node.js process per case), Rust
@@ -481,7 +486,9 @@ where the original does). amsthm with a note on each of the 738
 environments, against none: +0.06 s for the Lua original, +0.25 for
 Python (`libpandoc.read`), +0.21 for Julia, +0.15 (libpandoc-rs) to
 +0.28 (libpandoc-python) for the Rust wasm filter, and +0.02 for the Rust
-port without a reader (the plain-text rule).
+port without a reader (the plain-text rule). (Since 2026-11-18 amsthm's
+ports mirror its proposed v4.0.0, whose note is a span pandoc has read
+with the document: no call, so none of this cost.)
 
 ## pantable (rounds 2 and 3, the last)
 

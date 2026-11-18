@@ -11,32 +11,25 @@ numbers them as amsthm would (counters shared, within sections), sets
 their headings and bodies in their style's fonts, ends proofs with a
 symbol, and makes citations of them links.
 
-A div's `info` is its note, `Theorem 1 (note)`, which the original reads as
-markdown with pandoc (`pandoc.read`); this port reads it with libpandoc
-where this process has it (pandocpy, `libpandoc.convert`, or libpandoc
-installed). Without it, a note of plain text (words of letters and digits,
-a hyphen inside a word, and `,;:?!` after one, single spaces between) is
-read as pandoc reads it; any other is kept as its text, with a warning.
+A div's note, `Theorem 1 (note)`, is a span with class `info` that starts
+its first paragraph (`[note]{.info} ...`), as pandoc has read it with the
+document; without one, its `info` attribute, as plain text, with one
+warning a document where that holds markup.
 
 A port of ickc/pandoc-amsthm's amsthm.lua (Copyright (c) 2016-2026, Kolen
 Cheung; BSD-3-Clause, see ../LICENSE).
 """
 
-import copy
 import math
 import re
 import sys
-
-try:
-    import libpandoc  # pandoc's reader, for the notes
-except ImportError:
-    libpandoc = None
 from dataclasses import dataclass, field
 
 from panir import (
     lua_number,
     Conversion,
     Block,
+    Citation,
     Cite,
     CitationMode,
     Context,
@@ -51,10 +44,10 @@ from panir import (
     Math,
     Meta,
     MetaBlocks,
-    MetaBool,
     MetaInlines,
     MetaList,
     MetaMap,
+    MetaString,
     MetaValue,
     Pandoc,
     Para,
@@ -95,29 +88,11 @@ def warn(message: str) -> None:
     print(f"[amsthm] warning: {message}", file=sys.stderr)
 
 
-# A note of plain text: words of letters and digits (anything not ASCII but
-# a space), a hyphen inside one, and one of `,;:?!` after one, single
-# spaces between. pandoc's markdown reader gives such a text as it is, a
-# Str a word.
-PLAIN = re.compile(r"(?:[A-Za-z0-9]|[^\x00-\x7f\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff])+")
-PLAIN_NOTE = re.compile(rf"{PLAIN.pattern}(?:-{PLAIN.pattern})*[,;:?!]?(?: {PLAIN.pattern}(?:-{PLAIN.pattern})*[,;:?!]?)*")
-
-
-def note_inlines(info: str) -> list[Inline]:
-    """A div's note, read by pandoc's markdown reader as the original reads
-    it, where libpandoc is here; else as that reader reads plain text, and
-    any other note as its text, with a warning."""
-    if libpandoc is not None:
-        out: list[Inline] = []
-        for block in libpandoc.read(info, "markdown").blocks:
-            if not isinstance(block, (Para, Plain)):
-                # (the original puts the block among inlines, and pandoc fails)
-                raise ValueError(f"the note {info!r} is not inlines: a {type(block).__name__}")
-            out += block.content
-        return out
-    if not PLAIN_NOTE.fullmatch(info):
-        warn(f"the note {info!r} has markup, which needs pandoc's markdown reader: kept as text")
-    return inlines(info)
+PORTING_GUIDE = "https://ickc.github.io/pandoc-amsthm/porting.html"
+# An `info` attribute that reads as it did as markdown in v3: ASCII letters
+# and digits, Lua's spaces, anything not ASCII and `,.;:!?()/-`; not an
+# apostrophe, which markdown made a typographic one.
+PLAIN_TEXT = re.compile(r"[A-Za-z0-9 \t\n\v\f\r\x80-\U0010ffff,.;:!?()/-]*")
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +270,7 @@ class Theorem:
     def counter_name(self) -> str:
         return self.shared_counter or self.env_name
 
-    def header(self, options: "Options", identifier: str, info: str | None) -> list[Inline]:
+    def header(self, options: "Options", identifier: str, note: list[Inline] | None) -> list[Inline]:
         """The heading, as amsthm's `\\thmhead` writes it: the name and the
         number in the style's heading font, the number upright, the note in
         parentheses in the note font, and the punctuation; then the space
@@ -323,27 +298,25 @@ class Theorem:
             runs.insert(0, ([Str(number), Str("\u00a0")], head))
         elif number:
             runs.append(([Space(), Str(number)], [f for f in head if f == "bold"]))  # upright
-        if info:
-            runs.append(([Space(), Str("("), *note_inlines(info), Str(")")], []))
+        if note:
+            runs.append(([Space(), Str("("), *note, Str(")")], []))
         runs.append(([Str(style.headpunct)], head))
         return [*join_runs(runs), LineBreak() if style.headspace == "newline" else Space()]
 
 
 class Proof(Theorem):
     def __init__(self, text: str | None) -> None:
-        # (`name_to_text: {proof: ""}` is an empty name, which a theorem's
-        # text takes as none: the proof's is then its environment's, "proof")
-        super().__init__("proof", "proof", "Proof" if text is None else text, numbered=False)
+        super().__init__("proof", "proof", text or "Proof", numbered=False)
 
-    def header(self, options: "Options", identifier: str, info: str | None) -> list[Inline]:
+    def header(self, options: "Options", identifier: str, note: list[Inline] | None) -> list[Inline]:
         """"Proof.", in italics; or the note, in italics but its references,
         for the whole heading."""
-        if not info:
+        if not note:
             return [Emph(*inlines(self.text + ".")), Space()]
         # each Str in italics, emphasis in it upright, references as the
         # font applies to them; then neighbouring italics joined (in the
         # paragraph itself: a walk is of what is in it)
-        para = Para(*note_inlines(info)).walk(wrap_strs(Emph))
+        para = Para(*note).walk(wrap_strs(Emph))
         merge_consecutive(Emph)(para)
         return [*para.content, Emph(Str(".")), Space()]
 
@@ -405,6 +378,7 @@ class Options:
     names: dict[str, str] = field(default_factory=dict)
     unnumbered: set[str] = field(default_factory=set)
     warned: set[str] = field(default_factory=set)
+    warned_info: bool = False  # (an info attribute with markup, once a document)
 
 
 def as_list(value: MetaValue | None) -> list[MetaValue]:
@@ -412,16 +386,11 @@ def as_list(value: MetaValue | None) -> list[MetaValue]:
     return items(value)
 
 
-def lua_pairs(value: MetaValue, what: str) -> dict[str, MetaValue]:
-    """A map's entries, as Lua's `pairs`: a list's are its indices, which
-    no name matches; text or a boolean fails, as in Lua."""
-    match value:
-        case MetaMap(content):
-            return dict(content)
-        case MetaList() | MetaInlines() | MetaBlocks():
-            return {}
-        case _:
-            raise ValueError(f"amsthm: {what} is {type(value).__name__}, not a map")
+def meta_key(key: str) -> str:
+    """The name a metadata key stands for: a value is markdown, so
+    `Conjecture\\*` in a list is `Conjecture*`, a key is as written; a
+    backslash before punctuation is dropped, as markdown drops it."""
+    return re.sub(r"\\([!-/:-@\[-`{-~])", r"\1", key)
 
 
 def read_font(value: MetaValue | None, where: str) -> list[str]:
@@ -498,13 +467,20 @@ def read_options(meta: Meta, writer: Writer) -> Options:
     # (an empty `amsthm:` is text, not a map: it defines nothing)
     opt = dict(config.content) if isinstance(config, MetaMap) else {}
 
-    name_to_text = {k: stringify(v) for k, v in lua_pairs(opt["name_to_text"], "name_to_text").items()} if "name_to_text" in opt else {}
+    name_to_text: dict[str, str] = {}
+    match opt.get("name_to_text"):
+        case MetaMap(content):
+            name_to_text = {meta_key(k): stringify(v) for k, v in content.items()}
+        case None | MetaString(""):  # (an empty `name_to_text:` names nothing)
+            pass
+        case _:
+            warn("name_to_text is not a map from names to their text; ignoring it")
     # one unit for every environment, or a map of them by name
     parent_counters: dict[str, str] = {}
     parent_counter = None
     match opt.get("parent_counter"):
         case MetaMap(content):
-            parent_counters = {k: stringify(v) for k, v in content.items()}
+            parent_counters = {meta_key(k): stringify(v) for k, v in content.items()}
         case None:
             pass
         case other:
@@ -524,16 +500,27 @@ def read_options(meta: Meta, writer: Writer) -> Options:
                 # a name, and the names sharing its counter (YAML's keys come
                 # sorted, and so are they here)
                 for key in sorted(entry.content):
-                    add(Theorem(style, key, name_to_text.get(key, ""), parent_counters.get(key, parent_counter)))
+                    name = meta_key(key)
+                    owner = Theorem(style, name, name_to_text.get(name, ""), parent_counters.get(name, parent_counter))
+                    add(owner)
+                    # a name under it shares its counter; an unnumbered one
+                    # has none, so each is numbered on its own then
                     value = entry.content[key]
                     for v in value.content if isinstance(value, MetaList) else [value]:
-                        name = stringify(v)
-                        add(Theorem(style, name, name_to_text.get(name, ""), shared_counter=key))
+                        shared = stringify(v)
+                        t = Theorem(style, shared, name_to_text.get(shared, ""),
+                                    None if owner.numbered else parent_counters.get(shared, parent_counter),
+                                    name if owner.numbered else None)
+                        if t.numbered and not owner.numbered:
+                            warn(f"{owner.env_name} is unnumbered, so it has no counter for {t.env_name} to share; numbering {t.env_name} on its own")
+                        add(t)
             else:
                 name = stringify(entry)
                 add(Theorem(style, name, name_to_text.get(name, ""), parent_counters.get(name, parent_counter)))
-    proof = Proof(name_to_text.get("proof"))
-    add(proof)
+    # (an empty name is none, as for any environment: "Proof", and in LaTeX
+    # babel's)
+    proof_name = name_to_text.get("proof") or None
+    add(Proof(proof_name))
 
     top = top_level_division(meta, writer)
     # with parts at level 1: a part steps no other counter, and is in a
@@ -564,7 +551,9 @@ def read_options(meta: Meta, writer: Writer) -> Options:
     # the end-of-proof symbol as TeX math: the text of its math, raw TeX and
     # words
     qed_symbol = "\\Box"
-    if "qed_symbol" in opt:
+    if "qed_symbol" in opt and not isinstance(opt["qed_symbol"], (MetaInlines, MetaString)):
+        warn("qed_symbol is not math or text; ignoring it")
+    elif "qed_symbol" in opt:
         parts: list[str] = []
         collect = Filter()
         collect.on(Math)(lambda m: parts.append(m.text))
@@ -583,7 +572,7 @@ def read_options(meta: Meta, writer: Writer) -> Options:
         counters=counters,
         numbered_depth=numbered_depth(meta, writer, top),
         part_level=part_level,
-        proof_name=name_to_text.get("proof"),
+        proof_name=proof_name,
         theorems=theorems,
         by_class=by_class,
         counter_depth=counter_depth,
@@ -653,6 +642,10 @@ def style_body(div: Div, options: Options, bodyfont: list[str]) -> None:
     """The div's content in its style's body font; environments in it are
     held out, as each has a style of its own."""
     held: list[Div] = []
+    # each placeholder's attribute starts with a mark no document can know
+    # (the original's is the address of its list), so a div of the user's
+    # with the attribute is not taken for one
+    mark = f"{id(held):#x} "
     hold = Filter(traverse="topdown")
 
     @hold.on(Div)
@@ -660,7 +653,7 @@ def style_body(div: Div, options: Options, bodyfont: list[str]) -> None:
         if find_theorem(options, d.classes):
             held.append(d)
             ctx.skip_children()
-            return Div(attributes={"amsthm-held": str(len(held))})
+            return Div(attributes={"amsthm-held": f"{mark}{len(held)}"})
         return None
 
     div.content.walk(hold)
@@ -671,10 +664,8 @@ def style_body(div: Div, options: Options, bodyfont: list[str]) -> None:
 
         @restore.on(Div)
         def back(d: Div) -> Div | None:
-            # (any div with the attribute, the user's too: a copy each, as
-            # each return is in Lua)
-            i = lua_number(d.attributes.get("amsthm-held", ""))
-            return copy.deepcopy(held[int(i) - 1]) if i is not None and i == int(i) and 1 <= i <= len(held) else None
+            value = d.attributes.get("amsthm-held", "")
+            return held[int(value[len(mark):]) - 1] if value.startswith(mark) else None
 
         div.content.walk(restore)
 
@@ -730,8 +721,35 @@ def place_qedhere(div: Div, options: Options) -> bool:
 
 
 def with_inlines(block: Block | None) -> list[Inline] | None:
-    """The inlines of a paragraph, plain text or heading."""
-    return block.content if isinstance(block, (Para, Plain, Header)) else None
+    """The inlines of a paragraph or plain text."""
+    return block.content if isinstance(block, (Para, Plain)) else None
+
+
+def take_note(div: Div, options: Options) -> list[Inline] | None:
+    """Takes a div's note out of it: a span with class `info` that starts
+    its first paragraph, as pandoc has read it, with the space after it, and
+    the paragraph if nothing is left in it (the span's other attributes
+    ignored); else its `info` attribute, as plain text."""
+    note = None
+    first = with_inlines(div.content[0] if div.content else None)
+    if first and isinstance(span := first[0], Span) and "info" in span.classes:
+        del first[0]
+        note = span.content
+        if first and isinstance(first[0], (Space, SoftBreak)):
+            first.pop(0)
+        if not first:
+            del div.content[0]
+    info = div.attributes.get("info")
+    if info and info.strip(" \t\n\v\f\r"):  # (blank: none)
+        if note is not None:
+            warn(f'a note in both a leading [...]{{.info}} span and info="{info}"; using the span')
+        else:
+            if not PLAIN_TEXT.fullmatch(info) and not options.warned_info:
+                options.warned_info = True
+                warn(f'the info attribute is plain text since amsthm v4, so info="{info}" is shown as typed; '
+                     f"write the note as a leading [...]{{.info}} span to keep its markup (once per document; see {PORTING_GUIDE})")
+            note = inlines(info)
+    return note or None
 
 
 def environment(div: Div, options: Options) -> Div | None:
@@ -739,10 +757,11 @@ def environment(div: Div, options: Options) -> Div | None:
     theorem = find_theorem(options, div.classes, True)
     if theorem is None:
         return None
+    note = take_note(div, options)  # (before the body is in its font, which the note is not)
     identifier = div.identifier
     if not theorem.numbered and identifier:
         options.unnumbered.add(identifier)
-    *title, space = theorem.header(options, identifier, div.attributes.get("info"))
+    *title, space = theorem.header(options, identifier, note)
     header = [Span(*title, classes=["amsthm-title"]), space]
 
     style = options.styles.get(theorem.style)
@@ -777,13 +796,19 @@ def reference_target(identifier: str, known: dict[str, str] | set[str]) -> tuple
     return None
 
 
+def has_affix(c: Citation) -> bool:
+    """Whether a citation has a prefix or suffix (`[see @a]`, `[@a, p. 3]`),
+    which a reference to an environment would drop."""
+    return bool(c.prefix or c.suffix)
+
+
 def multi_ref(cite: Inline, known: dict[str, str]) -> list[str] | None:
     """The ids of `[@a; @b]`, each an environment's, none with a prefix or
     suffix (which the list would drop); else None, for citeproc."""
     if not isinstance(cite, Cite) or len(cite.citations) < 2:
         return None
     for c in cite.citations:
-        if c.mode != CitationMode.NormalCitation or c.id not in known or c.prefix or c.suffix:
+        if c.mode != CitationMode.NormalCitation or c.id not in known or has_affix(c):
             return None
     return [c.id for c in cite.citations]
 
@@ -816,10 +841,14 @@ def warn_unnumbered(x: Cite | RawInline, options: Options) -> None:
         if target and target[0] not in options.warned:
             options.warned.add(target[0])
             warn(f"reference to the unnumbered environment {target[0]}; LaTeX prints the last number before it, other output leaves it unresolved")
+    # [see @a], [@a, p. 3]: one environment, with a prefix or suffix
+    if isinstance(x, Cite) and len(x.citations) == 1 and has_affix(c := x.citations[0]):
+        if reference_target(c.id, options.identifiers) or reference_target(c.id, options.unnumbered):
+            warn(f"a reference to an environment cannot carry a prefix or suffix, and is left to citeproc: {stringify(x)}")
     if isinstance(x, Cite) and len(x.citations) > 1:
         ours = others = named_ = affixed = False
         for c in x.citations:
-            affixed = affixed or bool(c.prefix or c.suffix)
+            affixed = affixed or has_affix(c)
             if c.id in options.identifiers or c.id in options.unnumbered:
                 ours = True
             elif reference_target(c.id, options.identifiers):
@@ -849,6 +878,8 @@ def resolve(x: Cite | RawInline, options: Options) -> list[Inline] | None:
         return ref_list(ids, lambda i: ref_link(i, known[i], True))
     if isinstance(x, Cite):
         identifier, mode = cite_id_mode(x)
+        if identifier is not None and has_affix(x.citations[0]):
+            return None  # (for citeproc, as [@a; @b] is)
         target = reference_target(identifier, known) if identifier is not None else None
         if target:
             identifier, is_named = target
@@ -868,7 +899,8 @@ def cite_to_ref(cite: Cite, options: Options) -> list[Inline] | None:
     if (ids := multi_ref(cite, known)) is not None:
         return ref_list(ids, lambda i: [RawInline("latex", f"\\eqref{{{i}}}")])
     identifier, mode = cite_id_mode(cite)
-    if identifier is None or mode not in (CitationMode.NormalCitation, CitationMode.AuthorInText):
+    # (with a prefix or suffix, for citeproc, as [@a; @b] is)
+    if identifier is None or has_affix(cite.citations[0]) or mode not in (CitationMode.NormalCitation, CitationMode.AuthorInText):
         return None
     paren = mode == CitationMode.NormalCitation
     target = reference_target(identifier, known)
@@ -910,8 +942,7 @@ def latex_environment(div: Div, options: Options) -> Div | None:
     if theorem is None:
         return None
     opening: list[Inline] = [RawInline("latex", f"\\begin{{{theorem.env_name}}}")]
-    if info := div.attributes.get("info"):
-        note = note_inlines(info)
+    if note := take_note(div, options):
         brace = needs_brace(note)
         opening += [RawInline("latex", "[{" if brace else "["), *note, RawInline("latex", "}]" if brace else "]")]
     if div.identifier:

@@ -10,22 +10,22 @@
 //! their headings and bodies in their style's fonts, ends proofs with a
 //! symbol, and makes citations of them links.
 //!
-//! A div's `info` is its note, `Theorem 1 (note)`, which the original reads
-//! as markdown with pandoc. This port has no markdown reader: a note of
-//! plain text (words of letters and digits, a hyphen inside a word, and
-//! `,;:?!` after one, single spaces between) is read as pandoc reads it; any
-//! other is kept as its text, with a warning.
+//! A div's note, `Theorem 1 (note)`, is a span with class `info` that starts
+//! its first paragraph (`[note]{.info} ...`), as pandoc has read it with the
+//! document; without one, its `info` attribute, as plain text, with one
+//! warning a document where that holds markup.
 //!
 //! A port of ickc/pandoc-amsthm's amsthm.lua (Copyright (c) 2016-2026, Kolen
 //! Cheung; BSD-3-Clause, see ../LICENSE).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Display;
+use std::hash::BuildHasher;
 
 use panir::{
-    Attr, Block, CitationMode, Cite, Conversion, Ctx, Div, Filter, Inline, Link, Math, MathType,
-    Meta, MetaValue, Order, Pandoc, Span, Target, inlines_of, items, lua_number, stringify,
-    to_roman_numeral,
+    Attr, Block, Citation, CitationMode, Cite, Conversion, Ctx, Div, Filter, Inline, Link, Math,
+    MathType, Meta, MetaValue, Order, Pandoc, Span, Target, inlines_of, items, lua_number,
+    stringify, to_roman_numeral,
 };
 
 /// LaTeX's sectioning units, by depth: parent_counter's values.
@@ -90,63 +90,15 @@ fn warn(message: impl Display) {
     eprintln!("[amsthm] warning: {message}");
 }
 
-/// A note of plain text: words of letters and digits (anything not ASCII
-/// but a space), a hyphen inside one, and one of `,;:?!` after one, single
-/// spaces between. pandoc's markdown reader gives such a text as it is, a
-/// Str a word.
-#[cfg(not(target_family = "wasm"))]
-fn is_plain(note: &str) -> bool {
-    let letter = |c: char| {
-        c.is_ascii_alphanumeric()
-            || (!c.is_ascii()
-                && !matches!(
-                    c,
-                    '\u{85}' | '\u{a0}' | '\u{1680}' | '\u{2000}'
-                        ..='\u{200a}'
-                            | '\u{2028}'
-                            | '\u{2029}'
-                            | '\u{202f}'
-                            | '\u{205f}'
-                            | '\u{3000}'
-                            | '\u{feff}'
-                ))
-    };
-    note.split(' ').all(|word| {
-        let word = word.strip_suffix([',', ';', ':', '?', '!']).unwrap_or(word);
-        word.split('-')
-            .all(|part| !part.is_empty() && part.chars().all(letter))
-    })
-}
+const PORTING_GUIDE: &str = "https://ickc.github.io/pandoc-amsthm/porting.html";
 
-/// A div's note, as the original reads it with pandoc's markdown reader
-/// where it is plain text; otherwise its text, with a warning.
-/// A div's note, read by pandoc's markdown reader as the original reads it
-/// (`pandoc.read`): the host's, built for wasm; natively (a JSON filter has
-/// no pandoc to call) as that reader reads plain text, and any other note
-/// as its text, with a warning.
-fn note_inlines(info: &str) -> Result<Vec<Inline>, String> {
-    #[cfg(target_family = "wasm")]
-    {
-        let doc = libpandoc::read(info, "markdown").map_err(|e| e.to_string())?;
-        let mut out = Vec::new();
-        for block in doc.blocks {
-            match block {
-                Block::Para(xs) | Block::Plain(xs) => out.extend(xs),
-                // (the original puts the block among inlines, and pandoc fails)
-                other => return Err(format!("the note {info:?} is not inlines: {}", other.tag())),
-            }
-        }
-        Ok(out)
-    }
-    #[cfg(not(target_family = "wasm"))]
-    {
-        if !is_plain(info) {
-            warn(format!(
-                "the note {info:?} has markup, which needs pandoc's markdown reader: kept as text"
-            ));
-        }
-        Ok(panir::inlines(info))
-    }
+/// Whether an `info` attribute reads as it did as markdown in v3: ASCII
+/// letters and digits, Lua's spaces, anything not ASCII and `,.;:!?()/-`;
+/// not an apostrophe, which markdown made a typographic one.
+fn is_plain_text(text: &str) -> bool {
+    text.chars().all(|c| {
+        c.is_ascii_alphanumeric() || !c.is_ascii() || " \t\n\x0b\x0c\r,.;:!?()/-".contains(c)
+    })
 }
 
 /// Whether a note holds math, a citation, an image or raw TeX, where a `]`
@@ -408,8 +360,6 @@ impl Theorem {
         }
     }
 
-    /// `name_to_text: {proof: ""}` is an empty name, which a theorem's text
-    /// takes as none: the proof's is then its environment's, "proof".
     fn proof(text: Option<&str>) -> Self {
         Theorem {
             proof: true,
@@ -520,19 +470,23 @@ struct Options {
     names: HashMap<String, String>,
     unnumbered: BTreeSet<String>,
     warned: BTreeSet<String>,
+    /// An info attribute with markup, once a document.
+    warned_info: bool,
 }
 
-/// A map's entries, as Lua's `pairs`: a list's are its indices, which no
-/// name matches; text or a boolean fails, as in Lua.
-fn lua_pairs<'a>(
-    value: &'a MetaValue,
-    what: &str,
-) -> Result<Vec<(&'a str, &'a MetaValue)>, String> {
-    match value {
-        MetaValue::MetaMap(map) => Ok(map.iter().map(|(k, v)| (k.as_str(), v)).collect()),
-        MetaValue::MetaList(_) | MetaValue::MetaInlines(_) | MetaValue::MetaBlocks(_) => Ok(vec![]),
-        other => Err(format!("amsthm: {what} is {}, not a map", other.tag())),
+/// The name a metadata key stands for: a value is markdown, so
+/// `Conjecture\*` in a list is `Conjecture*`, a key is as written; a
+/// backslash before punctuation is dropped, as markdown drops it.
+fn meta_key(key: &str) -> String {
+    let mut out = String::with_capacity(key.len());
+    let mut chars = key.chars().peekable();
+    while let Some(c) = chars.next() {
+        match chars.next_if(|&next| c == '\\' && next.is_ascii_punctuation()) {
+            Some(escaped) => out.push(escaped),
+            None => out.push(c),
+        }
     }
+    out
 }
 
 fn read_font(value: Option<&MetaValue>, place: &str) -> Vec<Font> {
@@ -647,18 +601,25 @@ fn read_options(meta: &Meta, writer: &Writer) -> Result<Options, String> {
         _ => &empty,
     };
 
-    let mut name_to_text = HashMap::new();
-    if let Some(v) = opt.get("name_to_text") {
-        for (k, v) in lua_pairs(v, "name_to_text")? {
-            name_to_text.insert(k.to_string(), stringify(v));
+    let name_to_text: HashMap<String, String> = match opt.get("name_to_text") {
+        Some(MetaValue::MetaMap(map)) => map
+            .iter()
+            .map(|(k, v)| (meta_key(k), stringify(v)))
+            .collect(),
+        // (an empty `name_to_text:` names nothing)
+        None => HashMap::new(),
+        Some(MetaValue::MetaString(s)) if s.is_empty() => HashMap::new(),
+        Some(_) => {
+            warn("name_to_text is not a map from names to their text; ignoring it");
+            HashMap::new()
         }
-    }
+    };
     // one unit for every environment, or a map of them by name
     let (parent_counters, parent_counter): (HashMap<String, String>, Option<String>) =
         match opt.get("parent_counter") {
             Some(MetaValue::MetaMap(map)) => (
                 map.iter()
-                    .map(|(k, v)| (k.to_string(), stringify(v)))
+                    .map(|(k, v)| (meta_key(k), stringify(v)))
                     .collect(),
                 None,
             ),
@@ -687,25 +648,31 @@ fn read_options(meta: &Meta, writer: &Writer) -> Result<Options, String> {
                 // a name, and the names sharing its counter (YAML's keys come
                 // sorted, and so are a BTreeMap's)
                 for (key, value) in map {
-                    theorems.push(Theorem::new(
-                        style,
-                        key,
-                        &text_of(key),
-                        parent_of(key),
-                        None,
-                    ));
+                    let key = meta_key(key);
+                    let owner = Theorem::new(style, &key, &text_of(&key), parent_of(&key), None);
+                    // a name under it shares its counter; an unnumbered one
+                    // has none, so each is numbered on its own then
+                    let numbered = owner.numbered;
+                    let owner_name = owner.env_name.clone();
+                    theorems.push(owner);
                     let shared = match value {
                         MetaValue::MetaList(xs) => xs.iter().map(stringify).collect(),
                         other => vec![stringify(other)],
                     };
                     for name in shared {
-                        theorems.push(Theorem::new(
-                            style,
-                            &name,
-                            &text_of(&name),
-                            None,
-                            Some(key.to_string()),
-                        ));
+                        let (parent, counter) = if numbered {
+                            (None, Some(key.clone()))
+                        } else {
+                            (parent_of(&name), None)
+                        };
+                        let t = Theorem::new(style, &name, &text_of(&name), parent, counter);
+                        if t.numbered && !numbered {
+                            let env = &t.env_name;
+                            warn(format!(
+                                "{owner_name} is unnumbered, so it has no counter for {env} to share; numbering {env} on its own"
+                            ));
+                        }
+                        theorems.push(t);
                     }
                 }
             } else {
@@ -720,9 +687,10 @@ fn read_options(meta: &Meta, writer: &Writer) -> Result<Options, String> {
             }
         }
     }
-    theorems.push(Theorem::proof(
-        name_to_text.get("proof").map(String::as_str),
-    ));
+    // (an empty name is none, as for any environment: "Proof", and in LaTeX
+    // babel's)
+    let proof_name = name_to_text.get("proof").filter(|n| !n.is_empty()).cloned();
+    theorems.push(Theorem::proof(proof_name.as_deref()));
     let by_class: HashMap<String, usize> = theorems
         .iter()
         .enumerate()
@@ -784,12 +752,16 @@ fn read_options(meta: &Meta, writer: &Writer) -> Result<Options, String> {
 
     // the end-of-proof symbol as TeX math: the text of its math, raw TeX and words
     let mut qed_symbol = "\\Box".to_string();
-    if let Some(v) = opt.get("qed_symbol") {
-        let mut texts = Texts::default();
-        panir::apply(&mut inlines_of(v)?, &mut texts, None).map_err(|e| e.to_string())?;
-        if !texts.0.is_empty() {
-            qed_symbol = texts.0.join(" ");
+    match opt.get("qed_symbol") {
+        Some(v @ (MetaValue::MetaInlines(_) | MetaValue::MetaString(_))) => {
+            let mut texts = Texts::default();
+            panir::apply(&mut inlines_of(v)?, &mut texts, None).map_err(|e| e.to_string())?;
+            if !texts.0.is_empty() {
+                qed_symbol = texts.0.join(" ");
+            }
         }
+        Some(_) => warn("qed_symbol is not math or text; ignoring it"),
+        None => {}
     }
 
     Ok(Options {
@@ -803,7 +775,7 @@ fn read_options(meta: &Meta, writer: &Writer) -> Result<Options, String> {
         counters,
         numbered_depth: numbered_depth(meta, writer, &top),
         part_level,
-        proof_name: name_to_text.get("proof").cloned(),
+        proof_name,
         theorems,
         by_class,
         counter_depth,
@@ -814,6 +786,7 @@ fn read_options(meta: &Meta, writer: &Writer) -> Result<Options, String> {
         names: HashMap::new(),
         unnumbered: BTreeSet::new(),
         warned: BTreeSet::new(),
+        warned_info: false,
     })
 }
 
@@ -902,14 +875,14 @@ impl Options {
         &mut self,
         t: usize,
         identifier: &str,
-        info: Option<&str>,
+        note: Option<Vec<Inline>>,
         ctx: &mut Ctx,
     ) -> Option<Vec<Inline>> {
         let theorem = &self.theorems[t];
         if theorem.proof {
             // "Proof.", in italics; or the note, in italics but its
             // references, for the whole heading
-            let Some(info) = info.filter(|i| !i.is_empty()) else {
+            let Some(mut note) = note else {
                 return Some(vec![
                     Inline::Emph(panir::inlines(&format!("{}.", theorem.text))),
                     Inline::Space,
@@ -917,7 +890,6 @@ impl Options {
             };
             // each Str in italics, emphasis in it upright, references as the
             // font applies to them; then neighbouring italics joined
-            let mut note = ctx.ok(note_inlines(info))?;
             ctx.apply(&mut note, &mut Wrap(Font::Italic))?;
             merge_consecutive(Font::Italic, &mut note);
             note.extend([Inline::Emph(vec![".".into()]), Inline::Space]);
@@ -965,11 +937,11 @@ impl Options {
             )),
             None => {}
         }
-        if let Some(info) = info.filter(|i| !i.is_empty()) {
-            let mut note = vec![Inline::Space, "(".into()];
-            note.extend(ctx.ok(note_inlines(info))?);
-            note.push(")".into());
-            runs.push((note, vec![]));
+        if let Some(note) = note {
+            let mut run = vec![Inline::Space, "(".into()];
+            run.extend(note);
+            run.push(")".into());
+            runs.push((run, vec![]));
         }
         runs.push((vec![style.headpunct.as_str().into()], head));
         let mut out = join_runs(runs);
@@ -1033,10 +1005,14 @@ fn add_header_include(meta: &mut Meta, block: Block, at_start: bool) {
 // The body of an environment
 
 /// Environments in a body, held out of it (`Hold`) while the body is set
-/// in its font, then put back (`Restore`).
+/// in its font, then put back (`Restore`). Each placeholder's attribute
+/// starts with a mark no document can know (the original's is the address
+/// of its list), so a div of the user's with the attribute is not taken for
+/// one.
 struct Hold<'a> {
     options: &'a Options,
-    held: Vec<Block>,
+    mark: String,
+    held: Vec<Option<Block>>,
 }
 
 impl Filter for Hold<'_> {
@@ -1051,28 +1027,32 @@ impl Filter for Hold<'_> {
             attr: Attr::new(
                 "",
                 &[],
-                &[("amsthm-held", &(self.held.len() + 1).to_string())],
+                &[(
+                    "amsthm-held",
+                    &format!("{}{}", self.mark, self.held.len() + 1),
+                )],
             ),
             content: vec![],
         };
-        self.held.push(std::mem::replace(x, placeholder.into()));
+        self.held
+            .push(Some(std::mem::replace(x, placeholder.into())));
         ctx.skip_children();
         None
     }
 }
 
-struct Restore(Vec<Block>);
+struct Restore<'a>(&'a str, Vec<Option<Block>>);
 
-impl Filter for Restore {
+impl Filter for Restore<'_> {
     fn block(&mut self, x: &mut Block, _: &mut Ctx) -> Option<Vec<Block>> {
         let Block::Div(d) = x else { return None };
-        let i = lua_number(d.attr.get("amsthm-held")?)?;
-        // (any div with the attribute, the user's too: a copy each, as each
-        // return is in Lua)
-        let held = self
-            .0
-            .get((i.fract() == 0.0 && i >= 1.0).then(|| i as usize - 1)?)?;
-        Some(vec![held.clone()])
+        let i: usize = d
+            .attr
+            .get("amsthm-held")?
+            .strip_prefix(self.0)?
+            .parse()
+            .ok()?;
+        Some(vec![self.1.get_mut(i.checked_sub(1)?)?.take()?])
     }
 }
 
@@ -1175,15 +1155,68 @@ impl Filter for Qedhere<'_> {
     }
 }
 
+/// The inlines of a paragraph or plain text.
+fn para_inlines(block: &mut Block) -> Option<&mut Vec<Inline>> {
+    match block {
+        Block::Para(xs) | Block::Plain(xs) => Some(xs),
+        _ => None,
+    }
+}
+
+/// Takes a div's note out of it: a span with class `info` that starts its
+/// first paragraph, as pandoc has read it, with the space after it, and the
+/// paragraph if nothing is left in it (the span's other attributes
+/// ignored); else its `info` attribute, as plain text.
+fn take_note(div: &mut Div, options: &mut Options) -> Option<Vec<Inline>> {
+    let mut note = None;
+    if let Some(first) = div.content.first_mut().and_then(para_inlines)
+        && let Some(Inline::Span(span)) = first.first()
+        && span.attr.has_class("info")
+    {
+        let Inline::Span(span) = first.remove(0) else {
+            unreachable!()
+        };
+        note = Some(span.content);
+        if matches!(first.first(), Some(Inline::Space | Inline::SoftBreak)) {
+            first.remove(0);
+        }
+        if first.is_empty() {
+            div.content.remove(0);
+        }
+    }
+    let blank = [' ', '\t', '\n', '\x0b', '\x0c', '\r'];
+    if let Some(info) = div
+        .attr
+        .get("info")
+        .filter(|i| !i.trim_matches(blank).is_empty())
+    {
+        if note.is_some() {
+            warn(format!(
+                "a note in both a leading [...]{{.info}} span and info=\"{info}\"; using the span"
+            ));
+        } else {
+            if !is_plain_text(info) && !options.warned_info {
+                options.warned_info = true;
+                warn(format!(
+                    "the info attribute is plain text since amsthm v4, so info=\"{info}\" is shown as typed; write the note as a leading [...]{{.info}} span to keep its markup (once per document; see {PORTING_GUIDE})"
+                ));
+            }
+            note = Some(panir::inlines(info));
+        }
+    }
+    note.filter(|n| !n.is_empty())
+}
+
 /// Not LaTeX: the heading, the body's font, the end of a proof.
 fn environment(div: &mut Div, options: &mut Options, ctx: &mut Ctx) -> Option<()> {
     let t = options.find(&div.attr.classes, true)?;
+    // (before the body is in its font, which the note is not)
+    let note = take_note(div, options);
     let identifier = div.attr.identifier.to_string();
     if !options.theorems[t].numbered && !identifier.is_empty() {
         options.unnumbered.insert(identifier.clone());
     }
-    let info = div.attr.get("info").map(str::to_string);
-    let mut title = options.header(t, &identifier, info.as_deref(), ctx)?;
+    let mut title = options.header(t, &identifier, note, ctx)?;
     let space = title.pop()?;
     let header = vec![
         Span {
@@ -1203,18 +1236,19 @@ fn environment(div: &mut Div, options: &mut Options, ctx: &mut Ctx) -> Option<()
     if !bodyfont.is_empty() {
         let mut hold = Hold {
             options,
+            mark: format!("{:x} ", std::hash::RandomState::new().hash_one(())),
             held: vec![],
         };
         ctx.apply(&mut div.content, &mut hold)?;
-        let held = hold.held;
+        let Hold { mark, held, .. } = hold;
         for font in bodyfont {
             ctx.apply(&mut div.content, &mut Wrap(font))?;
         }
         if !held.is_empty() {
-            ctx.apply(&mut div.content, &mut Restore(held))?;
+            ctx.apply(&mut div.content, &mut Restore(&mark, held))?;
         }
     }
-    match div.content.first_mut().and_then(Block::inlines_mut) {
+    match div.content.first_mut().and_then(para_inlines) {
         Some(first) => {
             first.splice(0..0, header);
         }
@@ -1230,7 +1264,7 @@ fn environment(div: &mut Div, options: &mut Options, ctx: &mut Ctx) -> Option<()
         if !qedhere.placed {
             // amsthm's \qed, \nobreak\hfill\quad\openbox: as math, \quad\Box
             // (the \hfill is the CSS's)
-            match div.content.last_mut().and_then(Block::inlines_mut) {
+            match div.content.last_mut().and_then(para_inlines) {
                 Some(last) => last.push(qed_span(options)),
                 None => div.content.push(Block::Para(vec![qed_span(options)])),
             }
@@ -1259,6 +1293,12 @@ fn reference_target(id: &str, known: impl Fn(&str) -> bool) -> Option<(String, b
     known(&lower).then_some((lower, true))
 }
 
+/// Whether a citation has a prefix or suffix (`[see @a]`, `[@a, p. 3]`),
+/// which a reference to an environment would drop.
+fn has_affix(c: &Citation) -> bool {
+    !c.prefix.is_empty() || !c.suffix.is_empty()
+}
+
 /// The ids of `[@a; @b]`, each an environment's, none with a prefix or
 /// suffix (which the list would drop); else None, for citeproc.
 fn multi_ref(cite: &Cite, known: &HashMap<String, String>) -> Option<Vec<String>> {
@@ -1270,8 +1310,7 @@ fn multi_ref(cite: &Cite, known: &HashMap<String, String>) -> Option<Vec<String>
         .map(|c| {
             let ok = c.mode == CitationMode::NormalCitation
                 && known.contains_key(c.id.as_str())
-                && c.prefix.is_empty()
-                && c.suffix.is_empty();
+                && !has_affix(c);
             ok.then(|| c.id.to_string())
         })
         .collect()
@@ -1288,9 +1327,9 @@ fn ref_list(ids: &[String], one: impl Fn(&str) -> Vec<Inline>) -> Vec<Inline> {
     out
 }
 
-fn single(cite: &Cite) -> Option<(&str, CitationMode)> {
+fn single(cite: &Cite) -> Option<&Citation> {
     match cite.citations.as_slice() {
-        [c] => Some((c.id.as_str(), c.mode)),
+        [c] => Some(c),
         _ => None,
     }
 }
@@ -1326,12 +1365,22 @@ fn warn_unnumbered(x: &Inline, options: &mut Options) {
         }
     }
     let Inline::Cite(cite) = x else { return };
+    // [see @a], [@a, p. 3]: one environment, with a prefix or suffix
+    if let Some(c) = single(cite).filter(|c| has_affix(c))
+        && (reference_target(&c.id, |i| options.identifiers.contains_key(i)).is_some()
+            || reference_target(&c.id, |i| options.unnumbered.contains(i)).is_some())
+    {
+        warn(format!(
+            "a reference to an environment cannot carry a prefix or suffix, and is left to citeproc: {}",
+            stringify(x)
+        ));
+    }
     if cite.citations.len() < 2 {
         return;
     }
     let (mut ours, mut others, mut named_, mut affixed) = (false, false, false, false);
     for c in &cite.citations {
-        affixed |= !c.prefix.is_empty() || !c.suffix.is_empty();
+        affixed |= has_affix(c);
         if options.identifiers.contains_key(c.id.as_str())
             || options.unnumbered.contains(c.id.as_str())
         {
@@ -1390,14 +1439,15 @@ fn resolve(x: &Inline, options: &Options) -> Option<Vec<Inline>> {
             if let Some(ids) = multi_ref(cite, known) {
                 return Some(ref_list(&ids, |i| ref_link(i, &known[i], true, None)));
             }
-            let (id, mode) = single(cite)?;
-            let (id, is_named) = reference_target(id, |i| known.contains_key(i))?;
+            // (with a prefix or suffix, for citeproc, as [@a; @b] is)
+            let c = single(cite).filter(|c| !has_affix(c))?;
+            let (id, is_named) = reference_target(&c.id, |i| known.contains_key(i))?;
             let name = if is_named {
                 options.names.get(&id).map(String::as_str)
             } else {
                 None
             };
-            match mode {
+            match c.mode {
                 CitationMode::NormalCitation => Some(ref_link(&id, &known[&id], true, name)),
                 CitationMode::AuthorInText => Some(ref_link(&id, &known[&id], false, name)),
                 CitationMode::SuppressAuthor => None,
@@ -1422,15 +1472,16 @@ fn cite_to_ref(cite: &Cite, options: &Options) -> Option<Vec<Inline>> {
             vec![Inline::raw("latex", format!("\\eqref{{{i}}}"))]
         }));
     }
-    let (id, mode) = single(cite)?;
+    // (with a prefix or suffix, for citeproc, as [@a; @b] is)
+    let c = single(cite).filter(|c| !has_affix(c))?;
     if !matches!(
-        mode,
+        c.mode,
         CitationMode::NormalCitation | CitationMode::AuthorInText
     ) {
         return None;
     }
-    let paren = mode == CitationMode::NormalCitation;
-    let (id, is_named) = reference_target(id, |i| known.contains_key(i))?;
+    let paren = c.mode == CitationMode::NormalCitation;
+    let (id, is_named) = reference_target(&c.id, |i| known.contains_key(i))?;
     match options.names.get(&id).filter(|_| is_named) {
         None => Some(vec![Inline::raw(
             "latex",
@@ -1445,12 +1496,12 @@ fn cite_to_ref(cite: &Cite, options: &Options) -> Option<Vec<Inline>> {
 
 /// LaTeX: the div's own blocks between `\begin{...}` and `\end{...}`, sharing
 /// a line with the first and last paragraphs, in a bare div.
-fn latex_environment(div: &mut Div, options: &Options, ctx: &mut Ctx) -> Option<Vec<Block>> {
+fn latex_environment(div: &mut Div, options: &mut Options, ctx: &mut Ctx) -> Option<Vec<Block>> {
     let t = options.find(&div.attr.classes, false)?;
+    let note = take_note(div, options);
     let env = &options.theorems[t].env_name;
     let mut opening = vec![Inline::raw("latex", format!("\\begin{{{env}}}"))];
-    if let Some(info) = div.attr.get("info").filter(|i| !i.is_empty()) {
-        let mut note = ctx.ok(note_inlines(info))?;
+    if let Some(mut note) = note {
         let brace = needs_brace(&mut note, ctx)?;
         opening.push(Inline::raw("latex", if brace { "[{" } else { "[" }));
         opening.extend(note);
@@ -1594,7 +1645,7 @@ impl Filter for Second {
 
     fn block(&mut self, x: &mut Block, ctx: &mut Ctx) -> Option<Vec<Block>> {
         match x {
-            Block::Div(d) if self.latex => latex_environment(d, &self.options, ctx),
+            Block::Div(d) if self.latex => latex_environment(d, &mut self.options, ctx),
             _ => None,
         }
     }
@@ -1673,8 +1724,6 @@ mod tests {
             checked += 1;
         }
         assert!(checked > 100);
-        // the notes with markup, as in every language (known.tsv)
-        let known = ["example-proofs", "model-source-chapter", "model-source-n"].map(String::from);
-        assert_eq!(differ, BTreeSet::from(known));
+        assert_eq!(differ, BTreeSet::new());
     }
 }

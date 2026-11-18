@@ -22,7 +22,6 @@ dependencies = [
 name = "amsthm"
 version = "0.1.0"
 dependencies = [
- "libpandoc",
  "panir",
  "serde_json",
 ]

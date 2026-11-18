@@ -1,77 +1,61 @@
 # amsthm
 
-ickc/pandoc-amsthm's `amsthm.lua`, the largest filter of round 1 (1,323
-lines, 1,033 of code): amsthm's theorem and proof environments, declared
-in the metadata by style (`plain`, `definition`, `remark`, and styles of
-one's own), with counters shared (`Theorem: [Lemma]`) or within LaTeX's
-sectioning units (`parent_counter`), written as divs of their class. In
-LaTeX and beamer, amsthm's own: `\newtheorem`s and `\newtheoremstyle`s in
-`header-includes`, `\begin{...}...\end{...}` around the div's blocks,
-citations of identifiers `\ref` and `\eqref`. In any other format the
-filter numbers as amsthm would (sections counted as LaTeX counts them,
-which needs the writer's options), sets the heading (`Theorem 1 (note).`)
-and the body in the style's fonts, holding nested environments out of
-them, ends a proof with a symbol (or puts it at `\qedhere`), and makes
-citations of identifiers links to the numbers; HTML gets a little CSS.
-Two top-down filters, sharing their state as Lua's upvalues. The owner's
-own filter: its behaviour questions are answered from its README, its
-design notes, and its own tests, which are the cases here.
+ickc/pandoc-amsthm's `amsthm.lua`, the largest filter of round 1 (1,412
+lines at the proposed v4.0.0): amsthm's theorem and proof environments,
+declared in the metadata by style (`plain`, `definition`, `remark`, and
+styles of one's own), with counters shared (`Theorem: [Lemma]`) or within
+LaTeX's sectioning units (`parent_counter`), written as divs of their
+class. In LaTeX and beamer, amsthm's own: `\newtheorem`s and
+`\newtheoremstyle`s in `header-includes`, `\begin{...}...\end{...}` around
+the div's blocks, citations of identifiers `\ref` and `\eqref`. In any
+other format the filter numbers as amsthm would (sections counted as LaTeX
+counts them, which needs the writer's options), sets the heading
+(`Theorem 1 (note).`) and the body in the style's fonts, holding nested
+environments out of them, ends a proof with a symbol (or puts it at
+`\qedhere`), and makes citations of identifiers links to the numbers; HTML
+gets a little CSS. Two top-down filters, sharing their state as Lua's
+upvalues. The owner's own filter: its behaviour questions are answered
+from its README, its design notes, and its own tests, which are the cases
+here.
 
-## Round 3: a note needs pandoc's reader
+**The version mirrored** is the proposed v4.0.0 (`upstream/ORIGIN`:
+`8606511`, the tip of the stack of pull requests ickc/pandoc-amsthm#39 to
+#48, not merged yet): eight fixes, then the note moved from the `info`
+attribute to a span. Until 2026-11-18 the ports mirrored v3.1.1
+(`ba1008f`), whose note was the attribute read as markdown by the filter
+(`pandoc.read`), round 3's call into pandoc; the ports read it with the
+host's pandoc where they had one and kept a note of plain text as its
+words where they had none, and `known.tsv` had 60 rows for it and for
+two test cases whose bodies were lists. All of that is gone (the git
+history has it): the filter, and every port, is pure, calling no reader,
+reading no file and no variable.
 
-A div's `info`, the note in its heading, is read by the original with
-`pandoc.read(info, "markdown")`, a call into pandoc (round 3), in three
-places: the heading of a theorem, the heading of a proof (where the note
-is the whole heading, in italics), and LaTeX's `\begin{Theorem}[note]`
-(braced where it holds math, a citation, an image or raw TeX).
+## The note
 
-**Where a port has pandoc's reader, it reads the note as the original
-does**, and braces it as the original does: Python with libpandoc
-(`libpandoc.read(info, "markdown")`) where this process has it (pandocpy,
-`libpandoc.convert`, or libpandoc installed), Julia with LibPandoc.jl where
-its environment has it (pandocjl's), Rust built for wasm32-wasip1
-(`libpandoc::read`, the host's: pandocrs, pandocpy, pandocjl,
-libpandoc.wasm), TypeScript in libpandoc's JavaScript host (the port's
-`hosted(pandoc)` for panir's `libpandocFilter`: `pandoc.read(info,
-"markdown")`, the instance it runs in). A note that is not inlines (a list,
-two paragraphs) fails, as the original fails putting a block among inlines.
-
-**Without a reader** (`run.py test`; a Rust JSON filter; TypeScript as a
-JSON filter, where the `pandoc` command would cost a process a note), a note of **plain text** is what pandoc's reader would make
-of it without reading: words of ASCII letters and digits or of any
-character that is not ASCII nor a space, a hyphen inside a word, one of
-`,;:?!` after one, single spaces between: a `Str` a word, a `Space`
-between, exactly. `plain-notes.py` checks the rule against pandoc 3.14
-(3,000 random notes it takes, each read by pandoc as a paragraph: all
-the same). Any other note (an apostrophe, which pandoc makes curly;
-emphasis; a citation; math; `e.g.`, which pandoc joins to the next word
-with a no-break space; two spaces) is **kept as its text** (its words, as
-Lua's `pandoc.Inlines` makes them of a string), with a warning naming it:
-closer to what a user wants than a failure, as amsthm itself warns and
-goes on wherever it can, and the heading is still there, its markup
-showing. The brace in LaTeX is then never needed (text has no math).
-
-Which of the original's own cases this changes, known differences there
-(`known.tsv`: `python@standalone`, `rust@standalone`,
-`rust@pandocrs-native`, `julia@standalone`, and `ts` everywhere), each
-with a twin whose notes are plain and which is the same in every
-language:
-
-- `model-source` (and `-n`, `-chapter`, the golden test's two runs):
-  `**This** is *markdown*.`, `can cite \ref{simplestEquation}`,
-  `pandoc-crossref style cite @simplestEquation`, `Proof of the *little*
-  theorem`; twin `model-source-plain`;
-- `natbib`: all five notes (citations, `$[0,1]$`, `[1]`, an image); twin
-  `natbib-plain`;
-- `proof-note`: `Proof of @Euler, see [@euler]`; twin `proof-note-plain`;
-- `example-proofs` (the documentation's): `Another proof of @Sqrt2`;
-  twin `example-proofs-plain`;
-- and this repository's `notes-markup`; `notes-plain` passes.
-
-In every host with a reader (`run.py host`: pandocpy and libpandoc.convert
-for Python, pandocjl for Julia, the four wasm hosts for Rust) all of them
-are the original's, but `proof-note` in HTML and markdown, whose body is
-the empty list item below.
+- **A span with class `info` that is the first inline of the div's first
+  block, a `Para` or `Plain`** (`[Lagrange]{.info} The order of...`), as
+  pandoc has read it with the document: its content is the note, the span
+  goes with one `Space` or `SoftBreak` after it, and the paragraph too if
+  nothing is left (a note in a paragraph of its own before a list or a
+  display: the heading then takes a paragraph of its own). The span's
+  identifier, other classes and attributes are dropped (`.smallcaps` shows
+  because pandoc's reader makes a `SmallCaps` inside the span). A span with
+  class `info` anywhere else, or first in a heading, is an ordinary span.
+  An empty span is no note (cases `note-span`, `note-edges`).
+- **Else the `info` attribute, as plain text** (`pandoc.Inlines(info)`:
+  its words, single `Space`s, a `SoftBreak` for a newline), none when it
+  is empty or blank. Markup in it is shown as typed, with one warning a
+  document (the first such note, and the porting guide), where "markup" is
+  any character but ASCII letters and digits, Lua's spaces, anything not
+  ASCII, and `,.;:!?()/-` (`note-attribute`, `note-text`).
+- **Both**: the span, with a warning naming the attribute; the markup
+  test is then not made (`note-both`).
+- Where the note goes is v3's: in parentheses in a theorem's heading, in
+  the note font; a proof's whole heading, in italics but its references;
+  LaTeX's `\begin{Theorem}[note]`, braced where it holds math, a
+  citation, an image or raw TeX. The note is taken before the body is set
+  in its font, and in LaTeX in the second pass (each pass takes it where
+  the original does, so the one warning names the same note).
 
 ## The writer's options
 
@@ -96,9 +80,8 @@ The original's tests run with them, so `run.py` has a case's options
 sets it for those options, and the Python, TypeScript and Julia ports in
 process with them in `ctx.conversion.options` too; `run.py host` runs
 them through the hosts themselves, with the options as a defaults file.
-All the same (the 36 Rust rows `known.tsv` had for them are gone); the
-`cargo test` in the Rust port runs the cases with the conversion's
-`options` in process.
+All the same; the `cargo test` in the Rust port runs the cases with the
+conversion's `options` in process.
 
 ## The original's behaviour, kept
 
@@ -107,15 +90,21 @@ All the same (the 36 Rust rows `known.tsv` had for them are gone); the
   entries one value or a list, an entry a name or a map of a name to the
   names sharing its counter, its keys in order (`map-order`), a value a
   list of names or one value's text (a map's text, `Prop: {a: b}` sharing
-  with `b`: `theorems`); `name_to_text` a map (a list: no names), text,
-  null or a boolean failing, as Lua's `pairs` does (`error-name-to-text-*`);
+  with `b`: `theorems`); a key of that map, of `name_to_text` and of
+  `parent_counter` drops a backslash before ASCII punctuation, as markdown
+  does in a value (`Claim\*` as a key is `Claim*`: `escaped-keys`,
+  `escaped-more`, `theorems`); `name_to_text` a map, anything else
+  ignored, with a warning unless it is empty text (`name_to_text:` or
+  null: `name-to-text-*`, `meta-shapes`, `config-lists`, whose list now
+  warns);
   `parent_counter` a map, or any value's text (`[chapter]` is `chapter`,
   `true` unsupported: `config-lists`, `config-text`); `counter_depth`
   Lua's `tonumber` of its text (`"1.5"`, `"0"`, `abc`, `false`:
   `counter-depth*`); `css` off for the text `false` only (`css: no`
-  keeps it); `swapnumbers` on for the text `true`; `qed_symbol` the
-  text of its math, raw TeX and words, joined by spaces (`qed-symbol-*`),
-  a map none, `true` or blocks failing as Lua's `pandoc.Inlines`.
+  keeps it); `swapnumbers` on for the text `true`; `qed_symbol`, when it
+  is inlines or text, the text of its math, raw TeX and words, joined by
+  spaces (`qed-symbol*`), anything else (a map, a list, a boolean,
+  blocks) ignored with a warning, keeping `\Box`.
 - **Styles**: a user's style named as an option or `proof` is warned
   about and left out, as is one not a map; one named `plain` replaces the
   built-in one (and is a `\newtheoremstyle{plain}` in LaTeX); an unknown
@@ -126,13 +115,21 @@ All the same (the 36 Rust rows `known.tsv` had for them are gone); the
   user's environment named `proof` is a `\newtheorem{proof}` in LaTeX but
   the proof everywhere else, as the proof is added last (`theorems`); a
   div of two environments' classes is left alone with a warning
-  (`duplicate-class`, `bodies`).
-- **Bodies**: the heading goes into a first paragraph, plain text or
-  heading, else a paragraph of its own; a proof's symbol onto a last one,
-  else a paragraph; the body font is each `Str` wrapped, emphasis in
-  italics undone, bold in bold flattened, neighbouring elements joined,
-  and the citations and `\ref`s the font applies to wrapped, with nested
-  environments held out (`bodies`, `italic-ref`, `styles-more`).
+  (`duplicate-class`, `bodies`); a name listed under an unnumbered one
+  (`Aside*: [Remark]`) is numbered on its own, within its own
+  `parent_counter` if it has one, with a warning
+  (`unnumbered-shared`, `unnumbered-more`); an empty name for the proof
+  is none: "Proof", and no `\proofname` in LaTeX (`proof-name-empty`,
+  `theorems`).
+- **Bodies**: the heading goes into a first paragraph or plain text, else
+  a paragraph of its own (a heading keeps its own line); a proof's symbol
+  onto a last one, likewise (`heading-edge`, `heading-more`, `bodies`);
+  the body font is each `Str` wrapped, emphasis in italics undone, bold in
+  bold flattened, neighbouring elements joined, and the citations and
+  `\ref`s the font applies to wrapped, with nested environments held out
+  (`bodies`, `italic-ref`, `styles-more`), as placeholders whose attribute
+  starts with a mark no document knows, so a user's div with
+  `amsthm-held` is an ordinary div (`held-attribute`, `held-more`).
 - **`\qedhere`**: in math, each `\qedhere` not followed by a letter is
   `\quad` and the symbol; a raw `tex` or `latex` inline of it (blanks
   around) is the symbol's span, after the blanks before it are removed;
@@ -140,56 +137,67 @@ All the same (the 36 Rust rows `known.tsv` had for them are gone); the
 - **References**: `[@a]` `(1)`, `@a` `1`, `@A` `Theorem 1` (the
   capitalised id of an environment's), `[@a; @b]` each in parentheses;
   `\ref{a}` and `\eqref{a}` raw TeX (format `tex` only); a reference to an
-  unnumbered environment left, with one warning per id; in LaTeX `\ref`
-  and `\eqref`, `Theorem~\ref{euler}` (`refs`, `named-ref-text`,
-  `multi-ref`, `unnumbered-ref`).
+  unnumbered environment left, with one warning per id; one with a prefix
+  or suffix (`[see @a]`, `[@a, p. 3]`, `@a [p. 3]`) left to citeproc with
+  a warning each, as several are; in LaTeX `\ref` and `\eqref`,
+  `Theorem~\ref{euler}` (`refs`, `named-ref`, `multi-ref`,
+  `unnumbered-ref`, `affixed-ref`, `affixed-more`).
 
-### pandoc's Lua, not the filter: an empty list item
+Every warning is the original's, word for word and in its order: checked
+for each case in LaTeX and markdown, every language against the original
+(not by `run.py`, which compares documents only).
 
-`tests/cases/named-ref.md` writes its theorems' bodies as `A.` to `D.`,
-which pandoc's markdown reads as ordered lists, each of one empty item
-(`fancy_lists`). The original tests the first block of each environment
-(`div.content[1].content`); reading a list's `content` in pandoc 3.14's
-Lua, then returning the element, makes each empty item `[Plain []]`
-(checked with a filter of one line, `local x = d.content[1].content;
-return d`; without the read, or returning without it, the item stays
-`[]`). The ports, reading the list but changing nothing in it, keep `[]`:
-a known difference in HTML and markdown (`named-ref`, `proof-note-plain`,
-whose body is `A.` too); `named-ref-text`, the same with text, is the
-same everywhere. Reproducing pandoc's conversion of an empty table would
-be porting pandoc's internals, not the filter.
+## For the owner
 
-## For the owner: what looks unintended
+### Filed and fixed upstream (proposed)
 
-1. **`[see @a]` and `[@a, p. 3]` lose their prefix and locator**: a
-   reference to one environment resolves to `(1)` whatever else the
-   citation holds (case `refs`), where `[see @a; @b, p. 2]` is left to
-   citeproc with a warning. The single case could do the same, or keep the
-   affixes around the link.
-2. **A map's key keeps its backslash**: `Foo\*: [Bar]` (as the README
-   writes a list's `Conjecture\*`) is the environment `Foo\`, unnumbered,
-   and `\newtheorem{Bar}[Foo\*]{Bar}` in LaTeX, which breaks; YAML keys
-   are not markdown. `name_to_text`'s keys likewise: `Name\*` names
-   nothing, `Name*` would (case `theorems`). The README could say `Foo*`
-   as a key, or the filter strip a backslash before the star.
-3. **A heading as an environment's first block takes the heading in**:
-   `# A heading` first in a theorem is, in HTML, the `<h1>` "Theorem 1. A
-   heading" (case `bodies`), where LaTeX puts `\begin{Theorem}` in a line
-   before the heading. A heading probably wants the paragraph of its own.
-4. **`amsthm-held` is not reserved**: the body's font holds nested
-   environments out as divs with that attribute, and puts back whatever
-   div has it: a user's div with `amsthm-held="1"` becomes a copy of the
-   first nested environment (case `bodies`).
-5. **`name_to_text: {proof: ""}`** names the proof `proof.` in HTML (an
-   empty text falls back to the environment's name) and `\proofname{}` in
-   LaTeX (case `theorems`).
-6. **Metadata errors are Lua's**: `name_to_text` as text, null or a
-   boolean fails with `bad argument #1 to 'for iterator' (table expected,
-   got string)`; `qed_symbol: true` with pandoc's `Inline, list of Inlines,
-   or string expected`; amsthm's own warnings would name the key.
-7. **The test cases `named-ref` and `proof-note` have lists for bodies**
-   (above): their assertions are about the references, so they pass, but
-   the bodies are not the text they look like.
+What this file listed as looking unintended in v3.1.1 was filed as
+ickc/pandoc-amsthm#31 to #38 and is fixed by the stack #39 to #46 (then
+the porting filter, #47, and the note span, #48); the ports here follow
+each fix:
+
+| issue | v3.1.1 | fix | cases here |
+|---|---|---|---|
+| #31 | the test cases `named-ref` and `proof-note` had lists for bodies (`A.`: an ordered list of one empty item, which pandoc's Lua turned into `[Plain []]` once the filter read the list's `content`) | #39: words for bodies | `named-ref`, `proof-note` (the twins `named-ref-text`, `proof-note-plain` and their known rows gone) |
+| #32 | `[see @a]` and `[@a, p. 3]` lost their prefix and locator | #40: left to citeproc with a warning, as several are | `affixed-ref`, `affixed-more`, `refs` |
+| #33 | a heading first in an environment took the heading in (`<h1>Theorem 1. A heading`), the symbol the last | #41: a heading keeps its own line | `heading-edge`, `heading-more`, `bodies` |
+| #34 | a user's div with `amsthm-held` became a copy of the first nested environment | #42: the placeholders' mark is the address of their list | `held-attribute`, `held-more`, `bodies` |
+| #35 | a map's key kept its backslash: `Foo\*` was the environment `Foo\`, `\newtheorem*{Foo\}` | #43: a backslash before punctuation dropped | `escaped-keys`, `escaped-more`, `theorems` |
+| #36 | `Foo*: [Bar]` shared a counter that does not exist (`\newtheorem{Bar}[Foo*]`) | #44: numbered on its own, with a warning | `unnumbered-shared`, `unnumbered-more`, `theorems` |
+| #37 | `name_to_text: {proof: ""}` named the proof `proof.` in HTML and `\proofname{}` in LaTeX | #45: an empty name is none | `proof-name-empty`, `theorems` |
+| #38 | `name_to_text` or `qed_symbol` of the wrong shape stopped with Lua's error | #46: ignored with a warning naming the key | `meta-shapes`, `name-to-text-*`, `qed-symbol-blocks`, `-true`, `-list` |
+
+### Found in the v4 original while porting it
+
+Small, none worth a port's difference (each port reproduces it, and the
+cases pin it). Each with a document that shows it, run as
+`pandoc -L amsthm.lua -t markdown doc.md` (pandoc 3.14), front matter
+`amsthm: {plain: [Theorem]}`:
+
+1. **A blank span is a note; a blank attribute is not.** `[ ]{.info}
+   Body.` (pandoc reads `Span [Space]`) gives `Theorem 1 ( ).`; the
+   attribute's test is `info:match("%S")`, the span's `#note > 0`. The
+   same test for both (no note when the span's content stringifies to
+   blanks) would match (case `note-edges`, Theorem 5).
+2. **An empty span with the attribute warns "using the span" and gives no
+   note.** `::: {.Theorem info="the attribute"}` then `[]{.info} Body.`:
+   warning `a note in both a leading [...]{.info} span and info="the
+   attribute"; using the span`, heading `Theorem 1.`. Either the
+   attribute could be used when the span is empty, or the warning could
+   say the note is empty (`note-both`, Theorem 2).
+3. **The attribute's spaces at its ends are kept, without a warning.**
+   `info="trailing "` gives `(trailing )`, where v3, reading markdown,
+   gave `(trailing)`; the porting guide says a note of plain text renders
+   as before. pandoc's attribute syntax refuses a leading space, so only
+   a trailing one (or HTML or JSON input) reaches it. Trimming before
+   `pandoc.Inlines` would match v3 (`note-text`, Theorem 4).
+4. **`name_to_text: ""` warns, `name_to_text:` does not.** The quoted
+   empty string is `MetaInlines []`, not `""`, so it is "not a map"; the
+   pull request names only the empty and null forms. Harmless.
+5. **When both forms are on one div, the attribute stays on it** in
+   other output (`data-info="the attribute"` in HTML) while the heading
+   shows the span's note: v3 left the attribute too, but then it was the
+   note (`note-both`, Theorem 1).
 
 ## By language
 
@@ -200,17 +208,18 @@ be porting pandoc's internals, not the filter.
 | a div's theorem, two classes compared | `theorem ~= found` | `is not` | `!==` | an index into the list | `!==` |
 | a sub-walk from a function | `pandoc.Div(div.content):walk{...}` | `div.content.walk(f)` | `applyFilter(div.content, f)` | `ctx.apply(&mut div.content, &mut f)?` | `walk!(f, div.content)` |
 | a font's filter, for each font | a table built by a function | a `Filter` built by a function | an object built by a function | `struct Wrap(Font)` | `struct Wrap{T}`, a method per kind |
-| the held environments put back | `held[tonumber(i)]`, a copy each (Lua) | `copy.deepcopy` | `copy` | `.clone()` | `deepcopy` |
-| Lua's `tonumber` | built in | a regular expression | a regular expression | by hand (`f64`'s parse takes `inf`) | a regular expression |
+| the held environments' mark | `tostring(held)`, the table's address | `id(held)` | `crypto.randomUUID()` (no address) | `RandomState::new().hash_one(())` (a local's address is the same in every run of a wasm build) | `objectid(held)` |
+| the held environments put back | `held[i]`, each once | the node itself | the node itself | moved out of an `Option` | the node itself |
+| Lua's `tonumber` | built in | panir's `lua_number` | `luaNumber` | `lua_number` | `lua_number` |
 | the writer's options | `PANDOC_WRITER_OPTIONS` | `ctx.conversion.options` or `.writer_options`, a dict | `ctx.conversion.options` or `.writerOptions`, an object | `conversion.options` or `.writer_options`, a JSON value | `ctx.conversion.options` or `.writer_options`, a `Dict` |
-| a note | `pandoc.read(info, "markdown")` | `libpandoc.read(info, "markdown")`, if imported | none | `libpandoc::read(info, "markdown")`, built for wasm | `LibPandoc.read(info, "markdown")`, if in the environment |
+| the note | `take_note`: the span out of the first paragraph, or `pandoc.Inlines(info)` | `take_note`, `inlines(info)` | `takeNote`, `inlines(info)` | `take_note`, `panir::inlines(info)` | `take_note!`, `inlines(info)` |
+| the markup test | a Lua pattern, `[^%w%s\128-\255,.;:!?()/%-]` | a regular expression | a regular expression (`u`) | a `chars().all` | `all` over the characters |
+| a key's backslash | `gsub("\\(%p)", "%1")` | `re.sub` | `replace` with `/g` | by hand (`next_if`) | `replace` with a regex |
+| the metadata's shape | `pandoc.utils.type` | `match` on the classes | `.t` | `match` on `MetaValue` | `isa` |
 
 - **Python**: dataclasses for the style, the theorem, the counter and the
-  options; `match` for metadata shapes. The held environments are put
-  back as copies, as Lua returns a copy each time: without it, a user's
-  div with `amsthm-held` got the same environment object, which was then
-  numbered twice in one place (the case `bodies` found it; `GAPS.md` 35
-  again).
+  options; `match` for metadata shapes (`MetaString("")` as a pattern for
+  the empty `name_to_text:`).
 - **TypeScript**: `Extract<Inline, { t: ... }>` for the font elements
   and raw inlines; `given` for Lua's `x and f(x)` (`documentclass`,
   `counter_depth`); a class's parameter properties are not erasable
@@ -222,9 +231,14 @@ be porting pandoc's internals, not the filter.
   needs a stable name; the three walks within a function (hold, fonts,
   restore; `\qedhere`) are structs with `Filter`, each `ctx.apply`'d. A
   `\qedhere` in math by hand (the `regex` crate has no look-ahead).
+  Taking the note out of the first paragraph is a `let` chain matching
+  the span, then a second match to move it out (`remove(0)`), as the
+  borrow of the first match can't be moved from.
 - **Julia**: a font's filter is a parametric callable struct, `Wrap{T}`,
   with a method per kind of node (`(::Wrap{T})(x::T)`); the passes are
   two functions with methods, the state `const` `Ref`s.
 
-Copies: the held environments, as above; nothing else is in two places
+Copies: none. With the placeholders' mark each held environment is put
+back once, so the ports put back the node itself (v3's copies, for a
+user's div with the attribute, are gone); nothing is in two places
 (`CHECK_UNIQUE=1` on every case, every language).
