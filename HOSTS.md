@@ -462,10 +462,16 @@ link. Nothing in the ports mangled a name: each passes it as written
 (include-files joins an included file's directory to the names in it,
 where the original changes its working directory: so a file in `sub`
 including `../../common/x.md` is opened as `sub/../../common/x.md`, which
-WASI refuses even with `../common` given; no case has it). The READMEs
-say `./../common/x` and `./img/x` (only `img` given) don't work either:
-with the ports' wasi-libc (Rust 1.97's) both do, in the four hosts, a
-leading `./` dropped (a probe); `sub/../../common/x` doesn't, as they say.
+WASI refuses even with `../common` given; no case has it). The hosts'
+READMEs said `./../common/x` and `./img/x` (only `img` given) don't work
+either: with the ports both do, in the four hosts, a leading `./`
+dropped, and with the hosts' own example filter neither does (a probe).
+The difference is the build, not the host nor the toolchain (Rust 1.97.1
+for both): the same filter drops a leading `./` built without link-time
+optimisation, as the ports are, and keeps it built with `lto = true`, as
+libpandoc-rs's examples are (its `include`, built both ways). So a name
+with a leading `./` is not to be relied on; `sub/../../common/x` works in
+neither. The READMEs say so now.
 
 ### H7. A wasm filter in Node sees no directory
 
@@ -604,7 +610,7 @@ into pandoc and the start of a runtime (Julia's compiling: 3.4 s against
 
 **How common**: every filter; on the textbook, 0.35 s each.
 
-**Since** (2026-11-18): measured (libpandoc's `dev/h14-exchange`): a
+**Since** (2026-11-18): measured (the project's `dev/h14-exchange`): a
 callback filter costs 0.29 s on the 9.4 MB textbook, 82% of it pandoc
 decoding the JSON the filter returns (half of that the garbage
 collector), 17% its encoding, 1.3 ms the copies across the C ABI. What to
