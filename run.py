@@ -102,6 +102,17 @@ def wasm_dirs(folder: Path) -> dict[str, str]:
     return {"LIBPANDOC_WASM_DIRS": os.pathsep.join(dict.fromkeys(dirs))} if dirs else {}
 
 
+def wasm_env(folder: Path) -> dict[str, str]:
+    """The variables of the process a filter's port built for wasm is
+    given in a host: those its ORIGIN's `wasm-env` names (`wasm-env: NAME
+    NAME`; the chain's together), as `LIBPANDOC_WASM_ENV`, names separated
+    by commas, which every host reads. None for a filter that names none: a
+    wasm filter is given none of the process's environment by default, so
+    its runs prove it reads none. The values are the case's (`NAME.env`)."""
+    names = [n for f in chain(folder) for n in origin(f).get("wasm-env", "").split()]
+    return {"LIBPANDOC_WASM_ENV": ",".join(dict.fromkeys(names))} if names else {}
+
+
 def needs_pandoc(folder: Path, case: dict | None = None) -> bool:
     """Whether a filter's ports call pandoc (`needs: pandoc` in its ORIGIN,
     round 2's and 3's), or, given a case, its ports do on that case
@@ -699,7 +710,7 @@ def cmd_host(args: argparse.Namespace) -> int:
                 print(f"note: {folder.name} rust@{mode} skipped: a JSON filter has no pandoc to call (NOTES.md)")
                 continue
             skipped = 0
-            given = wasm_dirs(folder) if mode in WASM else {}
+            given = {**wasm_dirs(folder), **wasm_env(folder)} if mode in WASM else {}
             for case in expected(folder):
                 if mode == "pandocrs-native" and needs_pandoc(folder, case):
                     skipped += 1
@@ -814,9 +825,11 @@ def main() -> int:
     p.add_argument("--repeat", type=int, default=3)
     args = ap.parse_args()
     command = {"test": cmd_test, "diff": cmd_diff, "expect": cmd_expect, "host": cmd_host, "time": cmd_time}[args.command]
-    # a wasm filter is given what its filter states (wasm_dirs), not the
-    # directories of the caller's LIBPANDOC_WASM_DIRS
+    # a wasm filter is given what its filter states (wasm_dirs, wasm_env),
+    # not the directories of the caller's LIBPANDOC_WASM_DIRS nor the
+    # variables its LIBPANDOC_WASM_ENV names
     os.environ.pop("LIBPANDOC_WASM_DIRS", None)
+    os.environ.pop("LIBPANDOC_WASM_ENV", None)
     if not env("PANDOC"):
         return command(args)
     # a port or an original running the `pandoc` command runs this one: a

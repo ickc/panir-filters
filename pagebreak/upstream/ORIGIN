@@ -6,3 +6,4 @@ licence: MIT, Copyright © 2017-2025 Albert Krewinkel, Benct Philip Jonsson (../
 cases: cases/input.md is the repository's test/input.md, verbatim; the others are written for the ports (env.env and env-meta.env set the two environment variables it reads)
 run: lua pagebreak.lua
 formats: asciidoc context docx epub html latex beamer ms odt typst markdown
+wasm-env: PANDOC_PAGEBREAK_HTML_CLASS PANDOC_PAGEBREAK_ODT_STYLE

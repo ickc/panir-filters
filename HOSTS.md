@@ -158,6 +158,31 @@ below). What each filter needs, from these runs:
 | H7 | **reversed**: in Node, as everywhere, a wasm filter is given no directory by default, the same variable gives some |
 | H14 | **measured**: a callback filter's 0.29 s on the textbook is 82% pandoc decoding the returned JSON; what to build is the owner's decision, not made |
 
+## Since: consecutive filters in one exchange, and `LIBPANDOC_WASM_ENV` (2026-11-18)
+
+Two more of the owner's decisions, merged the same day, the hosts at
+libpandoc-rs `42aee39`, libpandoc-python `4171201`, LibPandoc.jl
+`d8cfa02` and libpandoc's JavaScript host `da78c4f`:
+
+- **Every stretch of consecutive filters a host runs itself is one
+  exchange with pandoc** (functions on the parsed document, scripts, wasm
+  filters; one of pandoc's own ends it), and `LIBPANDOC_SEPARATE_FILTERS=1`
+  runs each on its own (libpandoc-rs#25, libpandoc#14, libpandoc-python#20,
+  LibPandoc.jl#16; H14). The filters here that run after another
+  (author-info-blocks after scholarly-metadata) are such runs of two.
+  `run.py host` gave the same rows with the default and with the variable
+  set to `1`.
+- **A wasm filter is given the variables `LIBPANDOC_WASM_ENV` names**, and
+  none of the process's otherwise (libpandoc-rs#26, libpandoc#15,
+  libpandoc-python#21, LibPandoc.jl#17; H8). `run.py` gives a wasm port
+  what its filter states, as it does directories: `wasm-env: NAME NAME` in
+  the ORIGIN. pagebreak names its two, and its port's 12 known rows (the
+  cases `env` and `env-meta` in the four wasm hosts) are gone; the other 24
+  filters name none and run with none.
+
+`run.py host`: 8,598 runs, 8,339 the original's, 259 known, none failing
+(before: 8,327 and 271).
+
 ## What each filter needs
 
 From the runs above: a wasm port is given no directory unless its ORIGIN
@@ -178,7 +203,7 @@ is the variables a filter reads beyond those pandoc gives every filter
 | multibib | the working directory: the bibliography files citeproc reads (`sample`, `topics`, `references` differ without) | – | citeproc (`convert`, through `libpandoc::citeproc`): the document once, a topic's citations once each |
 | pantable | the working directory: the CSV files `include` names (14 of 80 cases name one; the 9 of them otherwise the original's differ without; `outside` gives `../outside` too) | – | read (`read_many`): a table's markdown texts in one call |
 | amsthm | – | – | read (`convert`): a theorem's note with markup, as markdown |
-| pagebreak | – | `PANDOC_PAGEBREAK_HTML_CLASS`, `PANDOC_PAGEBREAK_ODT_STYLE` (cases `env`, `env-meta`; a wasm filter is not given them: H8) | – |
+| pagebreak | – | `PANDOC_PAGEBREAK_HTML_CLASS`, `PANDOC_PAGEBREAK_ODT_STYLE` (cases `env`, `env-meta`; its ORIGIN's `wasm-env` names them, so its wasm port is given them: `LIBPANDOC_WASM_ENV`, H8) | – |
 | the other 19 | – | – | – |
 
 19 of the 25 filters are pure: they need no directory, no variable of the
@@ -509,6 +534,15 @@ gets only `SOURCE_DATE_EPOCH`, so it ignores them too.
 same list. Low.
 
 **How common**: 1 of 24 (pagebreak).
+
+**Now** (2026-11-18): closed for wasm filters. The four hosts give a wasm
+filter the variables `LIBPANDOC_WASM_ENV` names (`NAME,NAME`; none by
+default, as the environment is where tokens are), or those their API is
+given for one filter (libpandoc-rs#26, libpandoc#15, libpandoc-python#21,
+LibPandoc.jl#17). pagebreak's ORIGIN names its two (`wasm-env`), and its
+port then gives the original's output in the four wasm hosts. The
+directory sandbox's own environment, and so a Lua filter inside it, is
+unchanged.
 
 ### H9. Rust's callbacks: no options; `read_options` takes no format and refuses a sandbox
 
