@@ -183,6 +183,30 @@ libpandoc-rs `42aee39`, libpandoc-python `4171201`, LibPandoc.jl
 `run.py host`: 8,598 runs, 8,339 the original's, 259 known, none failing
 (before: 8,327 and 271).
 
+## Since: amsthm follows its proposed v4.0.0 (2026-11-18)
+
+amsthm's ports now mirror the owner's proposed v4.0.0 (the stack of pull
+requests ickc/pandoc-amsthm#39 to #48, not merged yet; `amsthm/NOTES.md`):
+a theorem's note is a span that pandoc has read with the document, and
+the `info` attribute is plain text, so the original calls no reader, and
+no port does. Gone with it: the Python and Julia ports' optional
+libpandoc import, the TypeScript port's `hosted(pandoc)`, the Rust port's
+`libpandoc` dependency (its wasm build imports nothing from the
+`libpandoc` module), and the plain-text rule of a port without a reader.
+Its cases are v4's (85 documents, 340 runs a mode), and all 60 rows of its
+`known.tsv` went: 80 of the 259 known runs of `run.py host` were amsthm's
+(in `pandocrs-native`, 28 notes it had no reader for and 4 runs of the
+empty list item of pandoc's Lua; that list item's 6 runs in each of the
+other eight modes).
+
+`run.py host amsthm`, the hosts as in the section before (libpandoc's
+JavaScript host at `f09b923`): 3,060 runs, all the original's. With the other filters' runs as before (not run
+again): 9,030 runs, 8,851 the original's, 179 known. `run.py test`, every
+filter: 3,774 the original's, 58 known, none failing (before: 3,454 and
+186; amsthm's 128 known runs gone). Of the gaps below,
+H2, H9, H10 and H15 no longer have amsthm among the filters hitting them
+(H10 none left here).
+
 ## What each filter needs
 
 From the runs above: a wasm port is given no directory unless its ORIGIN
@@ -192,7 +216,7 @@ result in the four wasm hosts, or differs only as its `known.tsv` says
 once more with nothing (`pandocrs-wasm`), to see which cases need it, and
 they are the only wasm ports that import WASI's `path_open`. Calls into
 pandoc are what each wasm port imports from the `libpandoc` module (the
-four that may call it; the others import nothing from it). The process's environment
+three that may call it; the others import nothing from it). The process's environment
 is the variables a filter reads beyond those pandoc gives every filter
 (`PANDOC_VERSION`, `PANDOC_READER_OPTIONS`, `PANDOC_WRITER_OPTIONS`...).
 
@@ -202,15 +226,15 @@ is the variables a filter reads beyond those pandoc gives every filter
 | include-code-files | the working directory: the files it includes (9 of 11 cases differ without; `outside` gives `../outside` too) | – | – |
 | multibib | the working directory: the bibliography files citeproc reads (`sample`, `topics`, `references` differ without) | – | citeproc (`convert`, through `libpandoc::citeproc`): the document once, a topic's citations once each |
 | pantable | the working directory: the CSV files `include` names (14 of 80 cases name one; the 9 of them otherwise the original's differ without; `outside` gives `../outside` too) | – | read (`read_many`): a table's markdown texts in one call |
-| amsthm | – | – | read (`convert`): a theorem's note with markup, as markdown |
 | pagebreak | – | `PANDOC_PAGEBREAK_HTML_CLASS`, `PANDOC_PAGEBREAK_ODT_STYLE` (cases `env`, `env-meta`; its ORIGIN's `wasm-env` names them, so its wasm port is given them: `LIBPANDOC_WASM_ENV`, H8) | – |
-| the other 19 | – | – | – |
+| the other 20 | – | – | – |
 
-19 of the 25 filters are pure: they need no directory, no variable of the
+20 of the 25 filters are pure: they need no directory, no variable of the
 process's and no call into pandoc. 4 read files from the directory they
 run in (include-files, include-code-files, multibib, pantable), 1 reads the
-process's environment (pagebreak), 4 call pandoc (include-files, multibib,
-pantable, amsthm); 6 need one of these at least. (auto-lang's original
+process's environment (pagebreak), 3 call pandoc (include-files, multibib,
+pantable); 5 need one of these at least. (amsthm called pandoc until its
+ports followed the proposed v4.0.0, above.) (auto-lang's original
 reads its table of scripts from beside itself; the ports have it compiled
 in.)
 

@@ -134,7 +134,9 @@ amsthm turned out to need two things the survey did not list: the
 writer's options (`env`: `PANDOC_WRITER_OPTIONS`, -N and the top-level
 division, which its own tests use and a JSON filter is not given), and,
 for its notes, `pandoc.read` (round 3): the ports read a note of plain
-text as pandoc would, and keep any other as text (`amsthm/NOTES.md`). Its
+text as pandoc would, and keep any other as text (`amsthm/NOTES.md`;
+since 2026-11-18 the ports mirror the proposed v4.0.0, whose note is a
+span pandoc has read with the document, and call no reader). Its
 features add `env` and `raw`; `cite` is its cross-references.
 
 How the features are covered (each at least twice where possible):
@@ -206,7 +208,7 @@ Surveyed 2026-11-16; licences checked before any source was opened
 | include-files | pandoc-ext/include-files | MIT (the file's header: MIT) | Lua | code blocks of class `include` replaced by the files they name, read by pandoc | round 2 (reads files, relative to the including file) and round 3 (`pandoc.read` of each file, in its format, with the document's reader options); the directory sandbox's test |
 | include-code-files | pandoc/lua-filters | MIT | Lua | a code block's `include` attribute replaced by the file's text, a range of its lines, dedented | round 2 only (no call into pandoc): its ports run under `run.py test` too |
 | multibib | pandoc-ext/multibib | MIT (the file's header: ISC text) | Lua | a bibliography per topic, each its own file | round 3: citeproc from inside a filter (`pandoc.utils.citeproc`), twice |
-| amsthm's notes | (round 1's amsthm) | BSD-3 | Lua | a theorem's note read as markdown | round 3: `pandoc.read`, a call per note |
+| amsthm's notes | (round 1's amsthm) | BSD-3 | Lua | a theorem's note read as markdown | round 3: `pandoc.read`, a call per note (until 2026-11-18: amsthm's proposed v4.0.0 reads no note, `amsthm/NOTES.md`) |
 
 Not taken now: pandocfilters' `includes` (Python 2 only); lua-filters'
 include-files (an older pandoc-ext's); section-refs and

@@ -1359,7 +1359,8 @@ How common: 1 of 21 (amsthm).
 ## Round 2 and 3: what the filters that read files and call pandoc found in panir
 
 Round 2's and 3's filters (include-files, include-code-files, multibib,
-amsthm's notes, and pantable: CSV and YAML in a code block, markdown
+amsthm's notes, until its ports followed the proposed v4.0.0 on
+2026-11-18, and pantable: CSV and YAML in a code block, markdown
 cells read with pandoc, an included file) were mostly about the hosts:
 those gaps are in `HOSTS.md`. What they found in panir itself (45 and 46
 pantable's; its options are YAML in the code block, not metadata, so

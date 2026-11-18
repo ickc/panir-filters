@@ -10,8 +10,8 @@ Round 1 (filters that need only the AST) is chosen in
 [`SURVEY.md`](SURVEY.md) and listed, with each port's status, in
 [`filters.tsv`](filters.tsv). Rounds 2 and 3 (filters that read files and
 call pandoc: `include-files`, `include-code-files`, `multibib`, amsthm's
-notes, and the owner's `pantable`, CSV tables with markdown cells read in
-one batch) test the hosts that run filters inside a pandoc
+notes until its v4, and the owner's `pantable`, CSV tables with markdown
+cells read in one batch) test the hosts that run filters inside a pandoc
 conversion (libpandoc's bindings): what they lack is
 [`HOSTS.md`](HOSTS.md), and the round in a page
 [`ROUND2.md`](ROUND2.md). Ported so far: `caps`, `metavars`,
@@ -23,9 +23,11 @@ cluster, `scholarly-metadata`, `author-info-blocks`, `pandoc-quotes`,
 `amsthm`: all 21; lines and times in [`RESULTS.md`](RESULTS.md), and
 the round in a page in [`ROUND1.md`](ROUND1.md).
 
-Of the 25 filters, 19 are pure: they need no directory, no variable of
+Of the 25 filters, 20 are pure: they need no directory, no variable of
 the process's and no call into pandoc (`HOSTS.md`, "What each filter
-needs", from the runs in the hosts).
+needs", from the runs in the hosts); amsthm is among them since its ports
+mirror the proposed v4.0.0, whose note pandoc has read with the document
+(`amsthm/NOTES.md`).
 
 ## What goes here
 
