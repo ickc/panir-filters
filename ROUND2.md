@@ -8,7 +8,8 @@ sandbox can confine the conversion: libpandoc-python (`pandocpy`,
 `libpandoc.convert`), libpandoc-rs (`pandocrs`, its `libpandoc` crate,
 wasm filters), LibPandoc.jl (`pandocjl`, `LibPandoc.convert`) and
 libpandoc's JavaScript host (libpandoc.wasm in Node). Each was built from
-its `main` against libpandoc 1.12 (`HOSTS.md` has the commits).
+its `main` against libpandoc 1.12, and again against 1.13 and 1.14
+(`HOSTS.md` has the commits).
 
 ## What was done
 
@@ -43,7 +44,9 @@ its `main` against libpandoc 1.12 (`HOSTS.md` has the commits).
   every case; standalone, the ports keep round 1's plain-text rule.
   multibib (pandoc-ext) runs citeproc from inside a
   filter, twice: in the four languages, the same in every host but the
-  wasm ones (H3). A call into pandoc from a filter costs about 0.3 ms
+  wasm ones (H3); since libpandoc 1.14 in those too, the Rust port reading
+  the bibliography files itself (`libpandoc::citeproc`) and giving pandoc
+  their contents. A call into pandoc from a filter costs about 0.3 ms
   in every native host, six times `pandoc.read`'s, and batched
   (`read_many`, which every host but JavaScript's offers a filter) less
   than Lua's loop (H15).
@@ -79,9 +82,15 @@ encoding), H15 a call into pandoc costs six times `pandoc.read`'s; with
 pantable, H16 a Julia script's packages come only from `pandocjl`'s load
 path, H17 `pandocjl` cuts a Lua filter's output to a pipe at 64 KiB, H18
 `read_many`'s errors name a text by its place in the batch. (Since, in
-`HOSTS.md`: closed are H1, H2, H4, H7, H9, H12, H13 and H17; documented
-H5, H8, H10, H11, H15, H16 and H18; open, each with a proposal, H3, H6
-and H14.) And in panir
+`HOSTS.md`: closed are H1, H2, H3, H4, H6, H9, H12, H13 and H17;
+H7's fix reversed, a wasm filter being given no directory by default in
+every host, Node's included, and `LIBPANDOC_WASM_DIRS` the user's way to
+give some; documented H5, H8, H10, H11, H15, H16 and H18; H14 measured,
+82% of a callback filter's cost pandoc decoding the JSON it returns, what
+to build the owner's decision, not made.) What each filter needs from a
+host, from the runs: 19 of the 25 are pure, 4 read files, 1 the
+process's environment, 4 call pandoc (`HOSTS.md`, "What each filter
+needs"). And in panir
 (`GAPS.md` 41 to 46): pandoc.path's functions, Lua's `tonumber`, a
 fragment's walk that forgets the conversion, Python's list constructors,
 and with pantable a table from a grid of cells and a parser of pandoc's

@@ -23,6 +23,10 @@ cluster, `scholarly-metadata`, `author-info-blocks`, `pandoc-quotes`,
 `amsthm`: all 21; lines and times in [`RESULTS.md`](RESULTS.md), and
 the round in a page in [`ROUND1.md`](ROUND1.md).
 
+Of the 25 filters, 19 are pure: they need no directory, no variable of
+the process's and no call into pandoc (`HOSTS.md`, "What each filter
+needs", from the runs in the hosts).
+
 ## What goes here
 
 One folder per filter:
