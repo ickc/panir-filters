@@ -42,7 +42,9 @@ One folder per filter:
   original, the ports and the hosts run in, where the files its cases
   name are; as `wasm-dirs: .`, the directories, relative to it, its port
   built for wasm is given in a host (`LIBPANDOC_WASM_DIRS`; none for a
-  filter that names none); as `needs: pandoc`, that its ports call pandoc, so only
+  filter that names none); as `wasm-env: NAME NAME`, the variables of the
+  process it is given there (`LIBPANDOC_WASM_ENV`; none for a filter that
+  names none); as `needs: pandoc`, that its ports call pandoc, so only
   `run.py host` runs them);
 - `cases/`: input documents (`*.md`, read by pandoc's markdown reader, with
   the reader's options in `NAME.args` beside one, if any: `-M lang=en-GB`,
