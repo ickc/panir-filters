@@ -11,30 +11,20 @@
 // their headings and bodies in their style's fonts, ends proofs with a
 // symbol, and makes citations of them links.
 //
-// A div's `info` is its note, `Theorem 1 (note)`, which the original reads as
-// markdown with pandoc: in libpandoc's JavaScript host this port does too,
-// with the instance it runs in (`hosted`, for panir's `libpandocFilter`).
-// Run as a JSON filter it has no reader (the `pandoc` command would cost a
-// process a note): a note of plain text (words of letters and digits, a
-// hyphen inside a word, and `,;:?!` after one, single spaces between) is
-// read as pandoc reads it; any other is kept as its text, with a warning.
+// A div's note, `Theorem 1 (note)`, is a span with class `info` that starts
+// its first paragraph (`[note]{.info} ...`), as pandoc has read it with the
+// document; without one, its `info` attribute, as plain text, with one
+// warning a document where that holds markup.
 //
 // A port of ickc/pandoc-amsthm's amsthm.lua (Copyright (c) 2016-2026, Kolen
 // Cheung; BSD-3-Clause, see ../LICENSE).
 
-import { pathToFileURL } from "node:url";
 import {
-  applyFilter, copy, Div, Emph, fromJSON, getAttribute, given, inlines, inlinesOf, items, LineBreak, Link, luaNumber,
-  Math as MathNode, MetaBlocks, MetaList, Para, Plain, RawBlock, RawInline, SmallCaps, Space, Span, Str, stringify, Strong,
-  toRomanNumeral, type Block, type Cite, type Conversion, type Filter, type Header, type Inline, type Meta, type MetaValue,
-  type Pandoc,
+  applyFilter, Div, Emph, getAttribute, given, inlines, inlinesOf, items, LineBreak, Link, luaNumber, Math as MathNode,
+  MetaBlocks, MetaList, Para, Plain, RawBlock, RawInline, SmallCaps, Space, Span, Str, stringify, Strong, toRomanNumeral,
+  type Block, type Citation, type Cite, type Conversion, type Filter, type Header, type Inline, type Meta, type MetaValue,
 } from "panir";
 import { runFilter } from "panir/node";
-
-/** libpandoc's JavaScript host, as much as this filter uses of it. */
-interface Host {
-  read(text: string, from: unknown, options?: Record<string, unknown>): unknown;
-}
 
 // LaTeX's sectioning units, by depth: parent_counter's values.
 const PARENT_COUNTERS = new Map([["part", 0], ["chapter", 1], ["section", 2], ["subsection", 3], ["subsubsection", 4], ["paragraph", 5], ["subparagraph", 6]]);
@@ -53,34 +43,12 @@ const CSS = "<style>\n:where(.amsthm-qed) { float: right; }\n</style>";
 const BLANK = new Set(["Space", "SoftBreak", "LineBreak"]);
 
 const warn = (message: string) => console.error(`[amsthm] warning: ${message}`);
-const fail = (message: string): never => {
-  throw new Error(`amsthm: ${message}`);
-};
 
-// A note of plain text: words of letters and digits (anything not ASCII but
-// a space), a hyphen inside one, and one of `,;:?!` after one, single spaces
-// between. pandoc's markdown reader gives such a text as it is, a Str a word.
-const WORD = String.raw`(?:[A-Za-z0-9]|[^\x00-\x7f\x85\xa0  -     　﻿])+`;
-const TOKEN = `${WORD}(?:-${WORD})*[,;:?!]?`;
-const PLAIN_NOTE = new RegExp(`^${TOKEN}(?: ${TOKEN})*$`, "u");
-
-// The host's instance, where the filter runs in one (`hosted`), to read notes.
-let host: Host | undefined;
-
-/** A div's note, read by pandoc's markdown reader as the original reads it,
- * where the filter runs in libpandoc's JavaScript host; else as that reader
- * reads plain text, and any other note as its text, with a warning. */
-function noteInlines(info: string): Inline[] {
-  if (host) {
-    return (fromJSON(host.read(info, "markdown")) as Pandoc).blocks.flatMap((b) => {
-      // (the original puts the block among inlines, and pandoc fails)
-      if (b.t !== "Para" && b.t !== "Plain") throw new Error(`amsthm: the note ${JSON.stringify(info)} is not inlines: a ${b.t}`);
-      return b.content;
-    });
-  }
-  if (!PLAIN_NOTE.test(info)) warn(`the note ${JSON.stringify(info)} has markup, which needs pandoc's markdown reader: kept as text`);
-  return inlines(info);
-}
+const PORTING_GUIDE = "https://ickc.github.io/pandoc-amsthm/porting.html";
+// An `info` attribute that reads as it did as markdown in v3: ASCII letters
+// and digits, Lua's spaces, anything not ASCII and `,.;:!?()/-`; not an
+// apostrophe, which markdown made a typographic one.
+const PLAIN_TEXT = /^[A-Za-z0-9 \t\n\v\f\r\u0080-\u{10ffff},.;:!?()/-]*$/u;
 
 const UNSAFE = new Set(["Math", "Cite", "Image", "RawInline"]);
 
@@ -263,15 +231,13 @@ interface Options {
   names: Map<string, string>;
   unnumbered: Set<string>;
   warned: Set<string>;
+  warnedInfo: boolean; // (an info attribute with markup, once a document)
 }
 
-/** A map's entries, as Lua's `pairs`: a list's are its indices, which no name
- * matches; text or a boolean fails, as in Lua. */
-function luaPairs(value: MetaValue, what: string): [string, MetaValue | undefined][] {
-  if (value.t === "MetaMap") return Object.entries(value.content);
-  if (value.t === "MetaList" || value.t === "MetaInlines" || value.t === "MetaBlocks") return [];
-  return fail(`${what} is ${value.t}, not a map`);
-}
+/** The name a metadata key stands for: a value is markdown, so
+ * `Conjecture\*` in a list is `Conjecture*`, a key is as written; a
+ * backslash before punctuation is dropped, as markdown drops it. */
+const metaKey = (key: string) => key.replace(/\\([!-/:-@[-`{-~])/g, "$1");
 
 function readFont(value: MetaValue | undefined, place: string): FontName[] {
   const font: FontName[] = [];
@@ -337,10 +303,15 @@ function readOptions(meta: Meta, writer: Writer): Options {
   // (an empty `amsthm:` is text, not a map: it defines nothing)
   const opt: Meta = config?.t === "MetaMap" ? config.content : {};
 
-  const nameToText = new Map(opt.name_to_text !== undefined ? luaPairs(opt.name_to_text, "name_to_text").map(([k, v]) => [k, stringify(v)]) : []);
+  const ntt = opt.name_to_text;
+  const nameToText = new Map(ntt?.t === "MetaMap" ? Object.entries(ntt.content).map(([k, v]) => [metaKey(k), stringify(v)]) : []);
+  // (an empty `name_to_text:` names nothing)
+  if (ntt !== undefined && ntt.t !== "MetaMap" && !(ntt.t === "MetaString" && ntt.text === "")) {
+    warn("name_to_text is not a map from names to their text; ignoring it");
+  }
   // one unit for every environment, or a map of them by name
   const pc = opt.parent_counter;
-  const parentCounters = new Map(pc?.t === "MetaMap" ? Object.entries(pc.content).map(([k, v]) => [k, stringify(v)]) : []);
+  const parentCounters = new Map(pc?.t === "MetaMap" ? Object.entries(pc.content).map(([k, v]) => [metaKey(k), stringify(v)]) : []);
   const parentCounter = pc !== undefined && pc.t !== "MetaMap" ? stringify(pc) : undefined;
   const parentOf = (name: string) => parentCounters.get(name) ?? parentCounter;
 
@@ -352,11 +323,21 @@ function readOptions(meta: Meta, writer: Writer): Options {
         // a name, and the names sharing its counter (YAML's keys come sorted,
         // and so are they here)
         for (const key of Object.keys(entry.content).sort()) {
-          theorems.push(new Theorem(s, key, nameToText.get(key) ?? "", parentOf(key)));
+          const name = metaKey(key);
+          const owner = new Theorem(s, name, nameToText.get(name) ?? "", parentOf(name));
+          theorems.push(owner);
+          // a name under it shares its counter; an unnumbered one has none,
+          // so each is numbered on its own then
           const value = entry.content[key]!;
           for (const v of value.t === "MetaList" ? value.content : [value]) {
-            const name = stringify(v);
-            theorems.push(new Theorem(s, name, nameToText.get(name) ?? "", undefined, key));
+            const shared = stringify(v);
+            const t = owner.numbered
+              ? new Theorem(s, shared, nameToText.get(shared) ?? "", undefined, name)
+              : new Theorem(s, shared, nameToText.get(shared) ?? "", parentOf(shared));
+            if (t.numbered && !owner.numbered) {
+              warn(`${owner.envName} is unnumbered, so it has no counter for ${t.envName} to share; numbering ${t.envName} on its own`);
+            }
+            theorems.push(t);
           }
         }
       } else {
@@ -365,9 +346,10 @@ function readOptions(meta: Meta, writer: Writer): Options {
       }
     }
   }
-  // (`name_to_text: {proof: ""}` is an empty name, which a theorem's text
-  // takes as none: the proof's is then its environment's, "proof")
-  theorems.push(new Theorem("proof", "proof*", nameToText.get("proof") ?? "Proof", undefined, undefined, true));
+  // (an empty name is none, as for any environment: "Proof", and in LaTeX
+  // babel's)
+  const proofName = nameToText.get("proof") || undefined;
+  theorems.push(new Theorem("proof", "proof*", proofName ?? "Proof", undefined, undefined, true));
   const byClass = new Map(theorems.map((t) => [t.className, t]));
 
   const top = topLevelDivision(meta, writer);
@@ -401,10 +383,12 @@ function readOptions(meta: Meta, writer: Writer): Options {
 
   // the end-of-proof symbol as TeX math: the text of its math, raw TeX and words
   let qedSymbol = "\\Box";
-  if (opt.qed_symbol !== undefined) {
+  const qed = opt.qed_symbol;
+  if (qed !== undefined && qed.t !== "MetaInlines" && qed.t !== "MetaString") warn("qed_symbol is not math or text; ignoring it");
+  else if (qed !== undefined) {
     const parts: string[] = [];
     const collect = (x: { text: string }) => void parts.push(x.text);
-    applyFilter(inlinesOf(opt.qed_symbol), { Math: collect, RawInline: collect, Str: collect });
+    applyFilter(inlinesOf(qed), { Math: collect, RawInline: collect, Str: collect });
     if (parts.length > 0) qedSymbol = parts.join(" ");
   }
 
@@ -417,7 +401,7 @@ function readOptions(meta: Meta, writer: Writer): Options {
     counters,
     numberedDepth: numberedDepth(meta, writer, top),
     partLevel,
-    proofName: nameToText.get("proof"),
+    proofName,
     theorems,
     byClass,
     counterDepth,
@@ -428,6 +412,7 @@ function readOptions(meta: Meta, writer: Writer): Options {
     names: new Map(),
     unnumbered: new Set(),
     warned: new Set(),
+    warnedInfo: false,
   };
 }
 
@@ -484,15 +469,15 @@ function findTheorem(o: Options, classes: readonly string[], warnTwo = false): T
 /** The heading, as amsthm's `\thmhead` writes it: the name and the number in
  * the style's heading font, the number upright, the note in parentheses in
  * the note font, and the punctuation; then the space after the heading. */
-function header(o: Options, theorem: Theorem, identifier: string, info: string | undefined): Inline[] {
+function header(o: Options, theorem: Theorem, identifier: string, note: Inline[] | undefined): Inline[] {
   if (theorem.proof) {
     // "Proof.", in italics; or the note, in italics but its references, for
     // the whole heading
-    if (!info) return [Emph(inlines(`${theorem.text}.`)), Space()];
+    if (!note) return [Emph(inlines(`${theorem.text}.`)), Space()];
     // each Str in italics, emphasis in it upright, references as the font
     // applies to them; then neighbouring italics joined (in the paragraph
     // itself: a walk is of what is in it)
-    const para = applyFilter(Para(noteInlines(info)), wrapStrs("italic"));
+    const para = applyFilter(Para(note), wrapStrs("italic"));
     mergeConsecutive("italic", para.content);
     return [...para.content, Emph([Str(".")]), Space()];
   }
@@ -521,7 +506,7 @@ function header(o: Options, theorem: Theorem, identifier: string, info: string |
   // \swappedhead: the number first, in the heading font, then a tie
   if (number && o.swapnumbers) runs.unshift([[Str(number), Str(" ")], head]);
   else if (number) runs.push([[Space(), Str(number)], head.filter((f) => f === "bold")]); // upright
-  if (info) runs.push([[Space(), Str("("), ...noteInlines(info), Str(")")], []]);
+  if (note) runs.push([[Space(), Str("("), ...note, Str(")")], []]);
   runs.push([[Str(s.headpunct)], head]);
   return [...joinRuns(runs), s.headspace === "newline" ? LineBreak() : Space()];
 }
@@ -551,23 +536,25 @@ const named = (name: string, number: Inline): Inline[] => [...inlines(name), Str
  * out, as each has a style of its own. */
 function styleBody(div: Div, o: Options, bodyfont: FontName[]): void {
   const held: Div[] = [];
+  // each placeholder's attribute starts with a mark no document can know
+  // (the original's is the address of its list), so a div of the user's with
+  // the attribute is not taken for one
+  const mark = `${crypto.randomUUID()} `;
   applyFilter(div.content, {
     traverse: "topdown",
     Div: (d, ctx) => {
       if (!findTheorem(o, d.attr.classes)) return undefined;
       held.push(d);
       ctx.skipChildren();
-      return Div([], { attributes: { "amsthm-held": String(held.length) } });
+      return Div([], { attributes: { "amsthm-held": `${mark}${held.length}` } });
     },
   });
   for (const font of bodyfont) applyFilter(div.content, wrapStrs(font));
   if (held.length > 0) {
     applyFilter(div.content, {
       Div: (d) => {
-        const i = luaNumber(getAttribute(d.attr, "amsthm-held") ?? "");
-        // (any div with the attribute, the user's too: a copy each, as each
-        // return is in Lua)
-        return i !== undefined && Number.isInteger(i) && i >= 1 && i <= held.length ? copy(held[i - 1]!) : undefined;
+        const value = getAttribute(d.attr, "amsthm-held");
+        return value?.startsWith(mark) ? held[Number(value.slice(mark.length)) - 1] : undefined;
       },
     });
   }
@@ -613,15 +600,45 @@ function placeQedhere(div: Div, o: Options): boolean {
   return placed;
 }
 
-const withInlines = (block: Block | undefined) => (block?.t === "Para" || block?.t === "Plain" || block?.t === "Header" ? block.content : undefined);
+const withInlines = (block: Block | undefined) => (block?.t === "Para" || block?.t === "Plain" ? block.content : undefined);
+
+/** Takes a div's note out of it: a span with class `info` that starts its
+ * first paragraph, as pandoc has read it, with the space after it, and the
+ * paragraph if nothing is left in it (the span's other attributes ignored);
+ * else its `info` attribute, as plain text. */
+function takeNote(div: Div, o: Options): Inline[] | undefined {
+  let note: Inline[] | undefined;
+  const first = withInlines(div.content[0]);
+  const span = first?.[0];
+  if (span?.t === "Span" && span.attr.classes.includes("info")) {
+    first!.shift();
+    note = span.content;
+    if (first![0]?.t === "Space" || first![0]?.t === "SoftBreak") first!.shift();
+    if (first!.length === 0) div.content.shift();
+  }
+  const info = getAttribute(div.attr, "info");
+  if (info && /[^ \t\n\v\f\r]/.test(info)) {
+    if (note) warn(`a note in both a leading [...]{.info} span and info="${info}"; using the span`);
+    else {
+      if (!PLAIN_TEXT.test(info) && !o.warnedInfo) {
+        o.warnedInfo = true;
+        warn(`the info attribute is plain text since amsthm v4, so info="${info}" is shown as typed; `
+          + `write the note as a leading [...]{.info} span to keep its markup (once per document; see ${PORTING_GUIDE})`);
+      }
+      note = inlines(info);
+    }
+  }
+  return note?.length ? note : undefined;
+}
 
 /** Not LaTeX: the heading, the body's font, the end of a proof. */
 function environment(div: Div, o: Options): Div | undefined {
   const theorem = findTheorem(o, div.attr.classes, true);
   if (!theorem) return undefined;
+  const note = takeNote(div, o); // (before the body is in its font, which the note is not)
   const identifier = div.attr.identifier;
   if (!theorem.numbered && identifier) o.unnumbered.add(identifier);
-  const title = header(o, theorem, identifier, getAttribute(div.attr, "info"));
+  const title = header(o, theorem, identifier, note);
   const space = title.pop()!;
   const head = [Span(title, { classes: ["amsthm-title"] }), space];
 
@@ -651,11 +668,15 @@ function referenceTarget(id: string, known: { has(id: string): boolean }): [stri
   return lower !== id && known.has(lower) ? [lower, true] : undefined;
 }
 
+/** Whether a citation has a prefix or suffix (`[see @a]`, `[@a, p. 3]`),
+ * which a reference to an environment would drop. */
+const hasAffix = (c: Citation) => c.prefix.length > 0 || c.suffix.length > 0;
+
 /** The ids of `[@a; @b]`, each an environment's, none with a prefix or
  * suffix (which the list would drop); else undefined, for citeproc. */
 function multiRef(cite: Cite, known: Map<string, string>): string[] | undefined {
   if (cite.citations.length < 2) return undefined;
-  const ok = cite.citations.every((c) => c.mode === "NormalCitation" && known.has(c.id) && c.prefix.length === 0 && c.suffix.length === 0);
+  const ok = cite.citations.every((c) => c.mode === "NormalCitation" && known.has(c.id) && !hasAffix(c));
   return ok ? cite.citations.map((c) => c.id) : undefined;
 }
 
@@ -681,10 +702,16 @@ function warnUnnumbered(x: Cite | Extract<Inline, { t: "RawInline" }>, o: Option
       warn(`reference to the unnumbered environment ${target[0]}; LaTeX prints the last number before it, other output leaves it unresolved`);
     }
   }
-  if (x.t !== "Cite" || x.citations.length < 2) return;
+  if (x.t !== "Cite") return;
+  // [see @a], [@a, p. 3]: one environment, with a prefix or suffix
+  const c = single(x);
+  if (c && hasAffix(c) && (referenceTarget(c.id, o.identifiers) || referenceTarget(c.id, o.unnumbered))) {
+    warn(`a reference to an environment cannot carry a prefix or suffix, and is left to citeproc: ${stringify(x)}`);
+  }
+  if (x.citations.length < 2) return;
   let [ours, others, namedAny, affixed] = [false, false, false, false];
   for (const c of x.citations) {
-    affixed ||= c.prefix.length > 0 || c.suffix.length > 0;
+    affixed ||= hasAffix(c);
     if (o.identifiers.has(c.id) || o.unnumbered.has(c.id)) ours = true;
     else if (referenceTarget(c.id, o.identifiers)) namedAny = true;
     else others = true;
@@ -710,7 +737,8 @@ function resolve(x: Cite | Extract<Inline, { t: "RawInline" }>, o: Options): Inl
     const ids = multiRef(x, known);
     if (ids) return refList(ids, (i) => refLink(i, known.get(i)!, true));
     const c = single(x);
-    const target = c && referenceTarget(c.id, known);
+    // (with a prefix or suffix, for citeproc, as [@a; @b] is)
+    const target = c && !hasAffix(c) && referenceTarget(c.id, known);
     if (!c || !target) return undefined;
     const [id, isNamed] = target;
     const name = isNamed ? o.names.get(id) : undefined;
@@ -729,7 +757,8 @@ function citeToRef(cite: Cite, o: Options): Inline[] | undefined {
   const ids = multiRef(cite, known);
   if (ids) return refList(ids, (i) => [RawInline("latex", `\\eqref{${i}}`)]);
   const c = single(cite);
-  if (!c || (c.mode !== "NormalCitation" && c.mode !== "AuthorInText")) return undefined;
+  // (with a prefix or suffix, for citeproc, as [@a; @b] is)
+  if (!c || hasAffix(c) || (c.mode !== "NormalCitation" && c.mode !== "AuthorInText")) return undefined;
   const paren = c.mode === "NormalCitation";
   const target = referenceTarget(c.id, known);
   if (!target) return undefined;
@@ -745,9 +774,8 @@ function latexEnvironment(div: Div, o: Options): Div | undefined {
   const theorem = findTheorem(o, div.attr.classes);
   if (!theorem) return undefined;
   const opening: Inline[] = [RawInline("latex", `\\begin{${theorem.envName}}`)];
-  const info = getAttribute(div.attr, "info");
-  if (info) {
-    const note = noteInlines(info);
+  const note = takeNote(div, o);
+  if (note) {
     const brace = needsBrace(note);
     opening.push(RawInline("latex", brace ? "[{" : "["), ...note, RawInline("latex", brace ? "}]" : "]"));
   }
@@ -818,12 +846,4 @@ const second: Filter<"topdown"> = {
   },
 };
 
-/** For libpandoc's JavaScript host, given the instance the filter runs in
- * (`libpandocFilter(hosted)`): notes read with it. */
-export const hosted = (pandoc: Host): Filter[] => {
-  host = pandoc;
-  return [first, second] as Filter[];
-};
-
-// run as a JSON filter (the main module): no reader
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await runFilter([first, second]);
+await runFilter([first, second]);

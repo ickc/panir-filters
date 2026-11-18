@@ -205,6 +205,12 @@ local function cite_to_id_mode(elem)
 end
 M.cite_to_id_mode = cite_to_id_mode
 
+-- Whether a citation has a prefix or suffix, as `[see @a]` and
+-- `[@a, p. 3]` do, which a reference to an environment would drop.
+local function has_affix(c)
+  return #c.prefix > 0 or #c.suffix > 0
+end
+
 -- The ids of [@a; @b], a reference to several environments, when each
 -- of them is a key of `ids` and none has a prefix or suffix, which the
 -- list would drop; nil otherwise, leaving it to citeproc.
@@ -212,8 +218,9 @@ local function multi_ref_ids(elem, ids)
   if elem.t ~= "Cite" or #elem.citations < 2 then return nil end
   local out = {}
   for _, c in ipairs(elem.citations) do
-    if c.mode ~= "NormalCitation" or not ids[c.id]
-        or #c.prefix > 0 or #c.suffix > 0 then return nil end
+    if c.mode ~= "NormalCitation" or not ids[c.id] or has_affix(c) then
+      return nil
+    end
     out[#out + 1] = c.id
   end
   return out
@@ -267,7 +274,8 @@ local function cite_to_ref(elem, check_id, names)
     end)
   end
   local id, mode = cite_to_id_mode(elem)
-  if id == nil then return nil end
+  -- With a prefix or suffix, it is left to citeproc, as [@a; @b] is.
+  if id == nil or has_affix(elem.citations[1]) then return nil end
   if mode ~= "NormalCitation" and mode ~= "AuthorInText" then return nil end
   local paren = mode == "NormalCitation"
   local name
@@ -313,29 +321,69 @@ local function font_ref(elem_type)
 end
 local italic_ref = font_ref("Emph")
 
--- Parse a markdown string to an Inlines list, unwrapping the leading Para.
-local function parse_markdown_as_inline(md)
-  local doc = pandoc.read(md, "markdown")
-  local out = {}
-  for _, blk in ipairs(doc.blocks) do
-    if blk.t == "Para" or blk.t == "Plain" then
-      for _, inl in ipairs(blk.content) do out[#out + 1] = inl end
+---------------------------------------------------------------------
+-- The note
+---------------------------------------------------------------------
+
+local PORTING_GUIDE = "https://ickc.github.io/pandoc-amsthm/porting.html"
+
+local function is_note_span(el)
+  return el ~= nil and el.t == "Span" and el.classes:includes("info")
+end
+
+-- Whether an info attribute reads the same as plain text as it did as
+-- markdown in v3: letters, digits, spaces and , . ; : ! ? ( ) / -. Not
+-- an apostrophe, which markdown made a typographic one.
+local function is_plain_text(text)
+  return text:find("[^%w%s\128-\255,.;:!?()/%-]") == nil
+end
+M.is_plain_text = is_plain_text
+
+-- Take a div's note out of it, and return it as inlines, or nil. The
+-- note is a span with class info that starts the div's first block, a
+-- paragraph, as pandoc has read it with the document: the span goes,
+-- with the space after it, and so does the paragraph if nothing is left
+-- in it. The span's other attributes are ignored. Without the span, the
+-- note is the div's info attribute, as plain text.
+local function take_note(div, options)
+  local note
+  local content = div.content
+  local first = content[1]
+  if first and (first.t == "Para" or first.t == "Plain")
+      and is_note_span(first.content[1]) then
+    local inlines = first.content
+    note = inlines:remove(1).content
+    if inlines[1] and (inlines[1].t == "Space" or inlines[1].t == "SoftBreak") then
+      inlines:remove(1)
+    end
+    if #inlines == 0 then
+      content:remove(1)
     else
-      out[#out + 1] = blk
+      first.content = inlines
+      content[1] = first
+    end
+    div.content = content
+  end
+  local info = div.attributes.info
+  if info and info:match("%S") then
+    if note then
+      io.stderr:write("[amsthm] warning: a note in both a leading " ..
+        "[...]{.info} span and info=\"" .. info .. "\"; using the span\n")
+    else
+      if not is_plain_text(info) and not options.warned_info then
+        options.warned_info = true
+        io.stderr:write("[amsthm] warning: the info attribute is plain text since amsthm " ..
+          "v4, so info=\"" .. info .. "\" is shown as typed; " ..
+          "write the note as a leading [...]{.info} span to keep its " ..
+          "markup (once per document; see " .. PORTING_GUIDE .. ")\n")
+      end
+      note = pandoc.Inlines(info)
     end
   end
-  return out
+  if note and #note > 0 then return note end
+  return nil
 end
-M.parse_markdown_as_inline = parse_markdown_as_inline
-
-local function parse_info(info)
-  if info == nil or info == "" then return {} end
-  local res = { pandoc.Str("(") }
-  for _, e in ipairs(parse_markdown_as_inline(info)) do res[#res + 1] = e end
-  res[#res + 1] = pandoc.Str(")")
-  return res
-end
-M.parse_info = parse_info
+M.take_note = take_note
 
 ---------------------------------------------------------------------
 -- NewTheorem / Proof
@@ -437,7 +485,7 @@ end
 -- name and the number in the style's heading font, the number upright,
 -- the note in parentheses in the note font (medium, upright), and the
 -- punctuation, followed by the space after the heading.
-function NewTheorem:to_header(options, id, info)
+function NewTheorem:to_header(options, id, note)
   local style = options.styles[self.style]
   local head = style.headfont
 
@@ -473,10 +521,11 @@ function NewTheorem:to_header(options, id, info)
     local number = upright(head)
     runs[#runs + 1] = { { pandoc.Space(), pandoc.Str(theorem_number) }, number }
   end
-  local note = parse_info(info)
-  if #note > 0 then
-    table.insert(note, 1, pandoc.Space())
-    runs[#runs + 1] = { note, {} }
+  if note then
+    local inlines = pandoc.Inlines({ pandoc.Space(), pandoc.Str("(") })
+    inlines:extend(note)
+    inlines:insert(pandoc.Str(")"))
+    runs[#runs + 1] = { inlines, {} }
   end
   runs[#runs + 1] = { { pandoc.Str(style.headpunct) }, head }
 
@@ -498,14 +547,13 @@ function Proof.new(text)
   return setmetatable(self, Proof)
 end
 
--- Proof gets a markdown-parsed info that's emph-normalised.
-function Proof:to_header(_options, _id, info)
-  if info == nil or info == "" then
+-- A proof's note is its whole heading, emph-normalised.
+function Proof:to_header(_options, _id, note)
+  if note == nil then
     return { pandoc.Emph(pandoc.Inlines(self.text .. ".")), pandoc.Space() }
   end
-  local ast = parse_markdown_as_inline(info)
   -- Wrap into a Para so we can walk + apply emph transforms over a block.
-  local para = pandoc.Para(ast)
+  local para = pandoc.Para(note)
   para = para:walk({
     Str = M.to_emph, Emph = M.cancel_emph,
     Cite = italic_ref, RawInline = italic_ref,
@@ -546,6 +594,15 @@ local function meta_list(node)
   if is_meta_list(node) then return node end
   return { node }
 end
+
+-- The name a metadata key stands for. A value is read as markdown, so
+-- `Conjecture\*` in a list is `Conjecture*`, but a key is taken as it is
+-- written; drop a backslash before punctuation, as markdown does, so the
+-- two agree.
+local function meta_key(key)
+  return (key:gsub("\\(%p)", "%1"))
+end
+M.meta_key = meta_key
 
 -- The LaTeX unit that level-1 headings map to, as pandoc decides it.
 local function top_level_division(meta)
@@ -646,15 +703,19 @@ local function from_meta(meta)
   end
 
   local name_to_text = {}
-  if opt.name_to_text ~= nil then
-    for k, v in pairs(opt.name_to_text) do name_to_text[k] = stringify(v) end
+  if is_meta_map(opt.name_to_text) then
+    for k, v in pairs(opt.name_to_text) do name_to_text[meta_key(k)] = stringify(v) end
+  elseif opt.name_to_text ~= nil and opt.name_to_text ~= "" then
+    -- An empty `name_to_text:`, its entries commented out, names nothing.
+    io.stderr:write("[amsthm] warning: name_to_text is not a map from " ..
+      "names to their text; ignoring it\n")
   end
   -- parent_counter is one unit for every environment, or a map from an
   -- environment's name to its unit, as \newtheorem takes one each.
   local parent_counters = {}
   local parent_counter
   if is_meta_map(opt.parent_counter) then
-    for k, v in pairs(opt.parent_counter) do parent_counters[k] = stringify(v) end
+    for k, v in pairs(opt.parent_counter) do parent_counters[meta_key(k)] = stringify(v) end
   elseif opt.parent_counter ~= nil then
     parent_counter = stringify(opt.parent_counter)
   end
@@ -690,29 +751,35 @@ local function from_meta(meta)
         table.sort(keys)
         for _, key in ipairs(keys) do
           local value = entry[key]
-          local key_s = stringify(key)
-          add(NewTheorem.new({
+          local key_s = meta_key(key)
+          local owner = NewTheorem.new({
             style = style, env_name = key_s,
             text = name_to_text[key_s] or "",
             parent_counter = parent_of(key_s),
-          }))
-          -- value: MetaList of names OR single name
-          if is_meta_list(value) then
-            for _, v in ipairs(value) do
-              local v_s = stringify(v)
-              add(NewTheorem.new({
-                style = style, env_name = v_s,
-                text = name_to_text[v_s] or "",
-                shared_counter = key_s,
-              }))
-            end
-          else
-            local v_s = stringify(value)
-            add(NewTheorem.new({
+          })
+          add(owner)
+          -- A name listed under it shares its counter; an unnumbered
+          -- environment has none, so then each is numbered on its own.
+          local function add_sharer(v)
+            local v_s = stringify(v)
+            local t = NewTheorem.new({
               style = style, env_name = v_s,
               text = name_to_text[v_s] or "",
-              shared_counter = key_s,
-            }))
+              shared_counter = owner.numbered and key_s or nil,
+              parent_counter = not owner.numbered and parent_of(v_s) or nil,
+            })
+            if t.numbered and not owner.numbered then
+              io.stderr:write("[amsthm] warning: " .. owner.env_name ..
+                " is unnumbered, so it has no counter for " .. t.env_name ..
+                " to share; numbering " .. t.env_name .. " on its own\n")
+            end
+            add(t)
+          end
+          -- value: MetaList of names OR single name
+          if is_meta_list(value) then
+            for _, v in ipairs(value) do add_sharer(v) end
+          else
+            add_sharer(value)
           end
         end
       else
@@ -726,8 +793,11 @@ local function from_meta(meta)
     end
   end
 
-  -- Proof is predefined.
-  local proof = Proof.new(name_to_text.proof)
+  -- Proof is predefined. An empty name is no name, as for any other
+  -- environment: "Proof", and in LaTeX babel's for the language.
+  local proof_name = name_to_text.proof
+  if proof_name == "" then proof_name = nil end
+  local proof = Proof.new(proof_name)
   theorems_order[#theorems_order + 1] = proof
   theorems_map[proof:class_name()] = proof
 
@@ -781,7 +851,11 @@ local function from_meta(meta)
   -- The end-of-proof symbol, as TeX math: `$\blacksquare$` in the metadata
   -- is math, and a bare `\blacksquare` raw TeX.
   local qed_symbol = "\\Box"
-  if opt.qed_symbol ~= nil then
+  local qed_kind = opt.qed_symbol ~= nil and utype(opt.qed_symbol) or nil
+  if qed_kind and qed_kind ~= "Inlines" and qed_kind ~= "string" then
+    io.stderr:write("[amsthm] warning: qed_symbol is not math or text; " ..
+      "ignoring it\n")
+  elseif qed_kind then
     local parts = {}
     pandoc.Inlines(opt.qed_symbol):walk({
       Math = function(m) parts[#parts + 1] = m.text end,
@@ -801,7 +875,7 @@ local function from_meta(meta)
     counters = counters,
     numbered_depth = numbered_depth(meta, top),
     part_level = part_level,
-    proof_name = name_to_text.proof,
+    proof_name = proof_name,
     theorems_order = theorems_order,
     theorems_map = theorems_map,
     counter_depth = counter_depth,
@@ -896,12 +970,16 @@ end
 -- each has a style of its own.
 local function style_body(div, options, bodyfont)
   local held = {}
+  -- Each placeholder's attribute starts with the address of `held`,
+  -- which no document can know, so a div of the user's that happens to
+  -- have the attribute is not taken for one.
+  local mark = tostring(held) .. " "
   local body = pandoc.Div(div.content):walk({
     traverse = "topdown",
     Div = function(d)
       if find_theorem(options, d.classes) then
         held[#held + 1] = d
-        return pandoc.Div({}, pandoc.Attr("", {}, { ["amsthm-held"] = tostring(#held) })), false
+        return pandoc.Div({}, pandoc.Attr("", {}, { ["amsthm-held"] = mark .. #held })), false
       end
       return nil
     end,
@@ -922,7 +1000,9 @@ local function style_body(div, options, bodyfont)
     body = body:walk({
       Div = function(d)
         local i = d.attributes["amsthm-held"]
-        if i then return held[tonumber(i)] end
+        if i and i:sub(1, #mark) == mark then
+          return held[tonumber(i:sub(#mark + 1))]
+        end
         return nil
       end,
     })
@@ -990,10 +1070,11 @@ local function amsthm_block(div, options)
   local theorem = find_theorem(options, div.classes, true)
   if not theorem then return nil end
 
-  local info = div.attributes.info
+  -- Before the body is set in its font, which the note is not.
+  local note = take_note(div, options)
   local id = div.identifier
   if not theorem.numbered and id ~= "" then options.unnumbered[id] = true end
-  local header = theorem:to_header(options, id, info)
+  local header = theorem:to_header(options, id, note)
   -- to_header ends with a Space; keep it outside the title span.
   local title = {}
   for i = 1, #header - 1 do title[i] = header[i] end
@@ -1004,12 +1085,11 @@ local function amsthm_block(div, options)
     div = style_body(div, options, style.bodyfont)
   end
 
-  -- Prepend header to the first block's inline list when possible,
-  -- otherwise wrap into a fresh Para.
-  if #div.content >= 1 and div.content[1].content
-      and (div.content[1].t == "Para" or div.content[1].t == "Plain"
-           or div.content[1].t == "Header") then
-    local first = div.content[1]
+  -- Prepend header to the first block's inline list when it is a
+  -- paragraph, otherwise wrap into a fresh Para: a heading keeps a line
+  -- of its own, as \begin{Theorem} is set before it in LaTeX.
+  local first = div.content[1]
+  if first and (first.t == "Para" or first.t == "Plain") then
     local new_inlines = {}
     for _, e in ipairs(header) do new_inlines[#new_inlines + 1] = e end
     for _, e in ipairs(first.content) do new_inlines[#new_inlines + 1] = e end
@@ -1026,8 +1106,7 @@ local function amsthm_block(div, options)
     -- \hfill is left out, for the CSS to do in HTML.
     local qed = qed_span(options)
     local last = div.content[#div.content]
-    if last and last.content
-       and (last.t == "Para" or last.t == "Plain" or last.t == "Header") then
+    if last and (last.t == "Para" or last.t == "Plain") then
       local ic = last.content
       ic[#ic + 1] = qed
       last.content = ic
@@ -1071,6 +1150,15 @@ local function warn_unnumbered(elem, options)
       io.stderr:write("[amsthm] warning: reference to the unnumbered " ..
         "environment " .. id .. "; LaTeX prints the last number before it, " ..
         "other output leaves it unresolved\n")
+    end
+  end
+  -- [see @a], [@a, p. 3]: one environment, with a prefix or suffix.
+  if elem.t == "Cite" and #elem.citations == 1 and has_affix(elem.citations[1]) then
+    local id = elem.citations[1].id
+    if ref_target(id, options.identifiers) or ref_target(id, options.unnumbered) then
+      io.stderr:write("[amsthm] warning: a reference to an environment " ..
+        "cannot carry a prefix or suffix, and is left to citeproc: " ..
+        pandoc.utils.stringify(elem) .. "\n")
     end
   end
   -- [@a; @knuth]: environments and other keys in one citation.
@@ -1128,6 +1216,8 @@ local function resolve_inline(elem, options)
   end
   if elem.t == "Cite" then
     local id, mode = cite_to_id_mode(elem)
+    -- With a prefix or suffix, it is left to citeproc, as [@a; @b] is.
+    if id and has_affix(elem.citations[1]) then return nil end
     local is_named
     if id then id, is_named = ref_target(id, options.identifiers) end
     if id then
@@ -1167,9 +1257,8 @@ local function amsthm_latex_block(div, options)
   local theorem = find_theorem(options, div.classes)
   if not theorem then return nil end
   local open = { pandoc.RawInline("latex", "\\begin{" .. theorem.env_name .. "}") }
-  local info = div.attributes.info
-  if info and info ~= "" then
-    local note = parse_markdown_as_inline(info)
+  local note = take_note(div, options)
+  if note then
     -- The writer escapes brackets in text, but not in math, citations,
     -- images (\includegraphics[width=...]) or raw TeX, where a ] would end
     -- the optional argument early.

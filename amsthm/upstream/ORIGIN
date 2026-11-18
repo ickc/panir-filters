@@ -1,8 +1,9 @@
-url: https://github.com/ickc/pandoc-amsthm/blob/ba1008f3f146082cc8282eddf9aa1062b5db841b/_extensions/amsthm/amsthm.lua
+url: https://github.com/ickc/pandoc-amsthm/blob/8606511d02bc5d44ad6c441301a6180854086239/_extensions/amsthm/amsthm.lua
 repository: https://github.com/ickc/pandoc-amsthm
-commit: ba1008f3f146082cc8282eddf9aa1062b5db841b
+commit: 8606511d02bc5d44ad6c441301a6180854086239
+note: this is the proposed v4.0.0, not yet merged: the tip of the stack of pull requests ickc/pandoc-amsthm#39 to #48 (branch v4/10-note-span; eight fixes, then the note as a leading [...]{.info} span, the breaking change); before it, the ports mirrored v3.1.1 (ba1008f)
 path: _extensions/amsthm/amsthm.lua
-licence: BSD-3-Clause, Copyright (c) 2016-2026, Kolen Cheung (../LICENSE, the repository's, verbatim; the file's header says BSD-3-Clause too); it covers the original, its tests and the ports here
-cases: the repository's own tests, verbatim: tests/cases/*.md under their names, tests/model-source.md as model-source.md, docs/examples/*.md as example-*.md; with the writer's options its spec/cases_spec.lua and spec/golden_spec.lua give them, as NAME.opts (a case run with two sets of options is there twice: scalar-meta-n, section-numbering-n and -secnumdepth, model-source-n and -chapter), and the spec's -M as NAME.args; the others are written for the ports
+licence: BSD-3-Clause, Copyright (c) 2016-2026, Kolen Cheung (../LICENSE, the repository's, verbatim and unchanged at this commit; the file's header says BSD-3-Clause too); it covers the original, its tests and the ports here
+cases: the repository's own tests at that commit, verbatim: tests/cases/*.md under their names, tests/model-source.md as model-source.md, docs/examples/*.md as example-*.md; with the writer's options its spec/cases_spec.lua and spec/golden_spec.lua give them, as NAME.opts (a case run with two sets of options is there twice: scalar-meta-n, section-numbering-n and -secnumdepth, model-source-n and -chapter), and the spec's -M as NAME.args; the others are written for the ports
 run: lua amsthm.lua
 formats: latex beamer html markdown

@@ -18,8 +18,8 @@ amsthm:
   broken: [Broken]
 ---
 
-::: {#t .Theorem info="Smith"}
-In bold italics, citing @t and [@t], *emphasis* and **bold** and [small]{.smallcaps}, and \ref{t} and \eqref{t}.
+::: {#t .Theorem}
+[Smith]{.info} In bold italics, citing @t and [@t], *emphasis* and **bold** and [small]{.smallcaps}, and \ref{t} and \eqref{t}.
 
 **Bold** *text*.
 :::

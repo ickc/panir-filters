@@ -4,9 +4,9 @@ amsthm:
 ---
 
 ::: {#euler .Theorem}
-A.
+First.
 :::
 
-::: {.proof info="Proof of @Euler, see [@euler]"}
-Obvious.
+::: proof
+[Proof of @Euler, see [@euler]]{.info} Obvious.
 :::
