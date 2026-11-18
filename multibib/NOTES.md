@@ -24,12 +24,12 @@ and docx (the original names Word's bibliography style). They run in
 |---|---|---|
 | Python | `libpandoc.convert(json, from_="json", to="json", citeproc=True)`, its warnings silenced (`pandoc.log.silence` in the original) | libpandoc as a library, if installed |
 | TypeScript | in libpandoc's JavaScript host, the instance the filter runs in (the port's `hosted(pandoc)` for panir's `libpandocFilter`): `pandoc.convert({from: "json", to: "json", citeproc: true}, json)`, its warnings in its log | the `pandoc` command with `--citeproc --quiet` on the JSON, a process a call (as the original does where pandoc's Lua has no citeproc) |
-| Rust | built for wasm, `libpandoc::convert` with `"citeproc": true`, the host's | none: it fails, saying to build it for wasm |
+| Rust | built for wasm, libpandoc-rs's `libpandoc::citeproc(doc, conversion)`: it reads the bibliography files itself, with the directories the host gave the filter, and gives them to the host's pandoc as their contents (libpandoc 1.14's `"citeproc-files"`), as a wasm filter's calls read no file | none: it fails, saying to build it for wasm |
 | Julia | `LibPandoc.convert(json; from = "json", to = "json", citeproc = true)`, its log silenced (`NullLogger`) | LibPandoc as a library, if in the environment |
 
-No host has a call for citeproc itself; `convert` from JSON to JSON with
-the option is the way in each, and does what `pandoc.utils.citeproc`
-does on these cases.
+No host but libpandoc-rs has a call for citeproc itself; `convert` from
+JSON to JSON with the option is the way in the others, and does what
+`pandoc.utils.citeproc` does on these cases.
 
 ## The original's behaviour, kept
 
@@ -70,9 +70,12 @@ Copies: the citations are copied when collected (Lua's are).
 
 ## In the hosts
 
-The same in every host, but a wasm filter's (`known.tsv`): its call to
-citeproc runs in pandoc's sandbox (the calls of a wasm filter are
-`"untrusted"`), so citeproc can't read the bibliography files the
-filter itself can read (`PandocResourceNotFound`), and the filter fails
-wherever the metadata names one (`sample`, `topics`, `references`), in
-the four wasm hosts (`HOSTS.md`).
+The same in every host. Until libpandoc 1.14 a wasm filter's call to
+citeproc ran in pandoc's sandbox (its calls are `"untrusted"`), so
+citeproc couldn't read the bibliography files the filter itself could
+(`PandocResourceNotFound`), and the Rust port failed wherever the
+metadata names one (`sample`, `topics`, `references`) in the four wasm
+hosts (`HOSTS.md`, H3). With `libpandoc::citeproc` the filter reads them
+and pandoc is given their contents: the original's result in every wasm
+host, given the working directory (`wasm-dirs: .` in its ORIGIN); given
+no directory, those three cases fail as before.

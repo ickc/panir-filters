@@ -357,6 +357,15 @@ In the directory sandbox (`--sandbox`): 303 the original's, 21 known,
 none failing. `run.py test`: 3,274 the original's, 142 known, none
 failing.
 
+Again on 2026-11-18 with libpandoc 1.14, the bindings' `main`s
+(`HOSTS.md`, "Since: libpandoc 1.14"), a wasm filter given no directory
+but what its filter states (`wasm-dirs`), with all 25 filters:
+`run.py host` 8,598 runs, 8,327 the original's, 271 known, none failing
+(on 2026-11-17, after pantable: 8,303 and 295), multibib's 24 wasm runs
+now the original's (`libpandoc::citeproc`, H3); `--sandbox` 798, 708 and
+90 (690 and 108), multibib's 18 there likewise; `run.py test` 3,454
+the original's, 186 known, none failing, as before.
+
 7,902 runs, none failing; why each known one is, `HOSTS.md` and each
 filter's `known.tsv`. In the directory sandbox (`run.py host --sandbox`,
 the two filters that read files, nine modes with the Lua originals): 297

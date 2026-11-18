@@ -13,8 +13,9 @@ rust-version = "1.97"
 panir = { path = "../panir/rust" }
 serde_json = "1"
 # libpandoc-rs's main (for the filters that call pandoc, built for wasm: its
-# guest side, which needs no libpandoc to build): libpandoc 1.13, panir 0.2
-libpandoc = { git = "https://github.com/ickc/libpandoc-rs", rev = "b709b0298de6a108af1cecbc358bc4cc779db3f4" }
+# guest side, which needs no libpandoc to build): libpandoc 1.14, panir 0.2,
+# libpandoc::citeproc for a wasm filter
+libpandoc = { git = "https://github.com/ickc/libpandoc-rs", rev = "d9b1c8adea7d46846d9e143e6dada229b6025ea6" }
 
 # libpandoc's panir is the one beside this repository too
 [patch."https://github.com/ickc/panir"]

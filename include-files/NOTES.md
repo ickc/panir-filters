@@ -111,9 +111,16 @@ Every port gives the original's result in every host, but for what the
 host decides (`known.tsv`, `HOSTS.md`): libpandoc's `read` expands tabs
 where `pandoc.read` keeps them (`reader-options`: Python, Rust, Julia; the
 TypeScript port's `pandoc` command also has no reader options); a wasm
-filter sees only the working directory, read-only, so neither `..` nor a
-symbolic link out of it (`outside`, in pandocrs, pandocpy and pandocjl),
-and in libpandoc.wasm's Node host no directory at all (every case). In the
+filter is given no directory unless `LIBPANDOC_WASM_DIRS` names some
+(libpandoc 1.14's hosts; the working directory here, `wasm-dirs: .`):
+given none, every case but `outside` differs. `outside` gives `.` and
+`../outside` (`outside.env`): the file through `..` is read, the symbolic
+link leaving the working directory is refused wherever it leads, and its
+include skipped, in the four wasm hosts. The Rust port joins an included
+file's directory to the names in it, where the original changes its
+working directory: in WASI `sub/../../common/x.md` (a file in `sub`
+including `../../common/x.md`) is refused even with `../common` given,
+where the original reads it (no case: `HOSTS.md`, H6). In the
 directory sandbox (`run.py host --sandbox`), every case inside the
 directory gives the original's result in every host that has one; what
 each kind of filter reads from outside it is `HOSTS.md`'s table.

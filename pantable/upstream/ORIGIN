@@ -8,3 +8,4 @@ needs: pantable 0.15.0 from PyPI (with panflute 2.3.1, PyYAML, numpy: oracle-req
 run: python -m pantable.cli.pantable
 formats: html
 cwd: cases/files
+wasm-dirs: .

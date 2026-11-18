@@ -58,17 +58,20 @@ async function handedOver(script) {
 }
 
 async function run(job) {
-  const fns = [];
-  for (const script of job.scripts ?? []) fns.push(libpandocFilter(await handedOver(script), job.options));
-  for (const path of job.wasm ?? []) fns.push(await wasmFilter(readFileSync(path), { pandoc, name: path }));
-  let kept;
-  fns.push((doc) => (kept = doc));
+  // the case's environment and directory first: a wasm filter is given the
+  // directories of $LIBPANDOC_WASM_DIRS as it is when the filter is made,
+  // relative to the working directory when it runs
   const saved = { ...process.env };
   Object.assign(process.env, job.env ?? {});
   const here = process.cwd();
   process.chdir(job.cwd); // (the case's files are named relative to it)
   pandoc.chdir(job.cwd);
+  let kept;
   try {
+    const fns = [];
+    for (const script of job.scripts ?? []) fns.push(libpandocFilter(await handedOver(script), job.options));
+    for (const path of job.wasm ?? []) fns.push(await wasmFilter(readFileSync(path), { pandoc, name: path }));
+    fns.push((doc) => (kept = doc));
     pandoc.convertWithFilters({ ...job.options, from: "json", to: job.format }, JSON.stringify(job.input), fns, { raw: true, bytes: true });
   } finally {
     process.chdir(here);

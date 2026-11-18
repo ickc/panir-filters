@@ -102,6 +102,93 @@ changed since `f2bd848`), and every filter run again in every mode.
 failing (pantable's 696: 554 and 142; H17's six are the original's now).
 `--sandbox`: 798 runs, 690 the original's, 108 known, none failing.
 
+## Since: libpandoc 1.14 (2026-11-18)
+
+The owner's decisions of 2026-11-18, merged the same day: libpandoc 1.14
+(ickc/libpandoc#10: `"citeproc-files"`, citeproc's files given as their
+contents to a sandboxed call; the host's cancel token inside
+`"untrusted"`); **a wasm filter is given no directory by default**, in
+every host, sandbox or not, and `LIBPANDOC_WASM_DIRS` (a list as `PATH`'s,
+read-only) gives every wasm filter of a command some (libpandoc-rs#21,
+libpandoc-python#17, LibPandoc.jl#12, libpandoc#12 for Node);
+libpandoc-rs's `libpandoc::citeproc(doc, conversion)`, which in a wasm
+filter reads the files the metadata names itself and hands them to pandoc
+(libpandoc-rs#22); and in the three bindings `cancel` tells pandoc before
+it sets its own flag (nothing here cancels). The hosts were built in
+scratch from exports of the bindings' `main`s, against libpandoc 1.14:
+the native library a local build of libpandoc's `main` (`030dc8b`, ABI
+1.14), `libpandoc.wasm` the `continuous` release built from the same
+commit, checked against its `SHA256SUMS`:
+
+| host | commit | built |
+|---|---|---|
+| libpandoc-python | `94ae90e` | `pip install .[wasm]` with `LIBPANDOC_PREFIX`, Python 3.13, panir 0.2.0 (panir's `main`, `4e2260e`), wasmtime-py 50 |
+| libpandoc-rs | `d9b1c8a` | `cargo build --release --locked -p pandocrs`, Rust 1.97.1; the ports' guest side at the same commit |
+| LibPandoc.jl | `f462472` | `Pkg.instantiate()`, Julia 1.12.7, Panir.jl at panir's `main`, no system image |
+| libpandoc's JavaScript host | `030dc8b` | `npm ci` in `wasm/`, Node 26.13, the release's `libpandoc.wasm` |
+
+What changed here: multibib's Rust port runs citeproc with
+`libpandoc::citeproc` (its own `convert` before), and `run.py` gives a
+wasm port only what its filter states: `wasm-dirs: .` in the ORIGIN of
+the four filters that read files (include-files, include-code-files,
+multibib, pantable), as `LIBPANDOC_WASM_DIRS`, in the four wasm modes and
+the sandboxed ones; the other 21 run with nothing, so their runs prove they
+need nothing. The `outside` cases give `.` and `../outside`
+(`outside.env`), what a user grants for a directory of shared files
+beside the document's. The Node driver now makes a wasm filter after
+setting the case's environment and directory (`wasm-filter.mjs` reads the
+variable when the filter is made, and resolves it against the working
+directory when it runs).
+
+`run.py host`: 8,598 case runs, 8,327 the original's, 271 known, none
+failing; `--sandbox`: 798 runs, 708 the original's, 90 known, none
+failing; `run.py test`: 3,454 the original's, 186 known, none failing, as
+before. multibib's 24 known runs (three cases, two formats, four wasm
+hosts) are the original's, and its 18 in the sandbox (three wasm hosts);
+`outside` stays known in every wasm mode, for a reason of its own (H6,
+below). What each filter needs, from these runs:
+"What each filter needs", below.
+
+| # | now |
+|---|---|
+| H1, H2, H4, H9, H12, H13, H17 | closed (above) |
+| H3 | **closed**: libpandoc 1.14's `"citeproc-files"` and libpandoc-rs's `libpandoc::citeproc`; multibib's wasm port is the original's in the four wasm hosts |
+| H5, H8, H10, H11, H15, H16, H18 | documented (above) |
+| H6 | **closed**: a wasm filter's directories are the user's to give (`LIBPANDOC_WASM_DIRS`, none by default); a file through `..` is read when its directory is given; a symbolic link leaving the working directory is refused, wherever it leads |
+| H7 | **reversed**: in Node, as everywhere, a wasm filter is given no directory by default, the same variable gives some |
+| H14 | **measured**: a callback filter's 0.29 s on the textbook is 82% pandoc decoding the returned JSON; what to build is the owner's decision, not made |
+
+## What each filter needs
+
+From the runs above: a wasm port is given no directory unless its ORIGIN
+says `wasm-dirs`, and every port so given none gives the original's
+result in the four wasm hosts, or differs only as its `known.tsv` says
+(none of those rows is about files); the four that read files were run
+once more with nothing (`pandocrs-wasm`), to see which cases need it, and
+they are the only wasm ports that import WASI's `path_open`. Calls into
+pandoc are what each wasm port imports from the `libpandoc` module (the
+four that may call it; the others import nothing from it). The process's environment
+is the variables a filter reads beyond those pandoc gives every filter
+(`PANDOC_VERSION`, `PANDOC_READER_OPTIONS`, `PANDOC_WRITER_OPTIONS`...).
+
+| filter | a directory (its wasm port) | the process's environment | calls into pandoc |
+|---|---|---|---|
+| include-files | the working directory: the files it includes, and those they include (every case but `outside` differs without; `outside` gives `../outside` too) | – | read (`read_many`): each file in its format, with the reader's options |
+| include-code-files | the working directory: the files it includes (9 of 11 cases differ without; `outside` gives `../outside` too) | – | – |
+| multibib | the working directory: the bibliography files citeproc reads (`sample`, `topics`, `references` differ without) | – | citeproc (`convert`, through `libpandoc::citeproc`): the document once, a topic's citations once each |
+| pantable | the working directory: the CSV files `include` names (14 of 80 cases name one; the 9 of them otherwise the original's differ without; `outside` gives `../outside` too) | – | read (`read_many`): a table's markdown texts in one call |
+| amsthm | – | – | read (`convert`): a theorem's note with markup, as markdown |
+| pagebreak | – | `PANDOC_PAGEBREAK_HTML_CLASS`, `PANDOC_PAGEBREAK_ODT_STYLE` (cases `env`, `env-meta`; a wasm filter is not given them: H8) | – |
+| the other 19 | – | – | – |
+
+19 of the 25 filters are pure: they need no directory, no variable of the
+process's and no call into pandoc. 4 read files from the directory they
+run in (include-files, include-code-files, multibib, pantable), 1 reads the
+process's environment (pagebreak), 4 call pandoc (include-files, multibib,
+pantable, amsthm); 6 need one of these at least. (auto-lang's original
+reads its table of scripts from beside itself; the ports have it compiled
+in.)
+
 ## How the ports ran
 
 `run.py host` (its docstring has the variables naming each host). A mode
@@ -273,6 +360,19 @@ a workaround each filter would write).
 (section-refs, section-bibliographies, multiple-bibliographies); any call
 whose input names a file (a LaTeX fragment's `\input`, by design refused).
 
+**Since** (libpandoc 1.14, 2026-11-18): closed, the other way round. A
+wasm filter's calls still read no file; the filter reads them and gives
+them as their contents, libpandoc's `"citeproc-files": {"name": "text"}`,
+and libpandoc-rs's `libpandoc::citeproc(doc, conversion)` does it for a
+filter: it reads the bibliography, style and abbreviations the metadata
+names, with the directories the filter was given, under the names pandoc
+looks them up by. multibib's Rust port calls it in place of its own
+`convert`, and is the original's in the four wasm hosts (its 12
+`known.tsv` rows, 24 runs, gone), given the working directory
+(`wasm-dirs: .`); given none, it fails as before
+(`PandocResourceNotFound`), and the host adds `(it was given no
+directory: LIBPANDOC_WASM_DIRS)`.
+
 ### H4. libpandoc's `read` expands tabs; `pandoc.read` doesn't
 
 **The original**: `pandoc.read(text, format, reader_options)` runs the
@@ -342,6 +442,37 @@ the directory sandbox, the sandbox's own list.
 **How common**: 2 (include-files, include-code-files), for a book whose
 chapters include a common directory beside them.
 
+**Since** (2026-11-18): closed. A wasm filter is given no directory by
+default, in every host, with the directory sandbox or without: its
+directories are the user's to give, `LIBPANDOC_WASM_DIRS` (the
+proposal's variable, read-only; not the working directory by default,
+and not the sandbox's list, which is the document's). A file through `..`
+is read when its directory is given: the `outside` cases, given `.` and
+`../outside`, read `../outside/canary.md` in pandocrs, pandocpy, pandocjl
+and Node, and so did `..` alone, `.:..`, and `.:` the absolute name of
+`outside` (a probe, each host). A symbolic link leaving the working
+directory is refused in every one of them, wherever it leads: wasi-libc
+opens `link-out.md` through the directory it matches by name, the
+working directory as `.`, which the link leaves, so it is refused even
+with `..`, which holds its target, given. include-files and
+include-code-files then skip the include as a missing file, and pantable's
+port fails (`Operation not permitted`), as its original fails on a file
+it may not read; so `outside` stays known in the four wasm modes, for the
+link. Nothing in the ports mangled a name: each passes it as written
+(include-files joins an included file's directory to the names in it,
+where the original changes its working directory: so a file in `sub`
+including `../../common/x.md` is opened as `sub/../../common/x.md`, which
+WASI refuses even with `../common` given; no case has it). The hosts'
+READMEs said `./../common/x` and `./img/x` (only `img` given) don't work
+either: with the ports both do, in the four hosts, a leading `./`
+dropped, and with the hosts' own example filter neither does (a probe).
+The difference is the build, not the host nor the toolchain (Rust 1.97.1
+for both): the same filter drops a leading `./` built without link-time
+optimisation, as the ports are, and keeps it built with `lto = true`, as
+libpandoc-rs's examples are (its `include`, built both ways). So a name
+with a leading `./` is not to be relied on; `sub/../../common/x` works in
+neither. The READMEs say so now.
+
 ### H7. A wasm filter in Node sees no directory
 
 **The hosts**: `wasm-filter.mjs` gives a filter only the directories its
@@ -355,6 +486,13 @@ through `node:fs` (a shim directory backed by the disk, or `node:wasi`
 for the filter), as the other hosts; in a browser, documented as none.
 
 **How common**: 2 (the filters that read files).
+
+**Since** (2026-11-18): libpandoc 1.13's fix (the working directory by
+default in Node) reversed with the owner's decision: in Node, as in every
+host, a wasm filter is given no directory by default, and
+`LIBPANDOC_WASM_DIRS` gives some (`node-dir.mjs`), seen under the same
+names as in the other hosts. Every case of the four filters that read
+files is the same in `node-wasm` as in the other wasm modes.
 
 ### H8. A wasm filter is not given the process's environment
 
@@ -471,6 +609,12 @@ into pandoc and the start of a runtime (Julia's compiling: 3.4 s against
 0.7 s warm), not the exchange.
 
 **How common**: every filter; on the textbook, 0.35 s each.
+
+**Since** (2026-11-18): measured (the project's `dev/h14-exchange`): a
+callback filter costs 0.29 s on the 9.4 MB textbook, 82% of it pandoc
+decoding the JSON the filter returns (half of that the garbage
+collector), 17% its encoding, 1.3 ms the copies across the C ABI. What to
+build is the owner's decision, not made.
 
 ### H15. A call into pandoc costs six times `pandoc.read`'s
 
@@ -627,7 +771,9 @@ error: not done, a question for the owner.
 - **A Python script and a Julia script, run twice in one process** (H5):
   the Python script starts afresh, the Julia one goes on.
 - **What a wasm filter sees** (H6, H7): the working directory in
-  pandocrs, pandocpy and pandocjl; nothing in Node.
+  pandocrs, pandocpy and pandocjl; nothing in Node. (Since libpandoc
+  1.14: nothing in any, by default; `LIBPANDOC_WASM_DIRS` gives the same
+  in every one.)
 - **What a callback's conversion holds** (H9): the options in Python and
   Julia, none in Rust.
 - **A directory sandbox in a fragment's read** (H9): Python and Julia map
@@ -680,7 +826,7 @@ through pandoc.
 | filter | pandocpy | pandocrs | pandocjl (`sandbox` branch) | JavaScript (Node) |
 |---|---|---|---|---|
 | Lua (the original), inside the module | confined: none of the three read | confined | confined | (no sandbox setting: Lua inside libpandoc.wasm sees the instance's `preopens`) |
-| wasm filter (the Rust port) | sees the mounts: none read | the same | the same | sees no directory (H7) |
+| wasm filter (the Rust port) | sees the mounts: none read; since 1.14 its own directories (`LIBPANDOC_WASM_DIRS`), not the mounts: given `.` and `../outside`, the file through `..` and the absolute name read, not the link | the same | the same | sees no directory (H7); since 1.14 the same variable (not in `--sandbox`'s modes) |
 | Python or Julia filter **script** (`-F port.py`, `port.jl`) | unconfined, by design and documented: all three read | – | unconfined, documented: all three read | – |
 | Python or Julia filter **function** (`convert(sandbox=...)`) | unconfined, documented: all three read | – | the same | a JS function: unconfined (no setting to confine it) |
 | Rust callback (`convert_with` with a sandbox) | – | unconfined, documented: the file read | – | – |
@@ -714,7 +860,7 @@ half with emphasis, math and a citation, read as markdown):
 |---|---|---|---|---|---|---|
 | read one text | `pandoc.read` | `libpandoc.read(text, conversion)` | `libpandoc::read`, `read_as` | the same | `LibPandoc.read(text, conversion)` | none for a filter (H2); since 1.13 `pandoc.read(text, conversion)`, the instance a filter is given |
 | read many at once | none | `read_many` | `read_many`, `read_many_as` | the same | `read_many` | the instance's `readMany` |
-| citeproc | `pandoc.utils.citeproc` | `convert(json, from_="json", to="json", citeproc=True)` | `libpandoc::convert` (no files: H3) | `convert` | `convert(...; citeproc = true)` | none (H2); since 1.13 `pandoc.convert({..., citeproc: true}, json)` |
+| citeproc | `pandoc.utils.citeproc` | `convert(json, from_="json", to="json", citeproc=True)` | `libpandoc::convert` (no files: H3); since 1.14 `libpandoc::citeproc`, the files read by the filter | `convert`; `libpandoc::citeproc` | `convert(...; citeproc = true)` | none (H2); since 1.13 `pandoc.convert({..., citeproc: true}, json)` |
 | write | `pandoc.write` | `write` | `write` | the same | `write` | none; since 1.13 `pandoc.convert` |
 | 738 notes, a call each (s) | 0.04 | 0.25 | 0.23 (pandocrs), 0.30 (pandocpy), 0.24 (pandocjl), 0.67 (Node) | 0.21 | 0.23 | 0.24 (the instance's) |
 | the same, one `read_many` (s) | – | 0.015 | 0.014, 0.014, 0.016, 0.18 | 0.013 | 0.012 | 0.17 |
