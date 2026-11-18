@@ -471,9 +471,9 @@ def read_options(meta: Meta, writer: Writer) -> Options:
     match opt.get("name_to_text"):
         case MetaMap(content):
             name_to_text = {meta_key(k): stringify(v) for k, v in content.items()}
-        case None | MetaString(""):  # (an empty `name_to_text:` names nothing)
+        case None:
             pass
-        case _:
+        case other if stringify(other):  # (`name_to_text:` or `""` names nothing)
             warn("name_to_text is not a map from names to their text; ignoring it")
     # one unit for every environment, or a map of them by name
     parent_counters: dict[str, str] = {}
@@ -729,18 +729,20 @@ def take_note(div: Div, options: Options) -> list[Inline] | None:
     """Takes a div's note out of it: a span with class `info` that starts
     its first paragraph, as pandoc has read it, with the space after it, and
     the paragraph if nothing is left in it (the span's other attributes
-    ignored); else its `info` attribute, as plain text."""
+    ignored); without one, or with a blank one, its `info` attribute, as
+    plain text, the spaces at its ends dropped."""
     note = None
     first = with_inlines(div.content[0] if div.content else None)
     if first and isinstance(span := first[0], Span) and "info" in span.classes:
         del first[0]
-        note = span.content
+        if not all(isinstance(x, BLANK) for x in span.content):
+            note = span.content
         if first and isinstance(first[0], (Space, SoftBreak)):
             first.pop(0)
         if not first:
             del div.content[0]
-    info = div.attributes.get("info")
-    if info and info.strip(" \t\n\v\f\r"):  # (blank: none)
+    info = div.attributes.get("info", "").strip(" \t\n\v\f\r")
+    if info:
         if note is not None:
             warn(f'a note in both a leading [...]{{.info}} span and info="{info}"; using the span')
         else:
@@ -749,7 +751,7 @@ def take_note(div: Div, options: Options) -> list[Inline] | None:
                 warn(f'the info attribute is plain text since amsthm v4, so info="{info}" is shown as typed; '
                      f"write the note as a leading [...]{{.info}} span to keep its markup (once per document; see {PORTING_GUIDE})")
             note = inlines(info)
-    return note or None
+    return note
 
 
 def environment(div: Div, options: Options) -> Div | None:

@@ -274,8 +274,8 @@ function read_options(meta, writer)
 
     ntt = get(opt, "name_to_text", nothing)
     name_to_text = ntt isa MetaMap ? Dict{String, String}(meta_key(k) => stringify(v) for (k, v) in ntt.content) : Dict{String, String}()
-    # (an empty `name_to_text:` names nothing)
-    ntt === nothing || ntt isa MetaMap || ntt isa MetaString && isempty(ntt.text) ||
+    # (`name_to_text:` or `""` names nothing)
+    ntt === nothing || ntt isa MetaMap || isempty(stringify(ntt)) ||
         warn("name_to_text is not a map from names to their text; ignoring it")
     # one unit for every environment, or a map of them by name
     pc = get(opt, "parent_counter", nothing)
@@ -562,18 +562,20 @@ with_inlines(block) = block isa Union{Para, Plain} ? block.content : nothing
 
 """Takes a div's note out of it: a span with class `info` that starts its first
 paragraph, as pandoc has read it, with the space after it, and the paragraph
-if nothing is left in it (the span's other attributes ignored); else its
-`info` attribute, as plain text."""
+if nothing is left in it (the span's other attributes ignored); without one,
+or with a blank one, its `info` attribute, as plain text, the spaces at its
+ends dropped."""
 function take_note!(div, o)
     note = nothing
     first = isempty(div.content) ? nothing : with_inlines(div.content[1])
     if first !== nothing && !isempty(first) && first[1] isa Span && "info" in first[1].attr.classes
-        note = popfirst!(first).content
+        span = popfirst!(first)
+        all(x -> x isa Blank, span.content) || (note = span.content)
         !isempty(first) && first[1] isa Union{Space, SoftBreak} && popfirst!(first)
         isempty(first) && popfirst!(div.content)
     end
-    info = get(div.attr, "info", "")
-    if any(c -> !(c in " \t\n\v\f\r"), info)
+    info = strip(get(div.attr, "info", ""), collect(" \t\n\v\f\r"))
+    if !isempty(info)
         if note !== nothing
             warn("a note in both a leading [...]{.info} span and info=\"$info\"; using the span")
         else
@@ -585,7 +587,7 @@ function take_note!(div, o)
             note = inlines(info)
         end
     end
-    note === nothing || isempty(note) ? nothing : note
+    note
 end
 
 "Not LaTeX: the heading, the body's font, the end of a proof."

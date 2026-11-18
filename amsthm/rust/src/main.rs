@@ -606,9 +606,9 @@ fn read_options(meta: &Meta, writer: &Writer) -> Result<Options, String> {
             .iter()
             .map(|(k, v)| (meta_key(k), stringify(v)))
             .collect(),
-        // (an empty `name_to_text:` names nothing)
+        // (`name_to_text:` or `""` names nothing)
         None => HashMap::new(),
-        Some(MetaValue::MetaString(s)) if s.is_empty() => HashMap::new(),
+        Some(v) if stringify(v).is_empty() => HashMap::new(),
         Some(_) => {
             warn("name_to_text is not a map from names to their text; ignoring it");
             HashMap::new()
@@ -1166,7 +1166,8 @@ fn para_inlines(block: &mut Block) -> Option<&mut Vec<Inline>> {
 /// Takes a div's note out of it: a span with class `info` that starts its
 /// first paragraph, as pandoc has read it, with the space after it, and the
 /// paragraph if nothing is left in it (the span's other attributes
-/// ignored); else its `info` attribute, as plain text.
+/// ignored); without one, or with a blank one, its `info` attribute, as
+/// plain text, the spaces at its ends dropped.
 fn take_note(div: &mut Div, options: &mut Options) -> Option<Vec<Inline>> {
     let mut note = None;
     if let Some(first) = div.content.first_mut().and_then(para_inlines)
@@ -1176,7 +1177,8 @@ fn take_note(div: &mut Div, options: &mut Options) -> Option<Vec<Inline>> {
         let Inline::Span(span) = first.remove(0) else {
             unreachable!()
         };
-        note = Some(span.content);
+        let blank = |x: &Inline| matches!(x, Inline::Space | Inline::SoftBreak | Inline::LineBreak);
+        note = Some(span.content).filter(|n| !n.iter().all(blank));
         if matches!(first.first(), Some(Inline::Space | Inline::SoftBreak)) {
             first.remove(0);
         }
@@ -1184,11 +1186,12 @@ fn take_note(div: &mut Div, options: &mut Options) -> Option<Vec<Inline>> {
             div.content.remove(0);
         }
     }
-    let blank = [' ', '\t', '\n', '\x0b', '\x0c', '\r'];
+    let lua_space = [' ', '\t', '\n', '\x0b', '\x0c', '\r'];
     if let Some(info) = div
         .attr
         .get("info")
-        .filter(|i| !i.trim_matches(blank).is_empty())
+        .map(|i| i.trim_matches(lua_space))
+        .filter(|i| !i.is_empty())
     {
         if note.is_some() {
             warn(format!(
@@ -1204,7 +1207,7 @@ fn take_note(div: &mut Div, options: &mut Options) -> Option<Vec<Inline>> {
             note = Some(panir::inlines(info));
         }
     }
-    note.filter(|n| !n.is_empty())
+    note
 }
 
 /// Not LaTeX: the heading, the body's font, the end of a proof.

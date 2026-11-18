@@ -8,11 +8,15 @@ amsthm:
 :::
 
 ::: {.Theorem info="the attribute"}
-[]{.info} An empty span and the attribute: a warning, and no note.
+[]{.info} An empty span and the attribute: the attribute, without a warning.
 :::
 
 ::: {.Theorem info=""}
 [the span]{.info} An empty attribute and a span: the span, no warning.
+:::
+
+::: {.Theorem info="the attribute "}
+[ ]{.info} A blank span and the attribute: the attribute, its end's space dropped.
 :::
 
 ::: {.proof info="the *attribute*"}

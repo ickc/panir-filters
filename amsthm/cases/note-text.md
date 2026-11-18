@@ -21,7 +21,7 @@ Plain by the test: smart typography is not applied.
 :::
 
 ::: {.Theorem info="two  spaces, trailing "}
-Spaces as pandoc.Inlines makes them of a string.
+Spaces inside as pandoc.Inlines makes them of a string, at the end dropped.
 :::
 
 ::: {.Theorem info="1. Not a list"}
