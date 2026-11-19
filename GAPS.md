@@ -36,7 +36,8 @@ found with the fifth batch, the owner's two filters (`auto-lang`,
 `amsthm`), the last of round 1: what they found of panir#17's API in use
 is in "The API of panir#17, used", after 35. Rounds 2 and 3 (filters
 that read files and call pandoc) found 41 to 44, at the end; what they
-found in the hosts is `HOSTS.md`.
+found in the hosts is `HOSTS.md`. pantable's move to panir's YAML header
+helpers (panir#21, 2026-11-19) found 49 to 51.
 
 | # | gap | languages | round 1 filters hitting it | status |
 |---|---|---|---|---|
@@ -1377,6 +1378,9 @@ nothing of panir's metadata; its widths count code points as Python's
 | 46 | pandoc's attribute syntax (`{#id .class key=value}`) has no parser: a filter reads `[]{...}` with pandoc's reader and takes the span's attributes, a call into pandoc, and none where there is no reader | all | 1: pantable (attributes of cells, rows and row blocks) | open |
 | 47 | Python's `Meta`, the name a metadata function is annotated with, was `dict[str, MetaValue]` to a type checker: `meta["indent"] = True` ran and did not check | Python | 3: count-para, first-line-indent, scholarly-metadata (6 of the 11 errors of pyright's first real run) | closed, panir#20 |
 | 48 | no public name for the lists a function is given (`NodeList[Block, ...]`, `NodeList[Inline, ...]`): annotated `list[Block]`, `blocks.walk(f)` doesn't check | Python | 1: include-files | open |
+| 49 | `to_data` and `Options.text` drop raw inlines: `\t` in a header, raw TeX to pandoc's markdown, arrives empty | all | 1: pantable (`csv-kwargs`' tab, Python) | open (low) |
+| 50 | an option under two spellings (`fancy-table`, `fancy_table`): `Options` takes keys as written, each port writes the fallback | all | 1: pantable | open (low) |
+| 51 | TypeScript: `Options`' readers as functions: `options[shape].call(options, key)` and a cast | TypeScript | 1: pantable | open (low) |
 
 ## 41. pandoc.path's functions
 
@@ -1561,3 +1565,56 @@ a constructor, and a name that is a plain `list` when running would make
 (as Lua's do) or they are for annotations only and say so. Low.
 
 How common: 1 of 25 seen; any typed Python filter that walks a list.
+
+## The API of panir#21, used: pantable's header (2026-11-19)
+
+The four pantable ports read their block headers with `yaml_filter` (each
+a `Pandoc` function: the reader is the host's `read_many`, else the
+`pandoc` command, `-f markdown-smart`), and their options with `Options`:
+`text`, `boolean`, `list`, and the raw value for a markdown caption
+(`inlines_of`, `blocks_of`). Right: the YAML library, the split of the
+block and Python's conversions of values went, 1,059 to 801 lines of
+code in Rust, 505 to 383 in TypeScript, 493 to 365 in Julia, 362 to 356
+in Python (`pantable/NOTES.md`); the four ports agree on every value.
+Numbers are `lua_number`'s, so a fraction (`1/3`) is two of them; a
+whole number is one with no fraction. Three small things:
+
+## 49. `to_data` and `Options.text` drop raw inlines
+
+`csv-kwargs: {delimiter: '\t'}`: pandoc's markdown reads `\t` as raw TeX,
+`MetaInlines [RawInline (Format "tex") "\\t"]`, and `stringify` (so
+`to_data`, `Options.text`, `Options.map`) drops raw inlines, as pandoc's
+does: the value is `""`. The Python port reads the value's inlines
+itself, a raw inline's text kept:
+
+```python
+text = "".join(x.text if isinstance(x, RawInline) else stringify(x) for x in value.content)
+```
+
+**Proposed**: a sentence in `Options`' docs (raw TeX and HTML in a value
+are dropped, as `stringify` drops them); or a `text` that keeps raw
+inlines' text. Low: one option of one port.
+
+## 50. An option under two spellings
+
+pantable's README spells `fancy_table` and `ns_head`, its code takes
+`-` and `_` alike. `Options` takes keys as written, so each port looks up
+the hyphenated key, then the other (Rust:
+`let key = if options.contains_key(key) { key } else { underscored.as_str() };`),
+and, the metadata being a map, takes the hyphenated one where both are
+given (the original takes the later). **Proposed**: nothing in panir
+unless a second filter wants it; the rule is the filter's.
+
+## 51. TypeScript: `Options`' readers as functions
+
+A port reading each option through one function (the key's two
+spellings, a warning for a value of another shape) passes the reader:
+`Options::text` in Rust, `Panir.text` in Julia, a name in Python
+(`getattr(options, shape)(key)`). In TypeScript the methods need `this`:
+
+```ts
+const value = (options[shape] as (key: string) => ReturnType<Options[S]>).call(options, k);
+```
+
+**Proposed**: none needed (a switch on the shape reads as well); noted
+as the one cast the header cost. Low.

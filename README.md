@@ -11,7 +11,8 @@ Round 1 (filters that need only the AST) is chosen in
 [`filters.tsv`](filters.tsv). Rounds 2 and 3 (filters that read files and
 call pandoc: `include-files`, `include-code-files`, `multibib`, amsthm's
 notes until its v4, and the owner's `pantable`, CSV tables with markdown
-cells read in one batch) test the hosts that run filters inside a pandoc
+cells read in one batch, its file now included by panclude and its YAML
+header read by pandoc) test the hosts that run filters inside a pandoc
 conversion (libpandoc's bindings): what they lack is
 [`HOSTS.md`](HOSTS.md), and the round in a page
 [`ROUND2.md`](ROUND2.md). Ported so far: `caps`, `metavars`,
@@ -47,7 +48,11 @@ One folder per filter:
   filter that names none); as `wasm-env: NAME NAME`, the variables of the
   process it is given there (`LIBPANDOC_WASM_ENV`; none for a filter that
   names none); as `needs: pandoc`, that its ports call pandoc, so only
-  `run.py host` runs them);
+  `run.py host` runs them; as `ports-after: panclude`, that its ports run
+  after the include step, panclude, and read no file themselves: in a
+  host libpandoc's (`-F panclude`, its root the document's directory,
+  the document given on standard input), as JSON filters `pandoc -L
+  $PANCLUDE` (panclude.lua) on the document first, the original alone);
 - `cases/`: input documents (`*.md`, read by pandoc's markdown reader, with
   the reader's options in `NAME.args` beside one, if any: `-M lang=en-GB`,
   which makes a `MetaString` as a command line does, or `-f
@@ -79,9 +84,11 @@ One folder per filter:
 - `known.tsv`, if any: the differences `NOTES.md` explains (`language`,
   perhaps with the one mode it differs in, as `rust@pandocrs-wasm` or
   `python@standalone`, and the one run, as `julia@pandocjl@host` (`run.py
-  host`, not `--sandbox`: `@sandbox`); case or document, perhaps with the one format it
-  differs in, as `name (markdown)`; why); they don't fail a run, and one
-  that stops differing does.
+  host`, not `--sandbox`: `@sandbox`), or `*` for every language, a
+  difference the four ports share, perhaps with the run, `*@host`; case or
+  document, perhaps with the one format it differs in, as `name
+  (markdown)`; why); they don't fail a run, and one that stops differing
+  does.
 
 At the top: `run.py`, the runner; one Cargo workspace for the Rust ports
 (`Cargo.toml`), one Node.js package for the TypeScript ones and the type
@@ -108,6 +115,7 @@ once:
 and:
 
     python3 run.py test                  # every port on every case
+    PANCLUDE=../panclude/panclude.lua python3 run.py test pantable   # with pandoc on PATH
     python3 run.py test list-table --lang rust,julia -v
     npm run check                        # tsc and pyright on the ports
 
@@ -136,8 +144,9 @@ Python originals, a Python with `oracle-requirements.txt`
     python3 run.py expect caps           # regenerate cases/expected.jsonl
     python3 run.py time caps --doc doc.json   # time and peak memory, original and ports
 
-Inside libpandoc's hosts (libpandoc 1.15 or later), built from their
-checkouts as their READMEs say (`HOSTS.md` lists the commits), named by
+Inside libpandoc's hosts (libpandoc 1.16 or later: its include step
+appends, which pantable's cases need), built from their checkouts as
+their READMEs say (`HOSTS.md` lists the commits), named by
 `$PANDOCPY`, `$HOST_PYTHON` (a Python with libpandoc), `$PANDOCRS`,
 `$PANDOCJL` (a command line: `julia -J IMAGE --project=DIR -m
 LibPandoc`), `$LIBPANDOC_NODE` (libpandoc's `wasm/node.mjs`) and
@@ -172,8 +181,10 @@ kept here.
 CI (`.github/workflows/ci.yml`) runs `run.py test` for the four languages
 on Linux, with `tsc`, pyright, rustfmt, clippy and `cargo test`, panir's main
 and libpandoc-python's (for pyright) checked
-out beside this repository; it needs neither pandoc nor the originals
-(PyYAML for pantable's Python port, as its original).
+out beside this repository; it needs no original, and, for pantable's
+ports (which read their headers with pandoc and run after the include
+step), pandoc's release binary (`PANDOC_VERSION`) and `panclude.lua` at a
+pinned commit (`PANCLUDE_COMMIT`, named by `$PANCLUDE`).
 
 ## Licences
 

@@ -156,7 +156,7 @@ below). What each filter needs, from these runs:
 | H5, H8, H10, H11, H15, H16, H18 | documented (above) |
 | H6 | **closed**: a wasm filter's directories are the user's to give (`LIBPANDOC_WASM_DIRS`, none by default); a file through `..` is read when its directory is given; a symbolic link leaving the working directory is refused, wherever it leads |
 | H7 | **reversed**: in Node, as everywhere, a wasm filter is given no directory by default, the same variable gives some |
-| H14 | **measured**: a callback filter's 0.29 s on the textbook is 82% pandoc decoding the returned JSON; what to build is the owner's decision, not made |
+| H14 | **measured**: a callback filter's 0.29 s on the textbook is 82% pandoc decoding the returned JSON; **built** since (below): consecutive in-process filters are one exchange with pandoc by default, `LIBPANDOC_SEPARATE_FILTERS=1` separates them |
 
 ## Since: consecutive filters in one exchange, and `LIBPANDOC_WASM_ENV` (2026-11-18)
 
@@ -247,16 +247,64 @@ four wasm modes 26 each. `--sandbox`: 798 runs, 708 the original's, 90
 known, none failing, the same rows as at 1.14, and what each read from
 outside its directory unchanged.
 
+## Since: pantable after panclude (2026-11-19)
+
+The owner's decisions of 2026-11-19: including a file is panclude's job,
+and a code block's YAML header is read by pandoc (panir#21's
+`yaml_filter`), with no YAML library. pantable's four ports now read no
+file and run after the include step (`ports-after: panclude` in its
+ORIGIN: in a host libpandoc's, `-F panclude` or `"panclude"`, the document
+given on standard input so that the step's root is the case's directory;
+as JSON filters `pandoc -L panclude.lua` first), against the original at
+ickc/pantable#78's tip (`578353a`), which has the include attribute
+itself; their wasm build is given no directory (`wasm-dirs` gone) and
+imports no `path_open`, but still calls pandoc, for the headers and the
+markdown cells. The `outside` canaries change meaning: the port reads
+nothing, so what keeps them out is the include step's roots; in every
+host mode, sandbox or not, the blocks naming them are left as they are
+(known, `*@host`), and `run.py` fails a host run of a filter after
+panclude whose output holds a canary's marker (none did). The hosts were
+built in scratch from the bindings' checkouts on their `append-1.16`
+branches (one commit over each `main`: the floor raised to libpandoc
+1.16, whose include step appends), against a local build of libpandoc's
+`main` (`4fff7d8`, ABI 1.16), the native library and `libpandoc.wasm`
+from its `dist/` prefix; the `pandoc` a port's command runs was
+`pandocrs` (pandoc 3.14); the Rust ports' guest side at libpandoc-rs's
+`main`, `e30bc1a`:
+
+| host | commit | built |
+|---|---|---|
+| libpandoc-python | `7bf6b6a` | `pip install .[wasm]` with `LIBPANDOC_PREFIX`, Python 3.13, panir's `main` (`e79c69b`) |
+| libpandoc-rs | `e72b4dd` | `cargo build --release --locked -p pandocrs` |
+| LibPandoc.jl | `8dbefbd` | `Pkg.instantiate()`, Julia 1.13.4, no system image |
+| libpandoc's JavaScript host | `4fff7d8` | `wasm/` as it is, Node 26.13, `dist/wasm/libpandoc.wasm` |
+
+`run.py host` (`CHECK_UNIQUE=1`): 9,237 runs, 8,894 the original's,
+343 known, none failing (before: 9,102, 8,923 and 179): each mode
+1,032 runs (`pandocrs-native` 981), known: `pandocpy` and `python-api` 31
+each, `node` 37, `pandocrs-native` 33, `pandocjl` 43, the four wasm modes
+42 each; pantable's
+831: 525 and 306 (before: 696, 554 and 142: 15 more cases, the readings
+the four ports now share known in every mode, and `outside` in all nine).
+`--sandbox`: 888 runs, 686 the original's, 202 known, none failing
+(before: 798, 708 and 90); pantable's 564: 365 and 199, and no canary
+read in any mode (before, the Python and Julia scripts read all three,
+by design). `run.py test`: 3,805 the original's, 119 known, none failing
+(before: 3,806 and 58), pantable's cases with no markdown cells now run
+after `panclude.lua`, their headers read by the `pandoc` command. The
+other filters' runs are as before.
+
 ## What each filter needs
 
 From the runs above: a wasm port is given no directory unless its ORIGIN
 says `wasm-dirs`, and every port so given none gives the original's
 result in the four wasm hosts, or differs only as its `known.tsv` says
-(none of those rows is about files); the four that read files were run
+(none of those rows is about files); the three that read files were run
 once more with nothing (`pandocrs-wasm`), to see which cases need it, and
-they are the only wasm ports that import WASI's `path_open`. Calls into
-pandoc are what each wasm port imports from the `libpandoc` module (the
-three that may call it; the others import nothing from it). The process's environment
+they are the only wasm ports that import WASI's `path_open` (pantable's
+did until its include became panclude's, below). Calls into pandoc are
+what each wasm port imports from the `libpandoc` module (the three that
+may call it; the others import nothing from it). The process's environment
 is the variables a filter reads beyond those pandoc gives every filter
 (`PANDOC_VERSION`, `PANDOC_READER_OPTIONS`, `PANDOC_WRITER_OPTIONS`...).
 
@@ -265,13 +313,14 @@ is the variables a filter reads beyond those pandoc gives every filter
 | include-files | the working directory: the files it includes, and those they include (every case but `outside` differs without; `outside` gives `../outside` too) | – | read (`read_many`): each file in its format, with the reader's options |
 | include-code-files | the working directory: the files it includes (9 of 11 cases differ without; `outside` gives `../outside` too) | – | – |
 | multibib | the working directory: the bibliography files citeproc reads (`sample`, `topics`, `references` differ without) | – | citeproc (`convert`, through `libpandoc::citeproc`): the document once, a topic's citations once each |
-| pantable | the working directory: the CSV files `include` names (14 of 80 cases name one; the 9 of them otherwise the original's differ without; `outside` gives `../outside` too) | – | read (`read_many`): a table's markdown texts in one call |
+| pantable | – (the include step, libpandoc's `panclude`, run before it, reads the files the `include` attribute names, inside its roots) | – | read (`read_many`): the document's block headers in one call (panir's `yaml_filter`), and a table's markdown texts in one call |
 | pagebreak | – | `PANDOC_PAGEBREAK_HTML_CLASS`, `PANDOC_PAGEBREAK_ODT_STYLE` (cases `env`, `env-meta`; its ORIGIN's `wasm-env` names them, so its wasm port is given them: `LIBPANDOC_WASM_ENV`, H8) | – |
 | the other 20 | – | – | – |
 
 20 of the 25 filters are pure: they need no directory, no variable of the
-process's and no call into pandoc. 4 read files from the directory they
-run in (include-files, include-code-files, multibib, pantable), 1 reads the
+process's and no call into pandoc. 3 read files from the directory they
+run in (include-files, include-code-files, multibib; pantable did until
+its include became panclude's), 1 reads the
 process's environment (pagebreak), 3 call pandoc (include-files, multibib,
 pantable); 5 need one of these at least. (amsthm called pandoc until its
 ports followed the proposed v4.0.0, above.) (auto-lang's original
