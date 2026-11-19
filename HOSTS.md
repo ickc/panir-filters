@@ -211,9 +211,41 @@ The same day the owner added `646d53e` to the stack (a blank note span is
 no note, the attribute's end spaces are dropped, an empty `name_to_text`
 text is silent), and the ports follow it: 87 documents, 348 runs a mode.
 `run.py host amsthm`, libpandoc's JavaScript host at `3c2f499`: 3,132
-runs, all the original's; with the other filters' runs as before, 9,102
-runs, 8,923 the original's, 179 known. `run.py test`, every filter: 3,806
-the original's, 58 known, none failing.
+runs, all the original's; with the other filters' runs as before (added
+up, not run again), 9,102 runs, 8,923 the original's, 179 known; measured
+since, the same (below). `run.py test`, every filter: 3,806 the
+original's, 58 known, none failing.
+
+## Since: libpandoc 1.15, the include step (2026-11-19)
+
+libpandoc 1.15 builds in the include step, `panclude` (ickc/libpandoc#16,
+#17 for the JavaScript host: one of pandoc's own entries among the
+filters, `-F panclude`), and each binding offers it and needs ABI 1.15
+(libpandoc-rs#27, libpandoc-python#22, LibPandoc.jl#18). No filter here
+names it. Every filter was run again in every mode, the hosts built in
+scratch from the `main`s, against libpandoc 1.15: the native library a
+local build of the library's sources as on libpandoc's `main` (`69eaea9`,
+ABI 1.15), `libpandoc.wasm`
+the `continuous` release built from the same commit, checked against its
+`SHA256SUMS` and build attestation; the `pandoc` a port's command runs
+was `pandocrs` (pandoc 3.14):
+
+| host | commit | built |
+|---|---|---|
+| libpandoc-python | `b7a9330` | `pip install .[wasm]` with `LIBPANDOC_PREFIX`, Python 3.13, panir 0.2.0 (panir's `main`, `4e2260e`), wasmtime-py 50 |
+| libpandoc-rs | `10e04e3` | `cargo build --release --locked -p pandocrs`, Rust 1.97.1; the ports' guest side at `d9b1c8a`, as before |
+| LibPandoc.jl | `b71a1c2` | `Pkg.instantiate()`, Julia 1.13.4, Panir.jl at panir's `main`, no system image |
+| libpandoc's JavaScript host | `69eaea9` | `wasm/` as `npm ci` makes it, Node 26.13, the release's `libpandoc.wasm` |
+
+`run.py host` (`CHECK_UNIQUE=1`): 9,102 runs, 8,923 the original's, 179
+known, none failing, the totals added up above; the 179 known runs are
+the rows, with their reasons, of the 8,598 runs with
+`LIBPANDOC_WASM_ENV` (above), less amsthm's 80.
+Each mode 1,017 runs (`pandocrs-native` 966), known: `pandocpy` and
+`python-api` 7 each, `node` 18, `pandocrs-native` 19, `pandocjl` 24, the
+four wasm modes 26 each. `--sandbox`: 798 runs, 708 the original's, 90
+known, none failing, the same rows as at 1.14, and what each read from
+outside its directory unchanged.
 
 ## What each filter needs
 

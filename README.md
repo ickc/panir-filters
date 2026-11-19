@@ -136,7 +136,7 @@ Python originals, a Python with `oracle-requirements.txt`
     python3 run.py expect caps           # regenerate cases/expected.jsonl
     python3 run.py time caps --doc doc.json   # time and peak memory, original and ports
 
-Inside libpandoc's hosts (libpandoc 1.14 or later), built from their
+Inside libpandoc's hosts (libpandoc 1.15 or later), built from their
 checkouts as their READMEs say (`HOSTS.md` lists the commits), named by
 `$PANDOCPY`, `$HOST_PYTHON` (a Python with libpandoc), `$PANDOCRS`,
 `$PANDOCJL` (a command line: `julia -J IMAGE --project=DIR -m
