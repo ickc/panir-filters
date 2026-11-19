@@ -1,42 +1,41 @@
 #!/usr/bin/env python3
-"""Code blocks of class `table`, CSV with YAML options, made tables: a
-pandoc filter.
+"""Code blocks of class `table`, CSV with a YAML header of options, made
+tables: a pandoc filter.
 
-The block holds CSV, and YAML blocks (each between `---` and `---` or
-`...`) of options: `caption`, `short-caption`, `alignment` (a letter a
-column among L, R, C, D), `alignment-cells` (a line of letters a row),
-`width` (a number or fraction a column, or D), `table-width` (then the
-columns without a width get one from the length of their text),
-`ms` (rows of the head, of each body's head and rows, of the foot),
-`ns-head` (row head columns of each body), `markdown` (cells, captions
-and attributes read as markdown), `fancy-table` (with markdown: the first
-column marks the head, bodies and foot, with attributes; a cell's first
-line its span and attributes), `include` (the CSV from a file, relative to
-the working directory, `include-encoding` its encoding), `csv-kwargs`
-(Python's csv.reader's), `format` (csv only).
+The block holds CSV, after a YAML header of options (between `---` and
+`---` or `...`, starting the block): `caption`, `short-caption`,
+`alignment` (a letter a column among L, R, C, D), `alignment-cells` (a
+word of letters a row), `width` (a number or fraction a column, or D),
+`table-width` (then the columns without a width get one from the length of
+their text), `ms` (rows of the head, of each body's head and rows, of the
+foot), `ns-head` (row head columns of each body), `markdown` (cells,
+captions and attributes read as markdown), `fancy-table` (with markdown:
+the first column marks the head, bodies and foot, with attributes; a
+cell's first line its span and attributes), `csv-kwargs` (Python's
+csv.reader's; `\\t` is a tab), `format` (csv only). The document's metadata
+under `pantable` gives defaults, a header's keys replacing them.
 
-Reading the CSV and the YAML is Python's (its csv module, PyYAML, as the
-original); the markdown of the cells is pandoc's, read with `libpandoc`:
-the pandoc the filter runs in under pandocpy or `libpandoc.convert`, or
-libpandoc as a library when pandoc runs this as a JSON filter, all of a
-table's texts in one call (`read_many`). Without libpandoc a table with
-markdown fails, saying so; the others don't need it.
+The file a block's `include` attribute names is panclude's to include
+(`pandoc -L panclude.lua`, or libpandoc's `panclude` step, run before this
+filter): a block still carrying the attribute is left as it is.
 
-A port of ickc/pantable's `pantable` filter, 0.15.0 (© 2016-2026 Kolen
-Cheung; BSD-3-Clause, see ../LICENSE).
+The header is read by pandoc, as a metadata block (`-f markdown-smart`;
+panir's `yaml_filter`), the markdown of the cells too: through `libpandoc`
+(the pandoc the filter runs in under pandocpy or `libpandoc.convert`, or
+libpandoc as a library), else the `pandoc` command, a process a text. The
+CSV is Python's csv module's, as the original's.
+
+A port of ickc/pantable's `pantable` filter, 0.15.0 with the include
+attribute (© 2016-2026 Kolen Cheung; BSD-3-Clause, see ../LICENSE).
 """
 
 import csv
 import io
 import re
+import subprocess
 import sys
-from dataclasses import dataclass, field, fields
-from fractions import Fraction
 from itertools import accumulate
 from typing import Literal
-
-import yaml
-from yaml.scanner import ScannerError
 
 from panir import (
     Attr,
@@ -48,8 +47,16 @@ from panir import (
     ColWidth,
     Context,
     Filter,
+    MetaBlocks,
+    MetaInlines,
+    MetaMap,
+    MetaString,
+    MetaValue,
+    Options,
+    Pandoc,
     Para,
     Plain,
+    RawInline,
     Row,
     Span,
     Str,
@@ -57,16 +64,21 @@ from panir import (
     TableBody,
     TableFoot,
     TableHead,
+    blocks_of,
+    inlines_of,
+    loads,
+    lua_number,
     main,
+    stringify,
+    to_data,
+    yaml_filter,
 )
 
 try:
-    import libpandoc  # pandoc's reader, for markdown cells
+    import libpandoc  # pandoc's reader: the header, and markdown cells
 except ImportError:
     libpandoc = None
 
-# panflute's choice of PyYAML's loader: libyaml's where it is built
-Loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 Align = Literal["AlignDefault", "AlignLeft", "AlignRight", "AlignCenter"]
 ALIGN: tuple[Align, ...] = ("AlignDefault", "AlignLeft", "AlignRight", "AlignCenter")
 
@@ -79,113 +91,101 @@ class EmptyTable(Exception):
     pass
 
 
-# The code block: YAML and data, as panflute's yaml_filter (strict_yaml)
-# splits it: at lines of three or more dots or dashes; a chunk starting
-# with --- opens YAML (even one of data), --- or ... closes it.
-
-SEPARATOR = re.compile(r"^([.]{3,}|[-]{3,})$", re.MULTILINE)
-
-
-def split(text: str) -> tuple[dict, str] | None:
-    """The options and the data; None for YAML that can't be scanned."""
-    options: dict = {}
-    data = []
-    raw = True
-    for chunk in SEPARATOR.split(text):
-        chunk = chunk.strip("\n")
-        if not chunk:
-            continue
-        if raw:
-            if chunk.startswith("---"):
-                raw = False
-            else:
-                data.append(chunk)
-        elif chunk.startswith(("---", "...")):
-            raw = True
-        else:
-            try:
-                options.update(yaml.load(chunk, Loader=Loader))  # a map, or a list of pairs
-            except ScannerError:
-                warn("malformed YAML block: left as it is")
-                return None
-    return options, "\n".join(data)
+def read(texts: list[str], ctx: Context, fmt: str) -> list[Pandoc]:
+    """Texts read by pandoc, a document each: in one call through libpandoc,
+    the conversion's way, else the `pandoc` command, a process a text. Tabs
+    are expanded, as the original's `pandoc` command does (a read with a
+    conversion keeps them)."""
+    if libpandoc is not None:
+        return libpandoc.read_many(texts, ctx.conversion, {"from": fmt, "preserve-tabs": False})
+    command = ["pandoc", "-f", fmt, "-t", "json"]
+    return [loads(subprocess.run(command, input=t, stdout=subprocess.PIPE, text=True, check=True).stdout) for t in texts]
 
 
-# The options: a value of the wrong type is made the right one as Python
-# makes it (`str(1.5)`, `list("12")`, `bool("false")`), else the default.
+# The options, from the metadata pandoc read: a key as written or with `_`
+# for `-` (the hyphenated one if both); a value of another shape than the
+# option's is its default, with a warning.
 
 
-def text(value: object) -> str:
-    return value if isinstance(value, str) else str(value)
+def get(options: Options, key: str, shape: str):
+    """An option's value as `Options.text`, `.boolean`, `.list` or `.map`
+    reads it, `.get` raw; None if missing or of another shape."""
+    key = key if key in options else key.replace("-", "_")
+    if key not in options:
+        return None
+    value = getattr(options, shape)(key)
+    if value is None:
+        warn(f"option {key} with value {to_data(options[key])} has an invalid type: the default")
+    return value
 
 
-def maybe_list(value: object) -> list | None:
-    return value if value is None or isinstance(value, list) else list(value)  # type: ignore[call-overload]
+def fraction(text: object) -> float | None:
+    """A number as Lua reads one, or two with `/` between (`1/3`); None
+    for anything else. A zero denominator fails, as the original."""
+    if not isinstance(text, str):
+        return None
+    top, slash, bottom = text.partition("/")
+    a, b = lua_number(top), lua_number(bottom) if slash else 1
+    return None if a is None or b is None else a / b
 
 
-def maybe_fraction(value: object) -> float | None:
-    if value is None or isinstance(value, float):
-        return value
-    return float(Fraction(value))  # type: ignore[arg-type]
+def whole(text: object) -> int | None:
+    """A whole number as Lua reads one (`3`, `3.0`); None for anything else."""
+    number = lua_number(text) if isinstance(text, str) else None
+    return int(number) if number is not None and float(number).is_integer() else None
 
 
-def mapping(value: object) -> dict:
-    return value if isinstance(value, dict) else dict(value)  # type: ignore[call-overload]
+def integers(values: list | None, key: str) -> list[int] | None:
+    """Whole numbers (`ms`, `ns-head`), else the default."""
+    out = [whole(x) for x in values or []]
+    if values is None or None not in out:
+        return None if values is None else out  # type: ignore[return-value]
+    warn(f"option {key} with value {values} has an invalid type: the default")
+    return None
 
 
-@dataclass
-class Options:
-    short_caption: str = ""
-    caption: str = ""
-    alignment: str = ""
-    alignment_cells: str = ""
-    width: list | None = None
-    table_width: float | None = None
-    header: bool = True  # (read, and never used: as the original)
-    ms: list[int] | None = None
-    ns_head: list[int] | None = None
-    markdown: bool = False
-    fancy_table: bool = False
-    include: str = ""
-    include_encoding: str = ""
-    format: str = "csv"
-    csv_kwargs: dict = field(default_factory=dict)
+def words(text: str) -> list[str]:
+    """Words of text: split at spaces, tabs and line breaks."""
+    return re.findall(r"[^ \t\n\r]+", text)
 
-    @classmethod
-    def of(cls, given: dict) -> "Options":
-        cast = {"width": maybe_list, "ms": maybe_list, "ns_head": maybe_list, "table_width": maybe_fraction,
-                "header": bool, "markdown": bool, "fancy_table": bool, "csv_kwargs": mapping}
-        names = {f.name for f in fields(cls)}
-        options = cls()
-        # keys with - or _ alike, the later winning
-        for name, value in {str(k).replace("-", "_"): v for k, v in given.items()}.items():
-            if name not in names:
-                continue
-            try:
-                setattr(options, name, cast.get(name, text)(value))
-            except (ValueError, TypeError):
-                warn(f"option {name.replace('_', '-')} with value {value} has an invalid type: the default")
-        for name in ("ms", "ns_head"):
-            value = getattr(options, name)
-            try:
-                if value is not None:
-                    setattr(options, name, [int(x) for x in value])
-            except (ValueError, TypeError):
-                warn(f"option {name.replace('_', '-')} with value {value} has an invalid type: the default")
-                setattr(options, name, None)
-        return options
+
+def kwarg(value: MetaValue) -> object:
+    """A csv-kwargs value: a boolean, or text (raw TeX's too: pandoc reads
+    `\\t` so), `\\t` a tab, a whole number an integer (`quoting: 3`)."""
+    if isinstance(value, MetaInlines):
+        text = "".join(x.text if isinstance(x, RawInline) else stringify(x) for x in value.content)
+    else:
+        text = to_data(value)
+    return "\t" if text == "\\t" else text if whole(text) is None else whole(text)
+
+
+class Settings:
+    def __init__(self, options: Options):
+        if "include" in options:
+            warn("the include key is not read: name the file with the include attribute, and run panclude first")
+        width, kwargs = get(options, "width", "list"), get(options, "csv-kwargs", "get")
+        if kwargs is not None and not isinstance(kwargs, MetaMap):
+            warn(f"option csv-kwargs with value {to_data(kwargs)} has an invalid type: the default")
+        self.caption: MetaValue | None = get(options, "caption", "get")
+        self.short_caption: MetaValue | None = get(options, "short-caption", "get")
+        self.alignment: str = get(options, "alignment", "text") or ""
+        self.alignment_cells = words(get(options, "alignment-cells", "text") or "")
+        self.width: list | None = None if width is None else [fraction(w) for w in width]
+        self.table_width = fraction(get(options, "table-width", "text"))
+        self.ms = integers(get(options, "ms", "list"), "ms")
+        self.ns_head = integers(get(options, "ns-head", "list"), "ns-head")
+        self.markdown = bool(get(options, "markdown", "boolean"))
+        self.fancy_table = bool(get(options, "fancy-table", "boolean"))
+        self.csv_kwargs = {k: kwarg(v) for k, v in kwargs.content.items()} if isinstance(kwargs, MetaMap) else {}
+        self.format: str = get(options, "format", "text") or "csv"
 
     def normalize(self, m: int, n: int) -> None:
         """What is wrong beyond the type, for a table of m rows and n columns."""
         total = 0.0
         if self.width is not None:
-            widths: list = ["D"] * n
+            widths: list = [None] * n
             for i, w in enumerate(self.width[:n]):
-                try:
-                    w = float(Fraction(w))
-                except (ValueError, TypeError):
-                    continue
-                if w >= 0.0:
+                if w is not None and w >= 0.0:
                     widths[i] = w
                     total += w
             self.width = widths
@@ -219,16 +219,9 @@ def aligns(letters: str, n: int) -> list[Align]:
 # The data
 
 
-def load_csv(data: str, options: Options) -> list[list[str]]:
-    """The rows, as long as the longest; FileNotFoundError, EmptyTable."""
-    if options.include:
-        try:
-            with open(options.include, encoding=options.include_encoding or None, newline="") as f:
-                rows = list(csv.reader(f, **options.csv_kwargs))
-        except FileNotFoundError as e:
-            raise FileNotFoundError(f"include path {options.include} not found.") from e
-    else:
-        rows = list(csv.reader(io.StringIO(data, newline=""), **options.csv_kwargs))
+def load_csv(data: str, kwargs: dict) -> list[list[str]]:
+    """The rows, as long as the longest; EmptyTable."""
+    rows = list(csv.reader(io.StringIO(data, newline=""), **kwargs))
     if not any(cell.strip() for row in rows for cell in row):
         raise EmptyTable
     n = max(map(len, rows))
@@ -387,13 +380,10 @@ def auto_width(grid: Grid, widths: list[float | None], table_width: float) -> li
 
 
 def read_markdown(texts: list[str], ctx: Context) -> list[list[Block]]:
-    """Each text's blocks, read by pandoc as markdown, the conversion's way,
-    in one call; an empty text is none. Tabs are expanded, as the original's
-    `pandoc` command does (a read with a conversion keeps them)."""
-    if libpandoc is None:
-        raise RuntimeError("pantable: markdown cells need pandoc's reader, libpandoc (pip install libpandoc)")
+    """Each text's blocks, read by pandoc as markdown, in one call; an empty
+    text is none."""
     todo = [t for t in texts if t]
-    docs = iter(libpandoc.read_many(todo, ctx.conversion, {"from": "markdown", "preserve-tabs": False}) if todo else [])
+    docs = iter(read(todo, ctx, "markdown") if todo else [])
     return [next(docs).blocks if t else [] for t in texts]
 
 
@@ -407,63 +397,86 @@ def attr_of(blocks: list[Block]) -> Attr:
     return Attr()
 
 
+def caption(long: MetaValue | None, short: MetaValue | None, markdown: bool) -> Caption:
+    """The caption: with markdown, as pandoc read the header (the original
+    reads its text as markdown); else its text, one `Str`, as the original's
+    (a plain table's caption is an empty paragraph). Not text: none, with a
+    warning; a short caption of blocks too."""
+    long, short = text_or_none("caption", long), text_or_none("short-caption", short)
+    if not markdown:
+        return Caption(Para(Str(to_data(long) if long else "")), short=[Str(to_data(short) if short else "")])
+    if isinstance(short, MetaBlocks):
+        warn("a short-caption of blocks: none")
+        short = None
+    short_inlines = inlines_of(short) if short else []
+    inlines = inlines_of(long) if long and not isinstance(long, MetaBlocks) else []
+    blocks = blocks_of(long) if isinstance(long, MetaBlocks) else [Para(*inlines)] if inlines else []
+    return Caption(*blocks, short=short_inlines or None)
+
+
+def text_or_none(key: str, value: MetaValue | None) -> MetaValue | None:
+    if value is None or isinstance(value, (MetaString, MetaInlines, MetaBlocks)):
+        return value
+    warn(f"option {key} with value {to_data(value)} has an invalid type: the default")
+    return None
+
+
 f = Filter()
 
 
-@f.on(CodeBlock)
-def table(block: CodeBlock, ctx: Context) -> Table | list | None:
-    if "table" not in block.classes:
+@f.on(Pandoc)
+def tables(doc: Pandoc, ctx: Context) -> Pandoc:
+    def headers(texts: list[str]) -> list[Pandoc]:
+        return read(texts, ctx, "markdown-smart")
+
+    return yaml_filter(doc, "table", "pantable", headers, lambda options, data, block: table(options, data, block, ctx))
+
+
+def table(options: Options, data: str, block: CodeBlock, ctx: Context) -> Table | list | None:
+    if block.attr.attributes.get("include") is not None:
+        warn("a code block with an include attribute: left as it is (run panclude first)")
         return None
-    parsed = split(block.text)
-    if parsed is None:
-        return None
-    options = Options.of(parsed[0])
+    settings = Settings(options)
     try:
-        if options.format != "csv":
-            raise ValueError(f"Unknown format: {options.format}")
-        rows = load_csv(parsed[1], options)
-    except FileNotFoundError as e:
-        warn(f"{e} The code block is left as it is.")
-        return None
+        if settings.format != "csv":
+            raise ValueError(f"Unknown format: {settings.format}")
+        rows = load_csv(data.strip("\n"), settings.csv_kwargs)  # (blank lines around the data dropped)
     except EmptyTable:
         warn("table is empty: deleted")
         return []
-    if options.markdown:
-        grid, ms, block_attrs, row_attrs, cell_attrs = markdown_cells(rows, options.fancy_table)
+    if settings.markdown:
+        grid, ms, block_attrs, row_attrs, cell_attrs = markdown_cells(rows, settings.fancy_table)
     else:
         grid, ms, block_attrs, row_attrs, cell_attrs = Grid(rows), None, None, [], []  # type: ignore[arg-type]
     m, n = len(grid.texts), len(grid.texts[0])
-    options.normalize(m, n)
-    ms = ms or options.ms or [1, 0, m - 1, 0]
+    settings.normalize(m, n)
+    ms = ms or settings.ms or [1, 0, m - 1, 0]
     # the table has the rows of its blocks: with fancy-table, the rows after
     # the last marker are dropped (as the original, which sizes it by ms)
     m = sum(ms)
     grid.texts = grid.texts[:m]
     row_attrs = row_attrs[:m]
-    ns_head = options.ns_head or [0] * (len(ms) // 2 - 1)
-    widths: list[float | None] = [None if w == "D" else float(w) for w in options.width or ["D"] * n]
-    if options.table_width is not None:
-        widths = auto_width(grid, widths, options.table_width)
-    spec = [ColSpec(a, ColWidth(w) if w is not None else None) for a, w in zip(aligns(options.alignment, n), widths)]
-    lines = options.alignment_cells.strip().splitlines()[:m]
+    ns_head = settings.ns_head or [0] * (len(ms) // 2 - 1)
+    widths: list[float | None] = settings.width or [None] * n
+    if settings.table_width is not None:
+        widths = auto_width(grid, widths, settings.table_width)
+    spec = [ColSpec(a, ColWidth(w) if w is not None else None) for a, w in zip(aligns(settings.alignment, n), widths)]
+    lines = settings.alignment_cells[:m]
     cell_aligns = [aligns(line, n) for line in lines] + [aligns("", n) for _ in range(m - len(lines))]
 
     anchors = [(i, j) for i in range(m) for j in range(n) if grid.is_at(i, j)]
-    if options.markdown:
-        # every text of the table in one call: captions, cells and their
-        # attributes, rows' and blocks' attributes
-        texts = [options.caption, options.short_caption, *(grid.texts[i][j] or "" for i, j in anchors),
-                 *(cell_attrs[i][j] for i, j in anchors), *row_attrs, *(block_attrs or [""] * (len(ms) // 2 + 1))]
+    if settings.markdown:
+        # every text of the table in one call: cells and their attributes,
+        # rows' and blocks' attributes
+        texts = [*(grid.texts[i][j] or "" for i, j in anchors), *(cell_attrs[i][j] for i, j in anchors), *row_attrs,
+                 *(block_attrs or [""] * (len(ms) // 2 + 1))]
         read = read_markdown(texts, ctx)
-        caption = Caption(*read[0], short=read[1][0].content if read[1] else None)  # type: ignore[attr-defined]
-        k = 2 + len(anchors)
-        contents = {a: plain(blocks) for a, blocks in zip(anchors, read[2:k])}
-        attrs = {a: attr_of(blocks) for a, blocks in zip(anchors, read[k:k + len(anchors)])}
-        k += len(anchors)
-        rows_attr = [attr_of(blocks) for blocks in read[k:k + m]]
-        blocks_attr = [attr_of(blocks) for blocks in read[k + m:]]
+        k = len(anchors)
+        contents = {a: plain(blocks) for a, blocks in zip(anchors, read[:k])}
+        attrs = {a: attr_of(blocks) for a, blocks in zip(anchors, read[k:2 * k])}
+        rows_attr = [attr_of(blocks) for blocks in read[2 * k:2 * k + m]]
+        blocks_attr = [attr_of(blocks) for blocks in read[2 * k + m:]]
     else:
-        caption = Caption(Para(Str(options.caption)), short=[Str(options.short_caption)])
         contents = {a: [Plain(Str(grid.texts[a[0]][a[1]] or ""))] for a in anchors}
         attrs = {a: Attr() for a in anchors}
         rows_attr = [Attr() for _ in range(m)]
@@ -481,7 +494,8 @@ def table(block: CodeBlock, ctx: Context) -> Table | list | None:
     bodies = [TableBody(parts[2 + 2 * k], parts[1 + 2 * k], ns, attr=blocks_attr[1 + k]) for k, ns in enumerate(ns_head)]
     foot = TableFoot(*parts[-1], attr=blocks_attr[-1])
     attr = Attr(block.attr.identifier, [c for c in block.classes if c != "table"], block.attr.attributes)
-    return Table(caption, spec, head, bodies, foot, attr=attr)
+    return Table(caption(settings.caption, settings.short_caption, settings.markdown), spec, head, bodies, foot,
+                 attr=attr)
 
 
 def plain(blocks: list[Block]) -> list[Block]:

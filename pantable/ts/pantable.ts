@@ -1,48 +1,50 @@
 #!/usr/bin/env node
-// Code blocks of class `table`, CSV with YAML options, made tables: a pandoc
-// filter.
+// Code blocks of class `table`, CSV with a YAML header of options, made
+// tables: a pandoc filter.
 //
-// The block holds CSV, and YAML blocks (each between `---` and `---` or
-// `...`) of options: `caption`, `short-caption`, `alignment` (a letter a
-// column among L, R, C, D), `alignment-cells` (a line of letters a row),
-// `width` (a number or fraction a column, or D), `table-width` (then the
-// columns without a width get one from the length of their text), `ms`
-// (rows of the head, of each body's head and rows, of the foot), `ns-head`
-// (row head columns of each body), `markdown` (cells, captions and
-// attributes read as markdown), `fancy-table` (with markdown: the first
-// column marks the head, bodies and foot, with attributes; a cell's first
-// line its span and attributes), `include` (the CSV from a file, relative to
-// the working directory, `include-encoding` its encoding), `format` (csv
-// only). `csv-kwargs` (Python's csv.reader's arguments) is not supported:
-// a warning, then the CSV read as it is.
+// The block holds CSV, after a YAML header of options (between `---` and
+// `---` or `...`, starting the block): `caption`, `short-caption`,
+// `alignment` (a letter a column among L, R, C, D), `alignment-cells` (a
+// word of letters a row), `width` (a number or fraction a column, or D),
+// `table-width` (then the columns without a width get one from the length
+// of their text), `ms` (rows of the head, of each body's head and rows, of
+// the foot), `ns-head` (row head columns of each body), `markdown` (cells,
+// captions and attributes read as markdown), `fancy-table` (with markdown:
+// the first column marks the head, bodies and foot, with attributes; a
+// cell's first line its span and attributes), `format` (csv only). The
+// document's metadata under `pantable` gives defaults, a header's keys
+// replacing them. `csv-kwargs` (Python's csv.reader's arguments) is not
+// supported: a warning, then the CSV read as it is.
 //
-// The CSV is read by csv-parse, the YAML by yaml (as YAML 1.1, PyYAML's),
-// each option made the type the original wants as Python makes it
-// (`str(1.5)`, `list("12")`, `bool("false")`); the markdown of the cells is
-// pandoc's: in libpandoc's JavaScript host, the instance the filter runs in
-// (`hosted`, for panir's `libpandocFilter`), all of a table's texts in one
-// call (`readMany`), as the conversion reads its input; run as a JSON
-// filter, the `pandoc` command, a process a text.
+// The file a block's `include` attribute names is panclude's to include
+// (`pandoc -L panclude.lua`, or libpandoc's `panclude` step, run before this
+// filter): a block still carrying the attribute is left as it is.
 //
-// A port of ickc/pantable's `pantable` filter, 0.15.0 (© 2016-2026 Kolen
-// Cheung; BSD-3-Clause, see ../LICENSE).
+// The header is read by pandoc, as a metadata block (`-f markdown-smart`;
+// panir's `yamlFilter`), the markdown of the cells too: in libpandoc's
+// JavaScript host, the instance the filter runs in (`hosted`, for panir's
+// `libpandocFilter`), in one call; run as a JSON filter, the `pandoc`
+// command, a process a text. The CSV is csv-parse's.
+//
+// A port of ickc/pantable's `pantable` filter, 0.15.0 with the include
+// attribute (© 2016-2026 Kolen Cheung; BSD-3-Clause, see ../LICENSE).
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { parse as parseCSV } from "csv-parse/sync";
 import {
-  Attr, Caption, Cell, ColSpec, ColWidth, ColWidthDefault, fromJSON, Para, parse, Plain, Row, Str, Table,
-  TableBody, TableFoot, TableHead,
-  type Alignment, type Block, type CodeBlock, type Conversion, type Filter, type Inline, type Pandoc,
+  Attr, blocksOf, Caption, Cell, ColSpec, ColWidth, ColWidthDefault, fromJSON, inlinesOf, luaNumber, Options, Para,
+  parse, Plain, Row, Str, Table, TableBody, TableFoot, TableHead, toData, yamlFilter,
+  type Alignment, type Block, type CodeBlock, type Conversion, type DataValue, type Filter, type Inline,
+  type MetaValue, type Pandoc,
 } from "panir";
 import { runFilter } from "panir/node";
-import { parseDocument } from "yaml";
 
 const warn = (message: string) => process.stderr.write(`pantable: ${message}\n`);
 
-/** What reads many texts of markdown, in the conversion the filter runs in. */
-type Reader = (texts: string[], conversion: Conversion) => Block[][];
+/** What reads texts into documents, a document each, in the conversion the
+ *  filter runs in, as the format says. */
+type Reader = (texts: string[], conversion: Conversion, from: string) => Pandoc[];
 
 /** libpandoc's JavaScript host, as much as this filter uses of it. */
 interface Host {
@@ -52,261 +54,121 @@ interface Host {
 /** The instance the filter runs in: all the texts in one call, their tabs
  *  expanded, as the original's `pandoc` command does (a read with a
  *  conversion keeps them). */
-const byHost = (pandoc: Host): Reader => (texts, conversion) =>
-  pandoc.readMany(texts, conversion, { from: "markdown", "preserve-tabs": false }).map((doc) => {
+const byHost = (pandoc: Host): Reader => (texts, conversion, from) =>
+  pandoc.readMany(texts, conversion, { from, "preserve-tabs": false }).map((doc) => {
     const error = (doc as { error?: { kind: string; message: string } }).error;
     if (error) throw new Error(`${error.kind}: ${error.message}`);
-    return (fromJSON(doc) as Pandoc).blocks;
+    return fromJSON(doc) as Pandoc;
   });
 
 /** The `pandoc` command: a process a text. */
-const byCommand: Reader = (texts) =>
-  texts.map((text) => parse(execFileSync("pandoc", ["-f", "markdown", "-t", "json"], { input: text }).toString("utf8")).blocks);
-
-// Python's exceptions that the original catches, to fall back to a default
-// (ValueError, TypeError): anything else fails, as there.
-class PyError extends Error {}
+const byCommand: Reader = (texts, _, from) =>
+  texts.map((text) => parse(execFileSync("pandoc", ["-f", from, "-t", "json"], { input: text }).toString("utf8")));
 
 class EmptyTable extends Error {}
 
-class NotFound extends Error {}
+// The options, from the metadata pandoc read: a key as written or with `_`
+// for `-` (the hyphenated one if both); a value of another shape than the
+// option's is its default, with a warning.
 
-// The code block: YAML and data, as panflute's yaml_filter (strict_yaml)
-// splits it: at lines of three or more dots or dashes; a chunk starting
-// with --- opens YAML (even one of data), --- or ... closes it.
+type Shape = "get" | "text" | "boolean" | "list";
 
-const SEPARATOR = /^([.]{3,}|[-]{3,})$/m;
-
-// PyYAML reads YAML 1.1: `yes`, `on` booleans, `010` octal, `1:30` 90;
-// dates stay text (as Python's str of a date)
-const YAML_OPTIONS: Parameters<typeof parseDocument>[1] = {
-  version: "1.1", intAsBigInt: true, uniqueKeys: false,
-  customTags: (tags) => tags.filter((t) => (typeof t === "string" ? t : t.tag) !== "tag:yaml.org,2002:timestamp"),
-};
-
-function split(text: string): [Map<string, unknown>, string] | undefined {
-  const options = new Map<string, unknown>();
-  const data: string[] = [];
-  let raw = true;
-  for (let chunk of text.split(new RegExp(SEPARATOR, "gm"))) {
-    chunk = chunk.replace(/^\n+|\n+$/g, "");
-    if (!chunk) continue;
-    if (raw) {
-      if (chunk.startsWith("---")) raw = false;
-      else data.push(chunk);
-    } else if (chunk.startsWith("---") || chunk.startsWith("...")) {
-      raw = true;
-    } else {
-      const doc = parseDocument(chunk, YAML_OPTIONS);
-      if (doc.errors.length > 0) {
-        warn("malformed YAML block: left as it is");
-        return undefined;
-      }
-      if (doc.warnings.length > 0) throw new Error(`YAML: ${doc.warnings[0]!.message}`);
-      let value: unknown;
-      try {
-        value = doc.toJS(); // (an alias to no anchor fails here)
-      } catch (e) {
-        warn(`malformed YAML block: left as it is (${(e as Error).message})`);
-        return undefined;
-      }
-      // (Python's dict.update: a map, or a list of pairs)
-      for (const [k, v] of pairs(value)) options.set(pyStr(k), v);
-    }
-  }
-  return [options, data.join("\n")];
+/** An option's value as `Options.text`, `.boolean` or `.list` reads it,
+ *  `.get` raw; undefined if missing or of another shape. */
+function get<S extends Shape>(options: Options, key: string, shape: S): ReturnType<Options[S]> {
+  const k = options.get(key) !== undefined ? key : key.replaceAll("-", "_");
+  const raw = options.get(k);
+  if (raw === undefined) return undefined as ReturnType<Options[S]>;
+  const value = (options[shape] as (key: string) => ReturnType<Options[S]>).call(options, k);
+  if (value === undefined) warn(`option ${k} with value ${JSON.stringify(toData(raw))} has an invalid type: the default`);
+  return value;
 }
 
-// A value as Python has it, made another type as Python makes it
-
-/** Python's str() of a value. */
-function pyStr(v: unknown): string {
-  return typeof v === "string" ? v : pyRepr(v);
+/** A number as Lua reads one, or two with `/` between (`1/3`); null for
+ *  anything else. A zero denominator fails, as the original. */
+function fraction(text: DataValue | undefined): number | null {
+  if (typeof text !== "string") return null;
+  const slash = text.indexOf("/");
+  const a = luaNumber(slash < 0 ? text : text.slice(0, slash));
+  const b = slash < 0 ? 1 : luaNumber(text.slice(slash + 1));
+  if (a === undefined || b === undefined) return null;
+  if (b === 0) throw new Error(`division by zero: ${text}`);
+  return a / b;
 }
 
-function pyRepr(v: unknown): string {
-  if (v === null || v === undefined) return "None";
-  if (typeof v === "boolean") return v ? "True" : "False";
-  if (typeof v === "bigint") return v.toString();
-  if (typeof v === "number") return pyFloat(v);
-  if (typeof v === "string") {
-    const q = v.includes("'") && !v.includes('"') ? '"' : "'";
-    return q + v.replace(/[\\\n\r\t]|[\x00-\x1f\x7f]/g, (c) =>
-      ({ "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t" })[c] ?? `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`)
-      .replaceAll(q, `\\${q}`) + q;
-  }
-  if (Array.isArray(v)) return `[${v.map(pyRepr).join(", ")}]`;
-  return `{${Object.entries(v as object).map(([k, x]) => `${pyRepr(k)}: ${pyRepr(x)}`).join(", ")}}`;
+/** Whole numbers (`ms`, `ns-head`), else the default. */
+function integers(values: DataValue[] | undefined, key: string): number[] | null {
+  if (values === undefined) return null;
+  const out = values.map((x) => (typeof x === "string" ? luaNumber(x) : undefined));
+  if (out.every((x) => x !== undefined && Number.isInteger(x))) return out as number[];
+  warn(`option ${key} with value ${JSON.stringify(values)} has an invalid type: the default`);
+  return null;
 }
 
-/** Python's repr of a float: the shortest digits, in exponent form below
- *  1e-4 and from 1e16. */
-function pyFloat(x: number): string {
-  if (Number.isNaN(x)) return "nan";
-  if (!Number.isFinite(x)) return x > 0 ? "inf" : "-inf";
-  const [mantissa, e] = x.toExponential().split("e") as [string, string];
-  const exp = Number(e);
-  if (exp < -4 || exp >= 16) return `${mantissa}e${exp < 0 ? "-" : "+"}${String(Math.abs(exp)).padStart(2, "0")}`;
-  const s = String(x);
-  return s.includes(".") ? s : `${s}.0`;
-}
+/** Words of text: split at spaces, tabs and line breaks. */
+const words = (text: string) => text.match(/[^ \t\n\r]+/g) ?? [];
 
-/** Python's bool(). */
-function pyBool(v: unknown): boolean {
-  if (v === null || v === undefined) return false;
-  if (typeof v === "string" || Array.isArray(v)) return v.length > 0;
-  if (typeof v === "object") return Object.keys(v).length > 0;
-  return typeof v === "number" ? v !== 0 : Boolean(v);
-}
-
-/** Python's list(): of text its characters, of a map its keys. */
-function pyList(v: unknown): unknown[] {
-  if (typeof v === "string") return [...v];
-  if (Array.isArray(v)) return v;
-  if (v !== null && typeof v === "object") return Object.keys(v);
-  throw new PyError(`'${typeof v}' object is not iterable`);
-}
-
-/** Python's int() of a value (`ms`, `ns-head`). */
-function pyInt(v: unknown): number {
-  if (typeof v === "bigint") return Number(v);
-  if (typeof v === "boolean") return Number(v);
-  if (typeof v === "number") {
-    if (Number.isNaN(v)) throw new PyError("cannot convert float NaN to integer");
-    if (!Number.isFinite(v)) throw new Error("cannot convert float infinity to integer");
-    return Math.trunc(v);
-  }
-  if (typeof v === "string" && /^\s*[-+]?\d+(_\d+)*\s*$/.test(v)) return Number(v.replaceAll("_", ""));
-  throw new PyError(`invalid literal for int(): ${pyRepr(v)}`);
-}
-
-// Python's fractions.Fraction of text
-const FRACTION = /^\s*([-+]?)(?=\d|\.\d)(\d*|\d+(?:_\d+)*)(?:(?:\s*\/\s*(\d+(?:_\d+)*))?|(?:\.(\d*|\d+(?:_\d+)*))?(?:[eE]([-+]?\d+(?:_\d+)*))?)\s*$/;
-
-/** float(Fraction(v)): a number, or a fraction or decimal as text. */
-function fraction(v: unknown): number {
-  if (typeof v === "bigint") return Number(v);
-  if (typeof v === "boolean") return Number(v);
-  if (typeof v === "number") {
-    if (Number.isNaN(v)) throw new PyError("cannot convert NaN to integer ratio");
-    if (!Number.isFinite(v)) throw new Error("cannot convert Infinity to integer ratio");
-    return v;
-  }
-  if (typeof v !== "string") throw new PyError("argument should be a string or a number");
-  const m = FRACTION.exec(v);
-  if (!m) throw new PyError(`Invalid literal for Fraction: ${pyRepr(v)}`);
-  const [, sign, num, denom] = m;
-  if (denom !== undefined) {
-    if (Number(denom.replaceAll("_", "")) === 0) throw new Error(`Fraction(${num}, 0)`);
-    return Number(`${sign}${num!.replaceAll("_", "")}`) / Number(denom.replaceAll("_", ""));
-  }
-  return Number(v.trim().replaceAll("_", ""));
-}
-
-/** Python's dict(): a map, or a list of pairs. */
-function pairs(v: unknown): [unknown, unknown][] {
-  if (Array.isArray(v)) {
-    return v.map((p: unknown) => {
-      const pair = typeof p === "string" ? [...p] : p;
-      if (!Array.isArray(pair) || pair.length !== 2) throw new PyError("dictionary update sequence element has not length 2");
-      return pair as [unknown, unknown];
-    });
-  }
-  if (v !== null && typeof v === "object") return Object.entries(v);
-  throw new PyError(`'${pyRepr(v)}' object is not iterable`);
-}
-
-interface Options {
-  "short-caption": string;
-  caption: string;
+interface Settings {
+  caption: MetaValue | undefined;
+  shortCaption: MetaValue | undefined;
   alignment: string;
-  "alignment-cells": string;
-  width: unknown[] | null;
-  "table-width": number | null;
-  header: boolean; // (read, and never used: as the original)
+  alignmentCells: string[];
+  width: (number | null)[] | null;
+  tableWidth: number | null;
   ms: number[] | null;
-  "ns-head": number[] | null;
+  nsHead: number[] | null;
   markdown: boolean;
-  "fancy-table": boolean;
-  include: string;
-  "include-encoding": string;
+  fancyTable: boolean;
   format: string;
-  "csv-kwargs": boolean; // (given: not supported here)
 }
 
-const defaults = (): Options => ({
-  "short-caption": "", caption: "", alignment: "", "alignment-cells": "", width: null, "table-width": null,
-  header: true, ms: null, "ns-head": null, markdown: false, "fancy-table": false, include: "",
-  "include-encoding": "", format: "csv", "csv-kwargs": false,
-});
-
-const maybe = <T>(f: (v: unknown) => T) => (v: unknown): T | null => (v === null ? null : f(v));
-
-const CASTS: Record<keyof Options, (v: unknown) => unknown> = {
-  "short-caption": pyStr, caption: pyStr, alignment: pyStr, "alignment-cells": pyStr, include: pyStr,
-  "include-encoding": pyStr, format: pyStr, header: pyBool, markdown: pyBool, "fancy-table": pyBool,
-  width: maybe(pyList), ms: maybe(pyList), "ns-head": maybe(pyList),
-  "table-width": maybe((v) => (typeof v === "number" ? v : fraction(v))), // (a float as it is, infinity too)
-  "csv-kwargs": () => true,
-};
-
-function optionsOf(given: Map<string, unknown>): Options {
-  const options = defaults();
-  // keys with - or _ alike, the later winning
-  const named = new Map<string, unknown>();
-  for (const [k, v] of given) named.set(k.replaceAll("_", "-"), v);
-  for (const [name, value] of named) {
-    if (!(name in CASTS)) continue;
-    try {
-      (options as unknown as Record<string, unknown>)[name] = CASTS[name as keyof Options](value);
-    } catch (e) {
-      if (!(e instanceof PyError)) throw e;
-      warn(`option ${name} with value ${pyStr(value)} has an invalid type: the default`);
-    }
+function settingsOf(options: Options): Settings {
+  if (options.get("include") !== undefined) {
+    warn("the include key is not read: name the file with the include attribute, and run panclude first");
   }
-  for (const name of ["ms", "ns-head"] as const) {
-    try {
-      options[name] = options[name]?.map(pyInt) ?? null;
-    } catch (e) {
-      if (!(e instanceof PyError)) throw e;
-      warn(`option ${name} has an invalid type: the default`);
-      options[name] = null;
-    }
+  if (get(options, "csv-kwargs", "get") !== undefined) {
+    warn("csv-kwargs (Python's csv.reader's) is not supported in this port: read as CSV");
   }
-  return options;
+  return {
+    caption: get(options, "caption", "get"),
+    shortCaption: get(options, "short-caption", "get"),
+    alignment: get(options, "alignment", "text") ?? "",
+    alignmentCells: words(get(options, "alignment-cells", "text") ?? ""),
+    width: get(options, "width", "list")?.map(fraction) ?? null,
+    tableWidth: fraction(get(options, "table-width", "text")),
+    ms: integers(get(options, "ms", "list"), "ms"),
+    nsHead: integers(get(options, "ns-head", "list"), "ns-head"),
+    markdown: get(options, "markdown", "boolean") ?? false,
+    fancyTable: get(options, "fancy-table", "boolean") ?? false,
+    format: get(options, "format", "text") || "csv",
+  };
 }
 
-/** What is wrong beyond the type, for a table of m rows and n columns. */
-function normalize(options: Options, m: number, n: number): (number | null)[] {
+/** What is wrong beyond the type, for a table of m rows and n columns: the
+ *  widths, null for the default. */
+function normalize(settings: Settings, m: number, n: number): (number | null)[] {
   let total = 0;
   const widths: (number | null)[] = Array(n).fill(null);
-  options.width?.slice(0, n).forEach((w, i) => {
-    let x: number;
-    try {
-      x = fraction(w);
-    } catch (e) {
-      if (e instanceof PyError) return;
-      throw e;
-    }
-    if (x >= 0) {
-      widths[i] = x;
-      total += x;
+  settings.width?.slice(0, n).forEach((w, i) => {
+    if (w !== null && w >= 0) {
+      widths[i] = w;
+      total += w;
     }
   });
-  if (options["table-width"] !== null && options["table-width"] < total) {
+  if (settings.tableWidth !== null && settings.tableWidth < total) {
     warn(`table-width smaller than the sum of the widths, ${total}: dropped`);
-    options["table-width"] = null;
+    settings.tableWidth = null;
   }
-  const ms = options.ms;
+  const ms = settings.ms;
   if (ms && (ms.length < 4 || ms.length % 2 || ms.some((x) => x < 0) || ms.reduce((a, b) => a + b, 0) !== m)) {
     warn(`ms ${ms}: too short, of odd length, negative or not adding up to the rows, ${m}: dropped`);
-    options.ms = null;
+    settings.ms = null;
   }
-  const bodies = options.ms ? options.ms.length / 2 - 1 : 1;
-  const ns = options["ns-head"];
+  const bodies = settings.ms ? settings.ms.length / 2 - 1 : 1;
+  const ns = settings.nsHead;
   if (ns && (ns.length !== bodies || ns.some((x) => x > n))) {
     warn(`ns-head ${ns}: not one a body, ${bodies}, or more than the columns, ${n}: dropped`);
-    options["ns-head"] = null;
+    settings.nsHead = null;
   }
   return widths;
 }
@@ -336,36 +198,10 @@ function lines(s: string): string[] {
 
 // The data
 
-/** Python's names of the encodings to WHATWG's, as TextDecoder knows them;
- *  Latin-1 is Node's own (WHATWG's is windows-1252). */
-function decode(bytes: Buffer, name: string): string {
-  const key = name.toLowerCase().replace(/[^a-z0-9.]+/g, "_");
-  if (["latin_1", "latin1", "iso_8859_1", "iso8859_1", "8859", "cp819", "l1", "latin"].includes(key)) {
-    return bytes.toString("latin1");
-  }
-  const sig = key === "utf_8_sig" || key === "utf8_sig";
-  const label = sig || ["utf_8", "utf8", "u8", "utf", "cp65001"].includes(key) ? "utf-8"
-    : key === "utf_16" || key === "utf16" ? (bytes[0] === 0xfe && bytes[1] === 0xff ? "utf-16be" : "utf-16le")
-    : key.replaceAll("_", "-");
-  return new TextDecoder(label, { fatal: true, ignoreBOM: !(sig || label.startsWith("utf-16")) }).decode(bytes);
-}
-
 /** The rows, as long as the longest. */
-function loadCSV(data: string, options: Options): string[][] {
-  let text = data;
-  if (options.include) {
-    let bytes: Buffer;
-    try {
-      bytes = readFileSync(options.include);
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === "ENOENT") throw new NotFound(`include path ${options.include} not found.`);
-      throw e;
-    }
-    text = decode(bytes, options["include-encoding"] || "utf-8");
-  }
-  if (options["csv-kwargs"]) warn("csv-kwargs (Python's csv.reader's) is not supported in this port: read as CSV");
+function loadCSV(data: string): string[][] {
   // (csv-parse's defaults, but for rows of other lengths, which pantable pads)
-  const rows = parseCSV(text, { relax_column_count: true }) as string[][];
+  const rows = parseCSV(data, { relax_column_count: true }) as string[][];
   if (!rows.some((row) => row.some((cell) => cell.trim()))) throw new EmptyTable();
   const n = Math.max(...rows.map((row) => row.length));
   return rows.map((row) => [...row, ...Array<string>(n - row.length).fill("")]);
@@ -551,61 +387,84 @@ function attrOf(blocks: Block[]): Attr {
 const plain = (blocks: Block[]): Block[] =>
   blocks.length === 1 && blocks[0]!.t === "Para" ? [Plain(blocks[0].content)] : blocks;
 
-const table = (read: Reader) => (block: CodeBlock, ctx: { conversion: Conversion }): Block | Block[] | undefined => {
-  if (!block.attr.classes.includes("table")) return undefined;
-  const parsed = split(block.text);
-  if (!parsed) return undefined;
-  const options = optionsOf(parsed[0]);
+const TEXT = ["MetaString", "MetaInlines", "MetaBlocks"];
+
+function textOrNone(key: string, value: MetaValue | undefined): MetaValue | undefined {
+  if (value === undefined || TEXT.includes(value.t)) return value;
+  warn(`option ${key} with value ${JSON.stringify(toData(value))} has an invalid type: the default`);
+  return undefined;
+}
+
+/** The caption: with markdown, as pandoc read the header (the original
+ *  reads its text as markdown); else its text, one `Str`, as the
+ *  original's (a plain table's caption is an empty paragraph). Not text:
+ *  none, with a warning; a short caption of blocks too. */
+function caption(longValue: MetaValue | undefined, shortValue: MetaValue | undefined, markdown: boolean): Caption {
+  const long = textOrNone("caption", longValue);
+  let short = textOrNone("short-caption", shortValue);
+  if (!markdown) {
+    const text = (v: MetaValue | undefined) => (v ? (toData(v) as string) : "");
+    return Caption([Para([Str(text(long))])], { short: [Str(text(short))] });
+  }
+  if (short?.t === "MetaBlocks") {
+    warn("a short-caption of blocks: none");
+    short = undefined;
+  }
+  const shortInlines = short ? inlinesOf(short) : [];
+  const inlines = long && long.t !== "MetaBlocks" ? inlinesOf(long) : [];
+  const blocks = long?.t === "MetaBlocks" ? blocksOf(long) : inlines.length > 0 ? [Para(inlines)] : [];
+  return Caption(blocks, { short: shortInlines.length > 0 ? shortInlines : null });
+}
+
+const table = (read: Reader, conversion: Conversion) => (options: Options, data: string, block: CodeBlock): Block | Block[] | undefined => {
+  if (block.attr.attributes.some(([k]) => k === "include")) {
+    warn("a code block with an include attribute: left as it is (run panclude first)");
+    return undefined;
+  }
+  const settings = settingsOf(options);
   let rows: string[][];
   try {
-    if (options.format !== "csv") throw new Error(`Unknown format: ${options.format}`);
-    rows = loadCSV(parsed[1], options);
+    if (settings.format !== "csv") throw new Error(`Unknown format: ${settings.format}`);
+    rows = loadCSV(data.replace(/^\n+|\n+$/g, "")); // (blank lines around the data dropped)
   } catch (e) {
-    if (e instanceof NotFound) {
-      warn(`${e.message} The code block is left as it is.`);
-      return undefined;
-    }
     if (e instanceof EmptyTable) {
       warn("table is empty: deleted");
       return [];
     }
     throw e;
   }
-  const md = options.markdown ? markdownCells(rows, options["fancy-table"]) : undefined;
+  const md = settings.markdown ? markdownCells(rows, settings.fancyTable) : undefined;
   const grid = md?.grid ?? new Grid(rows);
   const n = grid.texts[0]!.length;
-  let widths = normalize(options, grid.texts.length, n);
-  const ms = md?.ms ?? options.ms ?? [1, 0, grid.texts.length - 1, 0];
+  let widths = normalize(settings, grid.texts.length, n);
+  const ms = md?.ms ?? settings.ms ?? [1, 0, grid.texts.length - 1, 0];
   // the table has the rows of its blocks: with fancy-table, the rows after
   // the last marker are dropped (as the original, which sizes it by ms)
   const m = ms.reduce((a, b) => a + b, 0);
   grid.texts = grid.texts.slice(0, m);
-  const nsHead = options["ns-head"] ?? Array<number>(ms.length / 2 - 1).fill(0);
-  if (options["table-width"] !== null) widths = autoWidth(grid, widths, options["table-width"]);
-  const specs = aligns(options.alignment, n).map((a, j) => ColSpec(a, widths[j] !== null ? ColWidth(widths[j]!) : ColWidthDefault()));
-  const alignLines = lines(options["alignment-cells"].trim()).slice(0, m);
-  const cellAligns = grid.texts.map((_, i) => aligns(alignLines[i] ?? "", n));
+  const nsHead = settings.nsHead ?? Array<number>(ms.length / 2 - 1).fill(0);
+  if (settings.tableWidth !== null) widths = autoWidth(grid, widths, settings.tableWidth);
+  const specs = aligns(settings.alignment, n).map((a, j) => ColSpec(a, widths[j] !== null ? ColWidth(widths[j]!) : ColWidthDefault()));
+  const cellAligns = grid.texts.map((_, i) => aligns(settings.alignmentCells[i] ?? "", n));
 
   const anchors = grid.texts.flatMap((row, i) => row.flatMap((_, j) => (grid.isAt(i, j) ? [[i, j] as const] : [])));
   const blocks = ms.length / 2 + 1;
-  let caption: Caption, contents: Block[][], attrs: Attr[], rowAttrs: Attr[], blockAttrs: Attr[];
+  let contents: Block[][], attrs: Attr[], rowAttrs: Attr[], blockAttrs: Attr[];
   if (md) {
-    // every text of the table in one call: captions, cells and their
-    // attributes, rows' and blocks' attributes
-    const texts = [options.caption, options["short-caption"], ...anchors.map(([i, j]) => grid.texts[i]![j]!),
-      ...anchors.map(([i, j]) => md.cellAttrs[i]![j]!), ...md.rowAttrs.slice(0, m), ...(md.blockAttrs ?? Array<string>(blocks).fill(""))];
+    // every text of the table in one call: cells and their attributes,
+    // rows' and blocks' attributes
+    const texts = [...anchors.map(([i, j]) => grid.texts[i]![j]!), ...anchors.map(([i, j]) => md.cellAttrs[i]![j]!),
+      ...md.rowAttrs.slice(0, m), ...(md.blockAttrs ?? Array<string>(blocks).fill(""))];
     const todo = texts.filter((t) => t);
-    const done = todo.length > 0 ? read(todo, ctx.conversion) : [];
+    const done = todo.length > 0 ? read(todo, conversion, "markdown") : [];
     let k = 0;
-    const got = texts.map((t) => (t ? done[k++]! : []));
-    const short = got[1]!.length > 0 ? (got[1]![0] as { content: Inline[] }).content : null;
-    caption = Caption(got[0], { short });
-    contents = got.slice(2, 2 + anchors.length).map(plain);
-    attrs = got.slice(2 + anchors.length, 2 + 2 * anchors.length).map(attrOf);
-    rowAttrs = got.slice(2 + 2 * anchors.length, 2 + 2 * anchors.length + m).map(attrOf);
-    blockAttrs = got.slice(2 + 2 * anchors.length + m).map(attrOf);
+    const got = texts.map((t) => (t ? done[k++]!.blocks : []));
+    const a = anchors.length;
+    contents = got.slice(0, a).map(plain);
+    attrs = got.slice(a, 2 * a).map(attrOf);
+    rowAttrs = got.slice(2 * a, 2 * a + m).map(attrOf);
+    blockAttrs = got.slice(2 * a + m).map(attrOf);
   } else {
-    caption = Caption([Para([Str(options.caption)])], { short: [Str(options["short-caption"])] });
     contents = anchors.map(([i, j]) => [Plain([Str(grid.texts[i]![j]!)])]);
     attrs = anchors.map(() => Attr());
     rowAttrs = grid.texts.map(() => Attr());
@@ -634,10 +493,14 @@ const table = (read: Reader) => (block: CodeBlock, ctx: { conversion: Conversion
   });
   const foot = TableFoot(parts.at(-1), { attr: blockAttrs.at(-1)! });
   const { identifier, classes, attributes } = block.attr;
-  return Table(caption, specs, head, bodies, foot, { identifier, classes: classes.filter((c) => c !== "table"), attributes });
+  return Table(caption(settings.caption, settings.shortCaption, settings.markdown), specs, head, bodies, foot,
+    { identifier, classes: classes.filter((c) => c !== "table"), attributes });
 };
 
-const filters = (read: Reader): Filter[] => [{ CodeBlock: table(read) }];
+const filters = (read: Reader): Filter[] => [{
+  Pandoc: (doc, ctx) => yamlFilter(doc, "table", "pantable", (texts) => read(texts, ctx.conversion, "markdown-smart"),
+    table(read, ctx.conversion)),
+}];
 
 /** For libpandoc's JavaScript host, given the instance the filter runs in
  *  (`libpandocFilter(hosted)`): reading with it. */

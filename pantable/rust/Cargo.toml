@@ -1,6 +1,6 @@
 [package]
 name = "pantable"
-description = "Code blocks of class table, CSV with YAML options, made tables: a pandoc filter (a port of ickc/pantable)"
+description = "Code blocks of class table, CSV with a YAML header of options, made tables: a pandoc filter (a port of ickc/pantable)"
 license = "BSD-3-Clause"
 version = "0.1.0"
 edition.workspace = true
@@ -9,16 +9,14 @@ publish = false
 
 [dependencies]
 panir.workspace = true
+# the plain data of a list of options (panir's Options::list)
+serde_json.workspace = true
 # the CSV (Python's csv module in the original)
 csv = "1"
-# the YAML options (PyYAML in the original): YAML 1.2, pure safe Rust
-yaml-rust2 = "0.13"
-# an included file's encoding, other than UTF-8 and Latin-1
-encoding_rs = "0.8"
 # a cell's first line, and the first column of a fancy table
 regex = "1"
 
-# pandoc's reader for markdown cells, the host's: built for wasm, libpandoc's
+# pandoc's reader for the header and markdown cells, the host's: built for wasm, libpandoc's
 # calls go to the program running the filter
 [target.'cfg(target_family = "wasm")'.dependencies]
 libpandoc.workspace = true
