@@ -1,11 +1,11 @@
-url: https://github.com/ickc/pantable/tree/ea16bafc269d50fdc84198a39cb72960afa63df2/src/pantable
+url: https://github.com/ickc/pantable/tree/578353ac9882344489251d6af33ceaeedb466806/src/pantable
 repository: https://github.com/ickc/pantable
-commit: ea16bafc269d50fdc84198a39cb72960afa63df2 (v0.15.0)
+commit: 578353ac9882344489251d6af33ceaeedb466806 (0.15.0 with the include attribute: pull request ickc/pantable#78, branch include-attribute, not merged)
 path: src/pantable (pantable/ here: the package, verbatim; the filter is cli/pantable.py, pantable2csv and pantable2csvx are not ported)
 licence: BSD-3-Clause, Copyright (c) 2016-2026, Kolen Cheung (../LICENSE, the repository's, verbatim; pyproject.toml says BSD-3-Clause too); it covers the original, its tests and documentation's examples, and the ports here
-cases: the repository's tests/golden/pantable/*.md as golden-NAME.md and its CSV files under cases/files/tests/golden/pantable/ (its expected/*.md, markdown, are not used: the expected AST is the original's under pandoc 3.14); docs/examples/*.md as example-NAME.md, with fruits.csv; README.md as readme.md, with docs/comparison.csv (the README's last table includes it, from docs/); the others are written for the ports, their files in cases/files and the canaries outside it in cases/outside; NAME.needs marks the cases whose ports call pandoc (markdown cells)
-needs: pantable 0.15.0 from PyPI (with panflute 2.3.1, PyYAML, numpy: oracle-requirements.txt), the same files as pantable/ here; it calls `pandoc` on PATH for markdown cells
+cases: the repository's tests/golden/pantable/*.md as golden-NAME.md (but the include key's: include_key, include_key_invalid_path, encoding), with their files in cases/files/, where they run, as upstream runs each case from its own directory (its expected/*.md, markdown, are not used: the expected AST is the original's under pandoc 3.14); docs/examples/*.md as example-NAME.md, with fruits.csv; README.md as readme.md, with docs/comparison.csv (the README's last table includes it, from docs/); the others are written for the ports, their files in cases/files and the canaries outside it in cases/outside; NAME.needs marks the cases whose ports read markdown cells (a call into pandoc a table in a host, a process a text standalone)
+needs: pantable at 578353a (with panflute 2.3.1, PyYAML, numpy: oracle-requirements.txt), the same files as pantable/ here; it calls `pandoc` on PATH for markdown cells
 run: python -m pantable.cli.pantable
 formats: html
 cwd: cases/files
-wasm-dirs: .
+ports-after: panclude

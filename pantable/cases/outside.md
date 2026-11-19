@@ -2,16 +2,10 @@
 
 Through `..`:
 
-```table
----
-include: ../outside/canary.csv
----
+```{.table include="../outside/canary.csv"}
 ```
 
 Through a symbolic link in the directory:
 
-```table
----
-include: link-out.csv
----
+```{.table include="link-out.csv"}
 ```

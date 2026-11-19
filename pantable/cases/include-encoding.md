@@ -1,51 +1,29 @@
-# Encodings
+# Encodings: the included file is UTF-8
 
-UTF-8 with a byte-order mark, read as UTF-8 (the mark stays) and as
-`utf-8-sig`:
+A byte-order mark is dropped:
 
-```table
----
-include: bom.csv
----
+```{.table include="bom.csv"}
 ```
 
-```table
----
-include: bom.csv
-include-encoding: utf-8-sig
----
+Latin-1 and UTF-16 are not UTF-8: the block is left as it is:
+
+```{.table include="latin1.csv"}
 ```
 
-Latin-1, by two of its names:
+```{.table include="utf16.csv"}
+```
 
-```table
+`include-encoding` was the `include` key's: beside the attribute it is
+read by no one, a name Python knows or not:
+
+```{.table include="latin1.csv"}
 ---
-include: latin1.csv
 include-encoding: latin-1
 ---
 ```
 
-```table
+```{.table include="plain.csv"}
 ---
-include: latin1.csv
-include-encoding: ISO-8859-1
----
-```
-
-UTF-16 with a byte-order mark:
-
-```table
----
-include: utf16.csv
-include-encoding: utf-16
----
-```
-
-UTF-8, spelled another way:
-
-```table
----
-include: plain.csv
-include-encoding: UTF8
+include-encoding: klingon
 ---
 ```

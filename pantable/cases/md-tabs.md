@@ -1,8 +1,7 @@
 # Tabs in a markdown cell, from a file
 
-```table
+```{.table include="tabs-markdown.csv"}
 ---
 markdown: true
-include: tabs-markdown.csv
 ---
 ```

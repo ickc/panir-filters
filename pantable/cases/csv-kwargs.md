@@ -64,9 +64,8 @@ a;b
 
 A tab-separated file:
 
-```table
+```{.table include="tabs.tsv"}
 ---
-include: tabs.tsv
 csv-kwargs:
   dialect: excel-tab
 ---

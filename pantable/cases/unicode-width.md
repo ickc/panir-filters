@@ -21,12 +21,12 @@ table-width: 1
 e̊e̊,👨‍👩‍👧
 ```
 
-Line breaks as Python's `str.splitlines` finds them, from a file: CRLF
-inside a quoted field, a form feed, a vertical tab, U+2028, U+0085:
+Line breaks as Python's `str.splitlines` finds them, from a file: a line
+break inside a quoted field (CRLF in the file, a line feed once
+included), a form feed, a vertical tab, U+2028, U+0085:
 
-```table
+```{.table include="lines.csv"}
 ---
-include: lines.csv
 table-width: 1
 ---
 ```

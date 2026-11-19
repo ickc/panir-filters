@@ -1,63 +1,63 @@
 # language	case or document	why (NOTES.md)
-python	table-width-inf	the original fails: panflute writes the infinite width as `Infinity`, not JSON, which pandoc refuses; panir writes `"+inf"`, which pandoc reads (NOTES.md, for upstream)
-ts	table-width-inf	the original fails: panflute writes the infinite width as `Infinity`, not JSON, which pandoc refuses; panir writes `"+inf"`, which pandoc reads (NOTES.md, for upstream)
-rust	table-width-inf	the original fails: panflute writes the infinite width as `Infinity`, not JSON, which pandoc refuses; panir writes `"+inf"`, which pandoc reads (NOTES.md, for upstream)
-julia	table-width-inf	the original fails: panflute writes the infinite width as `Infinity`, not JSON, which pandoc refuses; panir writes `"+inf"`, which pandoc reads (NOTES.md, for upstream)
-ts	caption-odd	YAML: the yaml package's YAML 1.1 reads the key `n` as false (as the 1.1 spec's booleans have it); PyYAML keeps `n` and `y` text (NOTES.md, YAML)
-ts	yaml-parser-error	YAML: the yaml package's errors aren't PyYAML's scanner and parser errors: the port leaves the block as it is (the original's way with a scanner error), where PyYAML's parser error fails the original (NOTES.md, YAML)
-ts	yaml-values	YAML: the yaml package reads `1e3` as a float (1000.0); PyYAML's YAML 1.1 wants a dot in one, so text (NOTES.md, YAML)
-rust	caption	YAML: yaml-rust2 reads YAML 1.2: `yes` is text; PyYAML's YAML 1.1 reads True (NOTES.md, YAML)
-rust	yaml-blocks	YAML: yaml-rust2 refuses a key given twice (the port leaves the block as it is), PyYAML takes the later; and the csv crate skips a blank line inside the data (NOTES.md, YAML, CSV)
-rust	yaml-parser-error	YAML: yaml-rust2's errors aren't PyYAML's scanner and parser errors: the port leaves the block as it is, where PyYAML's parser error fails the original (NOTES.md, YAML)
-rust	yaml-tag	YAML: yaml-rust2 takes an unknown tag (`!!python/name:os.system`, its value read as it is); PyYAML's safe loader refuses it and the original fails (NOTES.md, YAML)
-rust	yaml-values	YAML: yaml-rust2 reads YAML 1.2: `010` is 10, `1:30` and `1_000` text, `1e3` 1000.0, `on` and `Off` text; PyYAML's 1.1: 8, 90, 1000, text, True, False (NOTES.md, YAML)
-rust	md-switch	YAML: yaml-rust2 reads YAML 1.2: `markdown: no` is the text `no`, true as Python's bool, so the cells are read as markdown (NOTES.md, YAML)
-julia	alignment	Julia's `uppercase` is Unicode's simple case mapping: `ß` stays one letter, not ASCII, so every column is default; Python's `str.upper` makes it `SS` (NOTES.md)
-julia	caption	YAML: YAML.jl reads `yes` as text; PyYAML True (NOTES.md, YAML)
-julia	yaml-scanner-error	YAML: YAML.jl reports `caption: a: b` as a parser error, PyYAML as a scanner error (the original leaves the block as it is): the port fails (NOTES.md, YAML)
-julia	yaml-values	YAML: YAML.jl reads `1:30` and `1_000` as text, `1e3` as 1000.0, `on` and `Off` as text; PyYAML's 1.1: 90, 1000, text, True, False (NOTES.md, YAML)
+*	table-width-inf	the original fails: panflute writes the infinite width as `Infinity`, not JSON, which pandoc refuses; the ports have pandoc's reading of `.inf`, the text `+inf`, no number: the default, with a warning (NOTES.md, Options)
+*	width-inf	the original fails (`Fraction` of infinity); the ports have pandoc's reading of `.inf`, the text `+inf`, no number: the column's width the default (NOTES.md, Options)
+*	caption-markup	a header is read by pandoc as markdown: a plain table's caption is the text of what it read, markup, escapes, entities and raw HTML gone; the original keeps the text as written (NOTES.md, Options)
+*	caption-odd	a list, a map or a boolean caption is no text: the default, empty, with a warning; YAML's null is empty text to pandoc; the original's is Python's `str()` of the value (`['one', 2, True]`, `True`, `False`, `None`) (NOTES.md, Options)
+*	yaml-values	pandoc's reading, YAML 1.2's, the numbers as text: `010` is 10, `1:30` and `1_000` text, `1e3` 1000, `.inf` `+inf`, `on` and `Off` text, `True` and `FALSE` booleans (no caption: the default), `~` empty; PyYAML's YAML 1.1: 8, 90, 1000, 1000.0, inf, True, False, None (NOTES.md, Options)
+*	width-odd	a width that is a boolean, or a fraction with underscores (`1_0/1_00`), is the default; text is not a list: the default; the original's `Fraction(True)` is 1, Python's `Fraction` reads underscores, and its `list("12")` is the widths 1 and 2 (NOTES.md, Options)
+*	ms-text	`ns-head` as text (`"1"`) is not a list: the default; the original's `list()` of it is [1] (NOTES.md, Options)
+*	md-switch	only a YAML boolean is one: `"false"` and `yes` are text to pandoc, so `markdown` is the default, false, with a warning; the original's `bool()` makes both true (NOTES.md, Options)
+*	md-short-caption	a short caption of blocks (`- a list`): none, with a warning; the original fails (panflute's type error, NOTES.md, bug 9)
+*	defaults	the document's metadata under `pantable` gives the ports' defaults, a header's keys replacing them; the original reads the block's header only (NOTES.md, Options)
+*	yaml-keys-both	a key in both spellings: the hyphenated one, as pandoc's metadata is a map, with no order for the original's "the later wins" (NOTES.md, Options)
+*	yaml-blocks-later	a header only starts the block (panir's `yaml_block`, pandoc's rule for a metadata block): YAML after the data, data before it, and a header opened by `-----` are data; the original's panflute reads YAML blocks anywhere (NOTES.md, Options)
+*	golden-testing_wrong_type	a header only starts the block: the YAML blocks inside the data are data (and the csv crate and DelimitedFiles skip its blank lines); the original reads them as options (NOTES.md, Options)
+*	md-fancy-dashes	a `---` line after the header is data: the fancy table keeps its rows; the original's panflute opens a YAML block there and deletes the emptied table (NOTES.md, bug 5)
+*	yaml-list	a header that is a YAML list is no metadata to pandoc: the whole block is data; the original reads a list of pairs as options (NOTES.md, Options)
+*	yaml-scalar	a header that is a word is no metadata to pandoc: the whole block is data; the original fails (`dict.update`) (NOTES.md, Options)
+*	yaml-tag	pandoc reads `!!python/name:os.system` as empty text, without an error: an empty caption; the original's safe loader refuses the tag and fails (NOTES.md, Options)
+*	yaml-duplicate	pandoc refuses a key given twice: the read fails, and the port, as pandoc fails a document so; the original takes the later (NOTES.md, Options)
+*	yaml-scanner-error	YAML pandoc can't read fails the read, and the port, as pandoc fails a document so; the original leaves a block it can't scan as it is (NOTES.md, Options)
+*	golden-invalid_yaml	YAML pandoc can't read (`*unquoted*`, an alias to no anchor) fails the read, and the port; the original leaves the block as it is (NOTES.md, Options)
+*	golden-include_both	the include key is not read (a warning): the attribute's file is appended and the table made of it; the original then reads the key's file (GBK) instead (NOTES.md, Includes)
+python	example-include	the include key is not read (a warning), and the block, empty, is deleted; the original reads the key's file (NOTES.md, Includes)
+ts	example-include	the include key is not read (a warning), and the block, empty, is deleted; the original reads the key's file (NOTES.md, Includes); and csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the example sets a delimiter and skipinitialspace)
+rust	example-include	the include key is not read (a warning), and the block, empty, is deleted; the original reads the key's file (NOTES.md, Includes); and csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the example sets a delimiter and skipinitialspace)
+julia	example-include	the include key is not read (a warning), and the block, empty, is deleted; the original reads the key's file (NOTES.md, Includes); and csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the example sets a delimiter and skipinitialspace)
+*@host	outside	the include step in a host reads inside its roots only, the document's directory: the blocks naming a file through `..` and a symbolic link leaving the directory are left as they are (a warning), where the original reads the canaries; run.py test's panclude.lua reads them as the original does (NOTES.md, Includes)
+*	md-blocks	the original reads a table's texts as one document (its cells joined in divs): headings' identifiers are made unique across the cells (`a-heading-1`); the ports read each text on its own, in one read_many (NOTES.md)
+*	md-notes	the original reads a table's texts as one document: a note or a reference link defined in one cell resolves in another; the ports read each text on its own, in one read_many (NOTES.md)
+*	md-break	the original fails: a cell holding a line `:::` closes its div in the joined document (a panflute type error); the ports read each text on its own (NOTES.md, for upstream)
+python	csv-kwargs-tab	pandoc reads a value that is only a tab (YAML's `"\t"`) as nothing: the delimiter is empty and Python's csv fails; the original's is a tab (NOTES.md, Options: write `\t`)
+python	csv-kwargs-tab-escaped	the two characters `\t` are a tab to the ports (NOTES.md, Options); the original passes them to Python's csv, which fails on a delimiter of two characters
 ts	csv-kwargs	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 ts	csv-kwargs-dialect	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 ts	csv-kwargs-multichar	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 ts	csv-kwargs-nonnumeric	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 ts	csv-kwargs-unknown	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
-ts	example-include	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the documentation's example sets a delimiter and skipinitialspace)
+ts	csv-kwargs-tab	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 rust	csv-kwargs	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 rust	csv-kwargs-dialect	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 rust	csv-kwargs-multichar	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 rust	csv-kwargs-nonnumeric	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 rust	csv-kwargs-unknown	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
-rust	example-include	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the documentation's example sets a delimiter and skipinitialspace)
+rust	csv-kwargs-tab	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 julia	csv-kwargs	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 julia	csv-kwargs-dialect	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 julia	csv-kwargs-multichar	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 julia	csv-kwargs-nonnumeric	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 julia	csv-kwargs-unknown	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
-julia	example-include	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the documentation's example sets a delimiter and skipinitialspace)
+julia	csv-kwargs-tab	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
+rust	csv-kwargs-tab-escaped	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the original fails on the delimiter `\t`, two characters)
+julia	csv-kwargs-tab-escaped	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is (the original fails on the delimiter `\t`, two characters)
 rust	csv-kwargs-strict	csv-kwargs: Python's csv interface, out of scope (owner's decision): a warning, the CSV read as it is
 ts	csv-quoting	CSV at csv-parse's defaults (owner's decision): it refuses a quote inside an unquoted field (`a"b`), which Python's csv reads
 ts	csv-unterminated	CSV at csv-parse's defaults (owner's decision): it refuses a quote never closed, which Python's csv reads to the end of the data
 rust	csv-quoting	CSV at the csv crate's defaults (owner's decision): it skips a blank line, which Python's csv reads as an empty row
 rust	ragged	CSV at the csv crate's defaults (owner's decision): it skips a blank line, which Python's csv reads as an empty row
-rust	include-encoding	CSV at the csv crate's defaults (owner's decision): it drops a UTF-8 byte-order mark at the start of its input, which Python's `utf-8` keeps in the first cell
+rust	yaml-blocks	CSV at the csv crate's defaults (owner's decision): it skips a blank line inside the data, which Python's csv reads as an empty row
 julia	csv-quoting	CSV at DelimitedFiles' defaults (owner's decision): it refuses text after a closing quote (`"c"d`), which Python's csv reads as `cd`
 julia	csv-unterminated	CSV at DelimitedFiles' defaults (owner's decision): it refuses a quote never closed, which Python's csv reads to the end of the data
 julia	ragged	CSV at DelimitedFiles' defaults (owner's decision): it skips a blank line, which Python's csv reads as an empty row
 julia	yaml-blocks	CSV at DelimitedFiles' defaults (owner's decision): it skips a blank line inside the data, which Python's csv reads as an empty row
-python	md-blocks	the original reads a table's texts as one document (its cells joined in divs): headings' identifiers are made unique across the cells (`a-heading-1`); the ports read each text on its own, in one read_many (NOTES.md)
-python	md-notes	the original reads a table's texts as one document: a note or a reference link defined in one cell resolves in another; the ports read each text on its own, in one read_many (NOTES.md)
-python	md-break	the original fails: a cell holding a line `:::` closes its div in the joined document (a panflute type error); the ports read each text on its own (NOTES.md, for upstream)
-ts	md-blocks	the original reads a table's texts as one document (its cells joined in divs): headings' identifiers are made unique across the cells (`a-heading-1`); the ports read each text on its own, in one read_many (NOTES.md)
-ts	md-notes	the original reads a table's texts as one document: a note or a reference link defined in one cell resolves in another; the ports read each text on its own, in one read_many (NOTES.md)
-ts	md-break	the original fails: a cell holding a line `:::` closes its div in the joined document (a panflute type error); the ports read each text on its own (NOTES.md, for upstream)
-rust	md-blocks	the original reads a table's texts as one document (its cells joined in divs): headings' identifiers are made unique across the cells (`a-heading-1`); the ports read each text on its own, in one read_many (NOTES.md)
-rust	md-notes	the original reads a table's texts as one document: a note or a reference link defined in one cell resolves in another; the ports read each text on its own, in one read_many (NOTES.md)
-rust	md-break	the original fails: a cell holding a line `:::` closes its div in the joined document (a panflute type error); the ports read each text on its own (NOTES.md, for upstream)
-julia	md-blocks	the original reads a table's texts as one document (its cells joined in divs): headings' identifiers are made unique across the cells (`a-heading-1`); the ports read each text on its own, in one read_many (NOTES.md)
-julia	md-notes	the original reads a table's texts as one document: a note or a reference link defined in one cell resolves in another; the ports read each text on its own, in one read_many (NOTES.md)
-julia	md-break	the original fails: a cell holding a line `:::` closes its div in the joined document (a panflute type error); the ports read each text on its own (NOTES.md, for upstream)
-rust@pandocrs-wasm	outside	given `.` and `../outside` (outside.env), a wasm filter reads the file through `..`, but not the symbolic link: a link leaving the directory a name is opened through (the working directory, `.`) is refused, wherever it leads, as "Operation not permitted", which fails the port, as a file the original may not read fails it (only a missing one is a warning) (HOSTS.md, H6)
-rust@pandocpy-wasm	outside	given `.` and `../outside` (outside.env), a wasm filter reads the file through `..`, but not the symbolic link: a link leaving the directory a name is opened through (the working directory, `.`) is refused, wherever it leads, as "Operation not permitted", which fails the port, as a file the original may not read fails it (only a missing one is a warning) (HOSTS.md, H6)
-rust@pandocjl-wasm	outside	given `.` and `../outside` (outside.env), a wasm filter reads the file through `..`, but not the symbolic link: a link leaving the directory a name is opened through (the working directory, `.`) is refused, wherever it leads, as "Operation not permitted", which fails the port, as a file the original may not read fails it (only a missing one is a warning) (HOSTS.md, H6)
-rust@node-wasm	outside	given `.` and `../outside` (outside.env), a wasm filter reads the file through `..`, but not the symbolic link: a link leaving the directory a name is opened through (the working directory, `.`) is refused, wherever it leads, as "Operation not permitted", which fails the port, as a file the original may not read fails it (only a missing one is a warning) (HOSTS.md, H6)
-julia	md-switch	YAML: YAML.jl reads `markdown: no` as the text `no`, true as Python's bool, so the cells are read as markdown (NOTES.md, YAML)
+julia	alignment	Julia's `uppercase` is Unicode's simple case mapping: `ß` stays one letter, not ASCII, so every column is default; Python's `str.upper` makes it `SS` (NOTES.md)
