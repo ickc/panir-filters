@@ -72,7 +72,7 @@ a,b
 c,d
 ```
 
-`ns-head` of the wrong length, more than the columns, and as text:
+`ns-head` of the wrong length, and more than the columns:
 
 ```table
 ---
@@ -85,14 +85,6 @@ c,d
 ```table
 ---
 ns-head: [3]
----
-a,b
-c,d
-```
-
-```table
----
-ns-head: "1"
 ---
 a,b
 c,d

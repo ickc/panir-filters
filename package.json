@@ -7,8 +7,7 @@
   },
   "dependencies": {
     "csv-parse": "^7.0.3",
-    "panir": "file:../panir/ts",
-    "yaml": "^2.9.1"
+    "panir": "file:../panir/ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

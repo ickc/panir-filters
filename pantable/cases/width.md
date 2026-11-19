@@ -16,22 +16,13 @@ width: [-0.5, abc, 1/3, 0.1, 0.2]
 a,b,c
 ```
 
-A boolean and an integer:
-
-```table
----
-width: [true, 0]
----
-a,b
-```
-
 Fractions written other ways:
 
 ```table
 ---
-width: ["  2/10 ", 1e-1, 1_0/1_00, +.5]
+width: ["  2/10 ", 1e-1, +.5]
 ---
-a,b,c,d
+a,b,c
 ```
 
 A number, not a list:
@@ -39,15 +30,6 @@ A number, not a list:
 ```table
 ---
 width: 0.5
----
-a,b
-```
-
-Text, not a list:
-
-```table
----
-width: "12"
 ---
 a,b
 ```

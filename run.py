@@ -30,14 +30,22 @@ Julia ports are then run in process, as a host does (`host/`), with them in
 `ctx.conversion.options`; the Rust ports, which run as JSON filters only,
 without them.
 
-`test` needs only the ports' toolchains; it runs the Julia ports' cases
-in one Julia process (`julia-cases.jl`), the others a process per case.
+A filter whose ORIGIN says `ports-after: panclude` has its ports run
+after the include step (panclude: a code block's `include` attribute
+appends the file's text): in a host (`host`), libpandoc's own (`-F
+panclude`, `"panclude"`), first; as JSON filters (`test`, `diff`, `time`),
+the document goes through `pandoc -L $PANCLUDE` (panclude.lua) first, in
+the filter's directory. Its original runs alone on the same document.
+
+`test` needs only the ports' toolchains (and, for a filter after
+panclude, pandoc and panclude.lua); it runs the Julia ports' cases in one
+Julia process (`julia-cases.jl`), the others a process per case.
 `diff`, `expect` and `time` also run the originals: pandoc (`$PANDOC`) for
 Lua ones, and for Python ones a Python with pandocfilters and panflute
 (`$ORACLE_PYTHON`; see `oracle-requirements.txt`), whose output is taken
 as pandoc reads it. Other variables: `$PANIR` (panir's checkout, default
-`../panir`), `$PYTHON`, `$NODE`, `$JULIA`, `$TIMEOUT` (seconds a run may
-take, 300). Rust ports are built (`cargo build --release`) before they
+`../panir`), `$PANCLUDE` (panclude.lua), `$PYTHON`, `$NODE`, `$JULIA`,
+`$TIMEOUT` (seconds a run may take, 300). Rust ports are built (`cargo build --release`) before they
 run.
 """
 
@@ -126,6 +134,28 @@ def chain(folder: Path) -> list[Path]:
     (each perhaps after others), then itself."""
     after = origin(folder).get("after")
     return [*chain(ROOT / after), folder] if after else [folder]
+
+
+def after_panclude(folder: Path) -> bool:
+    """Whether a filter's ports run after the include step, panclude
+    (`ports-after: panclude` in its ORIGIN): they include no file
+    themselves, the step does, before them; the original runs alone."""
+    return origin(folder).get("ports-after") == "panclude"
+
+
+def included(folder: Path, data: bytes) -> bytes:
+    """A document as panclude.lua leaves it (`$PANCLUDE`), run by pandoc in
+    the filter's directory with the document on standard input, so that a
+    relative path starts there, as the original's: what a filter after
+    panclude is given as a JSON filter. Others' documents as they are."""
+    if not after_panclude(folder):
+        return data
+    if not env("PANCLUDE"):
+        sys.exit(f"{folder.name}: its ports run after panclude: $PANCLUDE names panclude.lua (README)")
+    ran = run([env("PANDOC", "pandoc"), "-f", "json", "-t", "json", "-L", env("PANCLUDE")], data, cwd=workdir(folder))
+    if ran.code != 0:
+        sys.exit(f"{folder.name}: panclude.lua failed: {ran.err.decode(errors='replace')}")
+    return ran.out
 
 
 def ports(folder: Path, lang: str, options: bool = False) -> list[list[str]] | None:
@@ -372,8 +402,9 @@ def known(folder: Path) -> dict[tuple[str, str], str]:
     mode, `python@standalone` (`run.py test` and `diff`), `rust@pandocrs-wasm`
     (a host of `run.py host`), if it differs there only, and perhaps with
     the run, `julia@pandocjl@host` (`run.py host`) or `@sandbox` (`run.py
-    host --sandbox`). They don't fail a run; one that no longer differs
-    does."""
+    host --sandbox`); or `*`, every language, a difference the four ports
+    share, perhaps with the run, `*@host`. They don't fail a run; one that
+    no longer differs does."""
     path = folder / "known.tsv"
     if not path.exists():
         return {}
@@ -390,9 +421,10 @@ class Tally:
         """A run's result; `known.tsv`'s rows for its language, mode and run
         (`julia@pandocjl@host`: `run.py host` but not `--sandbox`, which is
         `@sandbox`), then for its language and mode (`rust@pandocrs-wasm`),
-        then for its language in every mode (`rust`)."""
+        then for its language in every mode (`rust`), then for every
+        language in the run (`*@host`), then in every mode (`*`)."""
         listed = known(folder)
-        whos = ([f"{lang}@{mode}@{run}"] if run else []) + [f"{lang}@{mode}", lang]
+        whos = ([f"{lang}@{mode}@{run}"] if run else []) + [f"{lang}@{mode}", lang] + ([f"*@{run}"] if run else []) + ["*"]
         keys = [(who, case) for who in whos for case in (f"{name} ({fmt})", name)]
         why = next((listed[k] for k in keys if k in listed), None)
         if problem and why:
@@ -444,11 +476,10 @@ def cmd_test(args: argparse.Namespace) -> int:
     tally = Tally(args.verbose)
     runs = []  # (folder, lang, case, the port's command, or what it made)
     for folder in filters(args.filters):
-        cases = expected(folder)
+        cases = [{**case, "input": json.loads(included(folder, json.dumps(case["input"]).encode()))}
+                 for case in expected(folder) if not needs_pandoc(folder, case)]
         for lang in langs:
             for case in cases:
-                if needs_pandoc(folder, case):
-                    continue
                 cmds = ports(folder, lang, "options" in case)
                 if cmds is not None:
                     runs.append((folder, lang, case, cmds))
@@ -522,7 +553,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
         for name, data in docs:
             for fmt in formats(folder):
                 want = run_original(folder, data, fmt)
-                case = {"name": name, "format": fmt, "input": json.loads(data)}
+                case = {"name": name, "format": fmt, "input": json.loads(included(folder, data))}
                 if want.code != 0:
                     case["error"] = True
                     print(f"note {folder.name} {name} ({fmt}): the original failed: "
@@ -568,7 +599,8 @@ WASM = ("pandocrs-wasm", "pandocpy-wasm", "pandocjl-wasm", "node-wasm")
 SANDBOXED = ["pandocpy-lua", "pandocrs-lua", "pandocjl-lua", "pandocpy", "python-api", "pandocrs-wasm",
              "pandocpy-wasm", "pandocjl-wasm", "pandocjl"]
 # What a case of the sandbox's reads from outside its directory: each
-# canary's marker (cases/outside/), by how it is named
+# canary's marker (cases/outside/), by how it is named; in a host, a filter
+# after the include step holds none, in the sandbox or not
 CANARIES = re.compile(rb"(?:CANARY|SECRET)-(DOTDOT|LINK|ABSOLUTE)")
 
 
@@ -594,8 +626,9 @@ def host_command(mode: str) -> list[str] | None:
 
 def host_filters(folder: Path, mode: str) -> list[str] | None:
     """The files a mode runs for a filter's chain (None if a port is
-    missing)."""
-    out = []
+    missing), after the include step (`panclude`) for a filter whose ports
+    run after it."""
+    out = ["panclude"] if after_panclude(folder) and HOSTS[mode][0] != "lua" else []
     for f in chain(folder):
         name = f.name
         if mode in ("pandocpy", "python-api"):
@@ -624,10 +657,13 @@ def host_filters(folder: Path, mode: str) -> list[str] | None:
 def in_host(cmd: list[str], files: list[str], case: dict, cwd: Path | None = None, sandbox: bool = False) -> Ran:
     """A case through a host's pandoc command: its document (pandoc's JSON)
     to its format, with its options as a defaults file and its environment,
-    the ports' files as filters (Lua ones with -L), then host/capture.lua.
-    With `sandbox`, in the host's directory sandbox: the directory `cwd`
-    read-only, and a temporary one holding the document, the options, the
-    Lua filters (pandoc reads them, inside) and the output, read-write."""
+    the ports' files as filters (Lua ones with -L; `panclude`, the include
+    step, as `-F panclude`), then host/capture.lua. With `sandbox`, in the
+    host's directory sandbox: the directory `cwd` read-only, and a temporary
+    one holding the document, the options, the Lua filters (pandoc reads
+    them, inside) and the output, read-write. After the include step the
+    document is given on standard input, so that the step's paths start at
+    the working directory, `cwd`, and its root is that directory."""
     with tempfile.TemporaryDirectory() as tmp:
         doc = Path(tmp) / "input.json"
         doc.write_text(json.dumps(case["input"]))
@@ -641,7 +677,9 @@ def in_host(cmd: list[str], files: list[str], case: dict, cwd: Path | None = Non
         filters = [x for f in files if not f.endswith(".lua") for x in ("-F", f)]
         filters += [x for f in lua[:-1] for x in ("-L", f)]
         out = Path(tmp) / "out" if sandbox else os.devnull
-        args = [*cmd, *options, "-f", "json", "-t", case["format"], "-o", str(out), *filters, "-L", lua[-1], str(doc)]
+        stdin = "panclude" in files
+        args = [*cmd, *options, "-f", "json", "-t", case["format"], "-o", str(out), *filters, "-L", lua[-1],
+                *([] if stdin else [str(doc)])]
         environ = {**os.environ, **case.get("env", {})}
         if cmd[0].endswith("julia") and "JULIA_LOAD_PATH" not in os.environ:
             # a Julia script's packages (pantable's YAML.jl...) are loaded from
@@ -649,7 +687,7 @@ def in_host(cmd: list[str], files: list[str], case: dict, cwd: Path | None = Non
             environ["JULIA_LOAD_PATH"] = os.pathsep.join(["@", str(ROOT), "@stdlib"])
         if sandbox:
             environ |= {"LIBPANDOC_SANDBOX": str(cwd or tmp), "LIBPANDOC_SANDBOX_WRITE": tmp}
-        return run(args, b"", cwd=cwd or (Path(tmp) if sandbox else None), environ=environ)
+        return run(args, doc.read_bytes() if stdin else b"", cwd=cwd or (Path(tmp) if sandbox else None), environ=environ)
 
 
 def in_driver(cmd: list[str], jobs: list[dict]) -> list[Ran]:
@@ -721,10 +759,11 @@ def cmd_host(args: argparse.Namespace) -> int:
                 if args.sandbox and case["name"] == "outside":
                     runs.append((folder, absolute_probe(folder, case), files))
             if skipped:
-                print(f"note: {skipped} cases of {folder.name} skipped in {mode}: a JSON filter has no pandoc to call")
+                print(f"note: {skipped} cases of {folder.name} skipped in {mode}: their ports read markdown cells (NAME.needs), which a JSON filter does by the pandoc command, a process a text")
         if mode in ("python-api", "node", "node-wasm"):
             key = "wasm" if mode == "node-wasm" else "scripts"
-            jobs = [{key: files, "format": case["format"], "options": case.get("options", {}),
+            jobs = [{key: [f for f in files if f != "panclude"], "panclude": "panclude" in files,
+                     "format": case["format"], "options": case.get("options", {}),
                      "env": case.get("env", {}), "cwd": str(workdir(folder) or ROOT), "input": case["input"],
                      **({"sandbox": {"read": [str(workdir(folder))]}} if args.sandbox else {})}
                     for folder, case, files in runs]
@@ -733,6 +772,11 @@ def cmd_host(args: argparse.Namespace) -> int:
             made = [in_host(cmd, files, case, workdir(folder), args.sandbox) for folder, case, files in runs]
         for (folder, case, _), ran in zip(runs, made):
             label = f"{folder.name} {lang}@{mode} {case['name']} ({case['format']})"
+            if after_panclude(folder) and CANARIES.search(ran.out):
+                # (the include step reads inside its roots only: the document's directory)
+                tally.failed += 1
+                print("FAIL", label, "holds a canary's marker: read outside the include step's roots")
+                continue
             if args.sandbox and case["name"].startswith("outside"):
                 read = sorted(set(m.decode() for m in CANARIES.findall(ran.out)))
                 what = f"failed: {ran.err.decode(errors='replace').strip()[-160:]}" if ran.code else ", ".join(read) or "nothing"
@@ -781,10 +825,11 @@ def cmd_time(args: argparse.Namespace) -> int:
     data = document(Path(args.doc))
     fmt = args.format or formats(folder)[0]
     rows = [("original", lambda: run_original(folder, data, fmt, as_read=False))]
+    ported = included(folder, data)  # (not timed: the include step, before the ports)
     for lang in langs:
         cmds = ports(folder, lang)
         if cmds is not None:
-            rows.append((lang, lambda cmds=cmds: run_port(cmds, data, fmt, cwd=workdir(folder))))
+            rows.append((lang, lambda cmds=cmds: run_port(cmds, ported, fmt, cwd=workdir(folder))))
     print(f"{folder.name} on {doc_name(Path(args.doc))} ({len(data) / 1e6:.1f} MB of JSON, {fmt}), "
           f"best of {args.repeat}")
     print("| | seconds | peak MB |\n|---|---|---|")

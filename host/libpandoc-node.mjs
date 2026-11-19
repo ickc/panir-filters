@@ -20,7 +20,9 @@
 //     node host/libpandoc-node.mjs < jobs
 //
 // Reads a job a line, `{"scripts": [...]` or `"wasm": [...], "format",
-// "options", "env", "cwd", "input"}`; writes a line a job, `output<TAB>` the
+// "options", "env", "cwd", "input"}`, and perhaps `"panclude": true`
+// (libpandoc's include step before them, its root the working directory);
+// writes a line a job, `output<TAB>` the
 // document's JSON, or `error<TAB>` the message (its newlines as `\n`).
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
@@ -72,7 +74,8 @@ async function run(job) {
     for (const script of job.scripts ?? []) fns.push(libpandocFilter(await handedOver(script), job.options));
     for (const path of job.wasm ?? []) fns.push(await wasmFilter(readFileSync(path), { pandoc, name: path }));
     fns.push((doc) => (kept = doc));
-    pandoc.convertWithFilters({ ...job.options, from: "json", to: job.format }, JSON.stringify(job.input), fns, { raw: true, bytes: true });
+    const filters = job.panclude ? { filters: ["panclude", ...fns.map((_, index) => ({ type: "callback", index }))] } : {};
+    pandoc.convertWithFilters({ ...job.options, ...filters, from: "json", to: job.format }, JSON.stringify(job.input), fns, { raw: true, bytes: true });
   } finally {
     process.chdir(here);
     for (const k of Object.keys(job.env ?? {})) if (!(k in saved)) delete process.env[k];

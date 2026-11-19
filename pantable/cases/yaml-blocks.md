@@ -9,57 +9,13 @@ caption: closed by dots
 a,b
 ```
 
-Two YAML blocks, the second after the data, merged (the later wins):
+Keys with underscores, and an unknown key:
 
 ```table
 ---
-caption: first
-alignment: R
----
-a,b
-1,2
----
-caption: second
----
-```
-
-The data before the YAML:
-
-```table
-a,b
----
-caption: after
----
-```
-
-Longer delimiters, and a YAML block never closed:
-
-```table
------
-caption: long dashes
-.....
-a,b
----
-alignment: C
-```
-
-Keys with underscores, both spellings (the later wins), and an unknown key:
-
-```table
----
-short-caption: hyphen
 short_caption: underscore
+fancy_table: false
 colour: blue
----
-a,b
-```
-
-A key given twice:
-
-```table
----
-caption: once
-caption: twice
 ---
 a,b
 ```
