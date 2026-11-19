@@ -6,7 +6,9 @@ script hands over (the script run anew for each case, as a new process
 would), then a function that keeps the document as they left it.
 
 Reads a job a line, `{"scripts": [...], "format", "options", "env",
-"cwd", "input"}`, and perhaps `"sandbox"` (`{"read": [...]}`) (a chain's scripts in turn); writes a line a job, `output<TAB>`
+"cwd", "input"}`, and perhaps `"sandbox"` (`{"read": [...]}`) (a chain's
+scripts in turn) and `"panclude": true` (libpandoc's include step before
+them, its root the working directory); writes a line a job, `output<TAB>`
 the document's JSON, or `error<TAB>` the message (its newlines as `\\n`).
 Needs a Python with libpandoc (and panir)."""
 
@@ -63,7 +65,7 @@ def run(job: dict) -> str:
             filters = [f for script in job["scripts"] for f in handed_over(script)]
             options = {**(job.get("options") or {}), **({"sandbox": job["sandbox"]} if "sandbox" in job else {})}
             libpandoc.convert(json.dumps(job["input"]), options, from_="json", to=job["format"],
-                              filters=[*filters, keep])
+                              filters=[*(["panclude"] if job.get("panclude") else []), *filters, keep])
     finally:
         os.chdir(here)
     return panir.dumps(kept[0])

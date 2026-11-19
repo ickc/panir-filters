@@ -12,6 +12,11 @@ jobs:
   # panir, whose API may change).
   test:
     runs-on: ubuntu-latest
+    env:
+      # pantable's ports read their block headers and run after the include
+      # step: pandoc's release binary, and panclude.lua at a pinned commit
+      PANDOC_VERSION: "3.14"
+      PANCLUDE_COMMIT: aa6a0d53bbdf1209092733b59efb5220d6e46ff6
     defaults:
       run:
         working-directory: panir-filters
@@ -48,9 +53,14 @@ jobs:
       - name: panir's TypeScript package, built
         working-directory: panir/ts
         run: npm ci && npm run build
+      - name: pandoc ${{ env.PANDOC_VERSION }} and panclude.lua
+        run: |
+          curl -fsSL "https://github.com/jgm/pandoc/releases/download/$PANDOC_VERSION/pandoc-$PANDOC_VERSION-linux-amd64.tar.gz" | tar xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/pandoc-$PANDOC_VERSION/bin" >> "$GITHUB_PATH"
+          curl -fsSL -o "$RUNNER_TEMP/panclude.lua" "https://raw.githubusercontent.com/ickc/panclude/$PANCLUDE_COMMIT/panclude.lua"
+          echo "PANCLUDE=$RUNNER_TEMP/panclude.lua" >> "$GITHUB_ENV"
       - name: Set up the ports
         run: |
-          python3 -m pip install PyYAML  # (pantable's Python port, as its original)
           npm ci
           julia --project=. -e 'using Pkg; Pkg.instantiate(); using Panir'
       - name: Check the ports
